@@ -1,9 +1,17 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
+import Cover from '../components/Cover.astro';
 ---
 
 <BaseLayout title="Invitación de Fátima y Andrés">
   <main>
-    <h1>Invitación de Fátima y Andrés</h1>
+    <Cover />
+    <div id="viaje" class="scroll-check"></div>
   </main>
 </BaseLayout>
+
+<style>
+  .scroll-check {
+    min-height: 100svh;
+  }
+</style>
