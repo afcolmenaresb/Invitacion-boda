@@ -20,16 +20,17 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     loading="eager"
   />
 
-  <div class="cover__text">
-    <div class="cover__intro">
-      <p class="cover__kicker">Estefi y Matías</p>
-      <p class="cover__lede">Hay viajes que no tendrían el mismo sentido sin ciertas personas.</p>
-    </div>
-    <div class="cover__names">
-      <h1 class="cover__title">Fátima &amp; Andrés</h1>
-      <p class="cover__location">Imbassaí, Bahía</p>
-      <a class="cover__cta" href="#viaje">Comenzar el viaje</a>
-    </div>
+  <div class="cover__intro">
+    <p class="cover__kicker">Estefi y Matías</p>
+    <p class="cover__lede">Hay viajes que no tendrían el mismo sentido sin ciertas personas.</p>
+  </div>
+
+  <div class="cover__names">
+    <h1 class="cover__title">
+      <span class="cover__title-name">Fátima</span>{' '}<span class="cover__title-amp">&amp;</span>{' '}<span class="cover__title-name">Andrés</span>
+    </h1>
+    <p class="cover__location">Imbassaí, Bahía</p>
+    <a class="cover__cta" href="#viaje">Comenzar el viaje</a>
   </div>
 </header>
 
@@ -40,8 +41,8 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     min-height: 100svh;
     display: flex;
     flex-direction: column;
-    justify-content: center;
-    padding: 8svh 6vw 12svh;
+    justify-content: space-between;
+    padding: 7svh 7vw 6svh;
     isolation: isolate;
   }
 
@@ -165,17 +166,23 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     right: -3vw;
     top: -2svh;
     transform: scaleX(-1);
+    filter: contrast(1.16) brightness(0.95);
+    opacity: 0.97;
   }
 
-  .cover__text {
+  .cover__intro {
     position: relative;
     z-index: 1;
-    max-width: 22rem;
-    margin-inline-start: 6vw;
+    align-self: flex-start;
+    text-align: left;
+    max-width: 74vw;
   }
 
   .cover__names {
-    margin-top: 0;
+    position: relative;
+    z-index: 1;
+    align-self: flex-end;
+    text-align: right;
     width: max-content;
     max-width: 100%;
   }
@@ -199,8 +206,8 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     font-style: italic;
     font-size: clamp(1.05rem, 4vw, 1.25rem);
     line-height: 1.5;
-    max-width: 20ch;
-    margin: 0 0 2rem;
+    max-width: 28ch;
+    margin: 0;
   }
 
   .cover__title {
@@ -210,6 +217,23 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     line-height: 1.05;
     letter-spacing: 0.01em;
     margin: 0 0 1.25rem;
+  }
+
+  .cover__title-name,
+  .cover__title-amp {
+    display: inline;
+  }
+
+  @media (max-width: 479px) {
+    .cover__title-name,
+    .cover__title-amp {
+      display: block;
+    }
+
+    .cover__title-amp {
+      font-size: 0.6em;
+      margin-block: 0.12em;
+    }
   }
 
   .cover__location {
@@ -246,33 +270,30 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     }
   }
 
-  /* Tablet vertical: narrative two-block composition */
+  /* Tablet vertical: four-quadrant letter, more air */
   @media (min-width: 768px) {
     .cover {
-      padding: 10svh 8vw 14svh;
+      padding: 9svh 8vw 8svh;
     }
 
     .cover__elephant {
-      width: 44vw;
+      width: 46vw;
       left: -6vw;
-      bottom: -4svh;
+      bottom: -6svh;
     }
 
     .cover__duck {
-      width: 38vw;
-      right: 2vw;
-      top: 5svh;
+      width: 40vw;
+      right: 1vw;
+      top: 2svh;
     }
 
-    .cover__text {
-      max-width: 26rem;
-      margin-inline-start: 6vw;
-      margin-block-start: 0;
+    .cover__intro {
+      max-width: 60vw;
     }
 
-    .cover__names {
-      margin-top: 10vh;
-      margin-inline-start: 32vw;
+    .cover__lede {
+      max-width: 32ch;
     }
 
     .cover__title {
@@ -287,26 +308,23 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     }
 
     .cover__elephant {
-      width: 30vw;
+      width: 32vw;
       left: -8vw;
-      bottom: -10svh;
+      bottom: -11svh;
     }
 
     .cover__duck {
-      width: 23vw;
-      right: -1vw;
-      top: 3svh;
+      width: 25vw;
+      right: 0;
+      top: 2svh;
     }
 
-    .cover__text {
-      max-width: 28rem;
-      margin-inline-start: 26vw;
-      margin-block-start: 0;
+    .cover__intro {
+      max-width: 34vw;
     }
 
-    .cover__names {
-      margin-top: 0;
-      margin-inline-start: 0;
+    .cover__lede {
+      max-width: 34ch;
     }
 
     .cover__title {
@@ -317,24 +335,27 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   /* Desktop */
   @media (min-width: 1280px) {
     .cover {
-      padding: 6svh 6vw;
+      padding: 7svh 6vw;
     }
 
     .cover__elephant {
-      width: 34vw;
-      left: -3vw;
+      width: 36vw;
+      left: -4vw;
       bottom: -19svh;
     }
 
     .cover__duck {
-      width: 24vw;
-      right: 3vw;
-      top: 4svh;
+      width: 27vw;
+      right: 2vw;
+      top: 2svh;
     }
 
-    .cover__text {
-      max-width: 30rem;
-      margin-inline-start: calc(24vw + 20px);
+    .cover__intro {
+      max-width: 32vw;
+    }
+
+    .cover__lede {
+      max-width: 36ch;
     }
 
     .cover__title {
@@ -342,49 +363,40 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     }
   }
 
-  /* Mobile horizontal (short viewport, overrides width-based rules above) */
+  /* Mobile horizontal (short viewport, overrides width-based rules above regardless of matched width) */
   @media (orientation: landscape) and (max-height: 500px) {
     .cover {
-      flex-direction: row;
-      align-items: center;
-      justify-content: flex-start;
-      padding: 6svh 6vw;
-      gap: 4vw;
+      padding: 5svh 6vw 4svh;
     }
 
     .cover__elephant {
-      width: 30vw;
-      left: -2vw;
-      bottom: -28svh;
+      width: 32vw;
+      left: -4vw;
+      bottom: -65svh;
     }
 
     .cover__duck {
-      width: 30vw;
-      right: 0;
-      top: -1svh;
+      width: 26vw;
+      right: -3vw;
+      top: -8svh;
     }
 
-    .cover__text {
-      max-width: 26rem;
-      margin-inline-start: 24vw;
-      margin-block-start: 0;
-    }
-
-    .cover__names {
-      margin-top: 0;
-      margin-inline-start: 0;
-    }
-
-    .cover__title {
-      font-size: clamp(1.6rem, 5.3vw, 2.15rem);
+    .cover__intro {
+      max-width: 46vw;
     }
 
     .cover__lede {
-      margin-bottom: 1rem;
+      max-width: 26ch;
+      font-size: clamp(0.95rem, 2.6vw, 1.1rem);
+    }
+
+    .cover__title {
+      font-size: clamp(1.6rem, 5vw, 2.15rem);
+      margin-bottom: 0.75rem;
     }
 
     .cover__location {
-      margin-bottom: 1.2rem;
+      margin-bottom: 1.1rem;
     }
   }
 </style>
