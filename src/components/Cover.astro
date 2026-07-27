@@ -1,4 +1,6 @@
 ---
+import paperGrain from '../assets/paper-grain.svg';
+
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 ---
 
@@ -33,7 +35,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   </div>
 </header>
 
-<style>
+<style define:vars={{ grainUrl: `url("${paperGrain.src ?? paperGrain}")` }}>
   .cover {
     position: relative;
     overflow: hidden;
@@ -49,7 +51,6 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     content: '';
     position: absolute;
     inset: 0;
-    background-repeat: no-repeat;
     background-image:
       /* soft irregular tonal modulation, hand-placed, low periodicity */
       radial-gradient(ellipse 58% 42% at 14% 20%, rgba(112, 92, 62, 0.045), transparent 63%),
@@ -58,88 +59,11 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
       radial-gradient(ellipse 40% 55% at 94% 90%, rgba(112, 92, 62, 0.035), transparent 55%),
       radial-gradient(ellipse 85% 92% at 60% 44%, rgba(112, 92, 62, 0.025), transparent 70%),
       radial-gradient(ellipse 30% 40% at 55% 12%, rgba(96, 78, 54, 0.03), transparent 60%),
-      /* faint cotton-paper fibers: long soft diagonal streaks at non-aligned angles */
-      linear-gradient(12deg, transparent 39.0%, rgba(42, 36, 29, 0.025) 47.3%, transparent 55.6%),
-      linear-gradient(-27deg, transparent 42.4%, rgba(42, 36, 29, 0.032) 51.9%, transparent 61.4%),
-      linear-gradient(51deg, transparent 41.5%, rgba(60, 50, 36, 0.022) 52.6%, transparent 63.7%),
-      linear-gradient(-63deg, transparent 43.4%, rgba(60, 50, 36, 0.03) 53.4%, transparent 63.4%),
-      linear-gradient(5deg, transparent 42.9%, rgba(42, 36, 29, 0.028) 54.8%, transparent 66.7%),
-      linear-gradient(33deg, transparent 41.3%, rgba(60, 50, 36, 0.023) 51.2%, transparent 61.1%),
-      linear-gradient(-18deg, transparent 39.2%, rgba(60, 50, 36, 0.035) 47.8%, transparent 56.4%),
-      linear-gradient(70deg, transparent 42.0%, rgba(60, 50, 36, 0.024) 52.3%, transparent 62.7%),
-      linear-gradient(-45deg, transparent 47.4%, rgba(60, 50, 36, 0.034) 54.1%, transparent 60.9%),
-      linear-gradient(89deg, transparent 41.9%, rgba(60, 50, 36, 0.033) 48.2%, transparent 54.5%),
-      /* fine irregular grain: individual, non-repeating flecks at fixed pseudo-random spots */
-      radial-gradient(circle 0.44px at 91.6% 94.0%, rgba(42, 36, 29, 0.086), transparent 1.01px),
-      radial-gradient(circle 0.52px at 38.2% 36.1%, rgba(42, 36, 29, 0.051), transparent 1.2px),
-      radial-gradient(circle 0.28px at 45.6% 3.4%, rgba(42, 36, 29, 0.094), transparent 0.64px),
-      radial-gradient(circle 0.49px at 62.5% 43.3%, rgba(42, 36, 29, 0.052), transparent 1.13px),
-      radial-gradient(circle 0.56px at 65.5% 61.9%, rgba(42, 36, 29, 0.096), transparent 1.29px),
-      radial-gradient(circle 0.66px at 95.9% 28.6%, rgba(60, 50, 36, 0.099), transparent 1.52px),
-      radial-gradient(circle 0.27px at 71.4% 58.9%, rgba(60, 50, 36, 0.075), transparent 0.62px),
-      radial-gradient(circle 0.25px at 53.3% 67.0%, rgba(42, 36, 29, 0.067), transparent 0.57px),
-      radial-gradient(circle 0.31px at 4.8% 28.0%, rgba(42, 36, 29, 0.086), transparent 0.71px),
-      radial-gradient(circle 0.6px at 89.2% 54.1%, rgba(60, 50, 36, 0.063), transparent 1.38px),
-      radial-gradient(circle 0.77px at 11.5% 77.8%, rgba(42, 36, 29, 0.064), transparent 1.77px),
-      radial-gradient(circle 0.21px at 15.0% 74.0%, rgba(60, 50, 36, 0.096), transparent 0.48px),
-      radial-gradient(circle 0.31px at 6.5% 41.8%, rgba(60, 50, 36, 0.115), transparent 0.71px),
-      radial-gradient(circle 0.35px at 79.9% 94.0%, rgba(42, 36, 29, 0.12), transparent 0.8px),
-      radial-gradient(circle 0.13px at 2.6% 78.2%, rgba(42, 36, 29, 0.081), transparent 0.3px),
-      radial-gradient(circle 0.5px at 20.3% 92.5%, rgba(42, 36, 29, 0.056), transparent 1.15px),
-      radial-gradient(circle 0.17px at 64.7% 68.7%, rgba(60, 50, 36, 0.068), transparent 0.39px),
-      radial-gradient(circle 0.33px at 89.3% 44.6%, rgba(42, 36, 29, 0.125), transparent 0.76px),
-      radial-gradient(circle 0.31px at 68.4% 41.4%, rgba(60, 50, 36, 0.111), transparent 0.71px),
-      radial-gradient(circle 0.32px at 54.5% 42.7%, rgba(60, 50, 36, 0.109), transparent 0.74px),
-      radial-gradient(circle 0.2px at 82.0% 11.6%, rgba(42, 36, 29, 0.105), transparent 0.46px),
-      radial-gradient(circle 0.25px at 25.3% 94.2%, rgba(60, 50, 36, 0.103), transparent 0.57px),
-      radial-gradient(circle 0.84px at 87.9% 94.8%, rgba(42, 36, 29, 0.066), transparent 1.93px),
-      radial-gradient(circle 0.32px at 38.0% 78.0%, rgba(42, 36, 29, 0.076), transparent 0.74px),
-      radial-gradient(circle 0.83px at 4.0% 65.2%, rgba(42, 36, 29, 0.075), transparent 1.91px),
-      radial-gradient(circle 0.25px at 48.1% 68.5%, rgba(42, 36, 29, 0.102), transparent 0.57px),
-      radial-gradient(circle 0.13px at 27.0% 98.4%, rgba(42, 36, 29, 0.131), transparent 0.3px),
-      radial-gradient(circle 0.19px at 77.1% 67.0%, rgba(42, 36, 29, 0.086), transparent 0.44px),
-      radial-gradient(circle 0.47px at 79.9% 27.8%, rgba(42, 36, 29, 0.053), transparent 1.08px),
-      radial-gradient(circle 0.18px at 47.8% 55.3%, rgba(60, 50, 36, 0.067), transparent 0.41px),
-      radial-gradient(circle 0.21px at 88.5% 97.8%, rgba(60, 50, 36, 0.11), transparent 0.48px),
-      radial-gradient(circle 0.13px at 28.2% 76.4%, rgba(60, 50, 36, 0.123), transparent 0.3px),
-      radial-gradient(circle 0.13px at 25.3% 97.3%, rgba(42, 36, 29, 0.125), transparent 0.3px),
-      radial-gradient(circle 0.3px at 20.6% 56.4%, rgba(42, 36, 29, 0.074), transparent 0.69px),
-      radial-gradient(circle 0.14px at 39.8% 67.6%, rgba(42, 36, 29, 0.133), transparent 0.32px),
-      radial-gradient(circle 0.29px at 60.3% 5.0%, rgba(60, 50, 36, 0.139), transparent 0.67px),
-      radial-gradient(circle 0.61px at 60.9% 14.6%, rgba(42, 36, 29, 0.093), transparent 1.4px),
-      radial-gradient(circle 0.29px at 78.9% 5.7%, rgba(60, 50, 36, 0.068), transparent 0.67px),
-      radial-gradient(circle 0.49px at 14.1% 10.1%, rgba(42, 36, 29, 0.076), transparent 1.13px),
-      radial-gradient(circle 0.34px at 75.2% 22.8%, rgba(42, 36, 29, 0.113), transparent 0.78px),
-      radial-gradient(circle 0.54px at 64.8% 74.0%, rgba(42, 36, 29, 0.103), transparent 1.24px),
-      radial-gradient(circle 0.77px at 13.7% 38.3%, rgba(42, 36, 29, 0.052), transparent 1.77px),
-      radial-gradient(circle 0.16px at 35.3% 21.6%, rgba(42, 36, 29, 0.085), transparent 0.37px),
-      radial-gradient(circle 0.31px at 6.7% 31.9%, rgba(42, 36, 29, 0.107), transparent 0.71px),
-      radial-gradient(circle 0.19px at 36.9% 94.6%, rgba(42, 36, 29, 0.125), transparent 0.44px),
-      radial-gradient(circle 0.64px at 81.5% 57.4%, rgba(42, 36, 29, 0.087), transparent 1.47px),
-      radial-gradient(circle 0.16px at 80.8% 18.8%, rgba(60, 50, 36, 0.122), transparent 0.37px),
-      radial-gradient(circle 0.18px at 45.7% 1.3%, rgba(42, 36, 29, 0.119), transparent 0.41px),
-      radial-gradient(circle 0.72px at 39.3% 96.5%, rgba(42, 36, 29, 0.09), transparent 1.66px),
-      radial-gradient(circle 0.74px at 71.5% 15.1%, rgba(42, 36, 29, 0.099), transparent 1.7px),
-      radial-gradient(circle 0.23px at 54.2% 12.9%, rgba(42, 36, 29, 0.072), transparent 0.53px),
-      radial-gradient(circle 0.24px at 79.3% 12.5%, rgba(42, 36, 29, 0.077), transparent 0.55px),
-      radial-gradient(circle 0.52px at 20.3% 35.0%, rgba(42, 36, 29, 0.067), transparent 1.2px),
-      radial-gradient(circle 0.2px at 90.4% 92.9%, rgba(60, 50, 36, 0.119), transparent 0.46px),
-      radial-gradient(circle 0.47px at 78.5% 56.8%, rgba(60, 50, 36, 0.091), transparent 1.08px),
-      radial-gradient(circle 0.84px at 66.4% 12.0%, rgba(42, 36, 29, 0.057), transparent 1.93px),
-      radial-gradient(circle 0.72px at 8.8% 9.0%, rgba(42, 36, 29, 0.107), transparent 1.66px),
-      radial-gradient(circle 0.22px at 4.5% 26.9%, rgba(60, 50, 36, 0.111), transparent 0.51px),
-      radial-gradient(circle 0.73px at 86.8% 20.3%, rgba(60, 50, 36, 0.054), transparent 1.68px),
-      radial-gradient(circle 0.27px at 18.3% 22.3%, rgba(60, 50, 36, 0.071), transparent 0.62px),
-      radial-gradient(circle 0.29px at 59.8% 38.8%, rgba(60, 50, 36, 0.094), transparent 0.67px),
-      radial-gradient(circle 0.56px at 63.4% 14.7%, rgba(42, 36, 29, 0.085), transparent 1.29px),
-      radial-gradient(circle 0.23px at 55.7% 96.6%, rgba(42, 36, 29, 0.097), transparent 0.53px),
-      radial-gradient(circle 0.49px at 66.7% 61.0%, rgba(60, 50, 36, 0.098), transparent 1.13px),
-      radial-gradient(circle 0.34px at 15.0% 14.7%, rgba(42, 36, 29, 0.109), transparent 0.78px),
-      radial-gradient(circle 0.28px at 74.7% 20.3%, rgba(42, 36, 29, 0.112), transparent 0.64px),
-      radial-gradient(circle 0.52px at 92.3% 79.4%, rgba(42, 36, 29, 0.086), transparent 1.2px),
-      radial-gradient(circle 0.46px at 71.4% 94.3%, rgba(42, 36, 29, 0.08), transparent 1.06px),
-      radial-gradient(circle 0.2px at 7.3% 67.4%, rgba(42, 36, 29, 0.125), transparent 0.46px),
-      radial-gradient(circle 0.61px at 25.3% 37.2%, rgba(42, 36, 29, 0.06), transparent 1.4px);
+      /* fine-grained cotton-paper texture: SVG fractal-noise tile (fine grain + directional fiber) */
+      var(--grainUrl);
+    background-size: 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 100% 100%, 260px 260px;
+    background-position: 0 0, 0 0, 0 0, 0 0, 0 0, 0 0, 0 0;
+    background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, repeat;
     mix-blend-mode: multiply;
     opacity: 0.7;
     pointer-events: none;
