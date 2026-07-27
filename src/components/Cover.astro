@@ -26,7 +26,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
       <p class="cover__lede">Hay viajes que no tendrían el mismo sentido sin ciertas personas.</p>
     </div>
     <div class="cover__names">
-      <h1 class="cover__title">Fátima &amp; Andrés</h1>
+      <h1 class="cover__title">Fátima&nbsp;&amp; Andrés</h1>
       <p class="cover__location">Imbassaí, Bahía</p>
       <a class="cover__cta" href="#viaje">Comenzar el viaje</a>
     </div>
@@ -156,24 +156,24 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   .cover__elephant {
     width: 54vw;
     left: -6vw;
-    bottom: -7svh;
+    bottom: calc(-7svh + 28px);
     transform: scaleX(-1);
   }
 
   .cover__duck {
     width: clamp(230px, 60vw, 300px);
     right: -3vw;
-    top: -2svh;
+    top: calc(-2svh + 15px);
     transform: scaleX(-1);
-    filter: contrast(1.16) brightness(0.95);
-    opacity: 0.97;
+    filter: contrast(1.18) brightness(0.94);
+    opacity: 1;
   }
 
   .cover__text {
     position: relative;
     z-index: 1;
     max-width: 22rem;
-    margin-inline-start: 6vw;
+    margin-inline-start: 7.5vw;
   }
 
   .cover__names {
@@ -202,14 +202,14 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     font-style: italic;
     font-size: clamp(1.05rem, 4vw, 1.25rem);
     line-height: 1.5;
-    max-width: 27ch;
-    margin: 0 0 1.5rem;
+    max-width: 25ch;
+    margin: 0 0 0.625rem;
   }
 
   .cover__title {
     font-family: var(--font-serif);
     font-weight: 400;
-    font-size: clamp(2.05rem, 8.2vw, 2.8rem);
+    font-size: clamp(1.89rem, 7.5vw, 2.58rem);
     line-height: 1.05;
     letter-spacing: 0.01em;
     margin: 0 0 1.25rem;
@@ -258,23 +258,28 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     .cover__elephant {
       width: 44vw;
       left: -6vw;
-      bottom: -4svh;
+      bottom: calc(-4svh + 40px);
     }
 
     .cover__duck {
       width: 38vw;
       right: 2vw;
-      top: 5svh;
+      top: calc(5svh + 22px);
     }
 
     .cover__text {
       max-width: 26rem;
-      margin-inline-start: 6vw;
+      margin-inline-start: calc(6vw + 40px);
       margin-block-start: 0;
     }
 
     .cover__names {
       margin-inline-start: 19vw;
+    }
+
+    .cover__lede {
+      max-width: 27ch;
+      margin-bottom: 0.44rem;
     }
 
     .cover__title {
@@ -289,20 +294,20 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     }
 
     .cover__elephant {
-      width: 30vw;
+      width: 28vw;
       left: -8vw;
-      bottom: -10svh;
+      bottom: -7svh;
     }
 
     .cover__duck {
       width: 23vw;
       right: -1vw;
-      top: 3svh;
+      top: calc(3svh + 20px);
     }
 
     .cover__text {
       max-width: 28rem;
-      margin-inline-start: 26vw;
+      margin-inline-start: calc(26vw + 28px);
       margin-block-start: 0;
     }
 
@@ -335,7 +340,8 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
     .cover__text {
       max-width: 30rem;
-      margin-inline-start: calc(24vw + 20px);
+      margin-inline-start: calc(24vw + 70px);
+      margin-block-start: 22px;
     }
 
     .cover__names {
@@ -358,9 +364,9 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     }
 
     .cover__elephant {
-      width: 30vw;
+      width: 32vw;
       left: -2vw;
-      bottom: -28svh;
+      bottom: -33svh;
     }
 
     .cover__duck {
@@ -371,7 +377,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
     .cover__text {
       max-width: 26rem;
-      margin-inline-start: 24vw;
+      margin-inline-start: calc(24vw + 14px);
       margin-block-start: 0;
     }
 
@@ -386,6 +392,10 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
     .cover__lede {
       margin-bottom: 1rem;
+    }
+
+    .cover__location {
+      margin-bottom: 1.8rem;
     }
 
     .cover__location {
