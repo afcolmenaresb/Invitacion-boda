@@ -1,8 +1,18 @@
 ---
+import '@fontsource/beau-rivage';
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 ---
 
 <header class="cover">
+  <img
+    class="cover__texture"
+    src={`${base}/images/textura-vertical.png`}
+    alt=""
+    role="presentation"
+    width="705"
+    height="967"
+    loading="eager"
+  />
   <img
     class="cover__elephant"
     src={`${base}/images/elephant.png`}
@@ -20,16 +30,19 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     loading="eager"
   />
 
-  <div class="cover__text">
-    <div class="cover__intro">
-      <p class="cover__kicker">Estefi y Matías</p>
-      <p class="cover__lede">Hay viajes que no tendrían el mismo sentido sin ciertas personas.</p>
-    </div>
-    <div class="cover__names">
-      <h1 class="cover__title">Fátima&nbsp;&amp; Andrés</h1>
-      <p class="cover__location">Imbassaí, Bahía</p>
-      <a class="cover__cta" href="#viaje">Comenzar el viaje</a>
-    </div>
+  <div class="cover__intro">
+    <p class="cover__kicker">Estefi y Matías</p>
+    <p class="cover__lede">Hay viajes que no tendrían el mismo sentido sin ciertas personas.</p>
+  </div>
+
+  <div class="cover__names">
+    <h1 class="cover__title">
+      <span>Fátima</span>
+      <span class="cover__amp">&amp;</span>
+      <span>Andrés</span>
+    </h1>
+    <p class="cover__location">Imbassaí, Bahía</p>
+    <a class="cover__cta" href="#viaje">Comenzar el viaje</a>
   </div>
 </header>
 
@@ -38,110 +51,18 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     position: relative;
     overflow: hidden;
     min-height: 100svh;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    padding: 8svh 6vw 12svh;
     isolation: isolate;
   }
 
-  .cover::before {
-    content: '';
+  .cover__texture {
     position: absolute;
     inset: 0;
-    background-repeat: no-repeat;
-    background-image:
-      /* soft irregular tonal modulation, hand-placed, low periodicity */
-      radial-gradient(ellipse 58% 42% at 14% 20%, rgba(112, 92, 62, 0.045), transparent 63%),
-      radial-gradient(ellipse 38% 58% at 88% 8%, rgba(112, 92, 62, 0.04), transparent 60%),
-      radial-gradient(ellipse 62% 46% at 30% 84%, rgba(96, 78, 54, 0.04), transparent 58%),
-      radial-gradient(ellipse 40% 55% at 94% 90%, rgba(112, 92, 62, 0.035), transparent 55%),
-      radial-gradient(ellipse 85% 92% at 60% 44%, rgba(112, 92, 62, 0.025), transparent 70%),
-      radial-gradient(ellipse 30% 40% at 55% 12%, rgba(96, 78, 54, 0.03), transparent 60%),
-      /* faint cotton-paper fibers: long soft diagonal streaks at non-aligned angles */
-      linear-gradient(12deg, transparent 39.0%, rgba(42, 36, 29, 0.025) 47.3%, transparent 55.6%),
-      linear-gradient(-27deg, transparent 42.4%, rgba(42, 36, 29, 0.032) 51.9%, transparent 61.4%),
-      linear-gradient(51deg, transparent 41.5%, rgba(60, 50, 36, 0.022) 52.6%, transparent 63.7%),
-      linear-gradient(-63deg, transparent 43.4%, rgba(60, 50, 36, 0.03) 53.4%, transparent 63.4%),
-      linear-gradient(5deg, transparent 42.9%, rgba(42, 36, 29, 0.028) 54.8%, transparent 66.7%),
-      linear-gradient(33deg, transparent 41.3%, rgba(60, 50, 36, 0.023) 51.2%, transparent 61.1%),
-      linear-gradient(-18deg, transparent 39.2%, rgba(60, 50, 36, 0.035) 47.8%, transparent 56.4%),
-      linear-gradient(70deg, transparent 42.0%, rgba(60, 50, 36, 0.024) 52.3%, transparent 62.7%),
-      linear-gradient(-45deg, transparent 47.4%, rgba(60, 50, 36, 0.034) 54.1%, transparent 60.9%),
-      linear-gradient(89deg, transparent 41.9%, rgba(60, 50, 36, 0.033) 48.2%, transparent 54.5%),
-      /* fine irregular grain: individual, non-repeating flecks at fixed pseudo-random spots */
-      radial-gradient(circle 0.44px at 91.6% 94.0%, rgba(42, 36, 29, 0.086), transparent 1.01px),
-      radial-gradient(circle 0.52px at 38.2% 36.1%, rgba(42, 36, 29, 0.051), transparent 1.2px),
-      radial-gradient(circle 0.28px at 45.6% 3.4%, rgba(42, 36, 29, 0.094), transparent 0.64px),
-      radial-gradient(circle 0.49px at 62.5% 43.3%, rgba(42, 36, 29, 0.052), transparent 1.13px),
-      radial-gradient(circle 0.56px at 65.5% 61.9%, rgba(42, 36, 29, 0.096), transparent 1.29px),
-      radial-gradient(circle 0.66px at 95.9% 28.6%, rgba(60, 50, 36, 0.099), transparent 1.52px),
-      radial-gradient(circle 0.27px at 71.4% 58.9%, rgba(60, 50, 36, 0.075), transparent 0.62px),
-      radial-gradient(circle 0.25px at 53.3% 67.0%, rgba(42, 36, 29, 0.067), transparent 0.57px),
-      radial-gradient(circle 0.31px at 4.8% 28.0%, rgba(42, 36, 29, 0.086), transparent 0.71px),
-      radial-gradient(circle 0.6px at 89.2% 54.1%, rgba(60, 50, 36, 0.063), transparent 1.38px),
-      radial-gradient(circle 0.77px at 11.5% 77.8%, rgba(42, 36, 29, 0.064), transparent 1.77px),
-      radial-gradient(circle 0.21px at 15.0% 74.0%, rgba(60, 50, 36, 0.096), transparent 0.48px),
-      radial-gradient(circle 0.31px at 6.5% 41.8%, rgba(60, 50, 36, 0.115), transparent 0.71px),
-      radial-gradient(circle 0.35px at 79.9% 94.0%, rgba(42, 36, 29, 0.12), transparent 0.8px),
-      radial-gradient(circle 0.13px at 2.6% 78.2%, rgba(42, 36, 29, 0.081), transparent 0.3px),
-      radial-gradient(circle 0.5px at 20.3% 92.5%, rgba(42, 36, 29, 0.056), transparent 1.15px),
-      radial-gradient(circle 0.17px at 64.7% 68.7%, rgba(60, 50, 36, 0.068), transparent 0.39px),
-      radial-gradient(circle 0.33px at 89.3% 44.6%, rgba(42, 36, 29, 0.125), transparent 0.76px),
-      radial-gradient(circle 0.31px at 68.4% 41.4%, rgba(60, 50, 36, 0.111), transparent 0.71px),
-      radial-gradient(circle 0.32px at 54.5% 42.7%, rgba(60, 50, 36, 0.109), transparent 0.74px),
-      radial-gradient(circle 0.2px at 82.0% 11.6%, rgba(42, 36, 29, 0.105), transparent 0.46px),
-      radial-gradient(circle 0.25px at 25.3% 94.2%, rgba(60, 50, 36, 0.103), transparent 0.57px),
-      radial-gradient(circle 0.84px at 87.9% 94.8%, rgba(42, 36, 29, 0.066), transparent 1.93px),
-      radial-gradient(circle 0.32px at 38.0% 78.0%, rgba(42, 36, 29, 0.076), transparent 0.74px),
-      radial-gradient(circle 0.83px at 4.0% 65.2%, rgba(42, 36, 29, 0.075), transparent 1.91px),
-      radial-gradient(circle 0.25px at 48.1% 68.5%, rgba(42, 36, 29, 0.102), transparent 0.57px),
-      radial-gradient(circle 0.13px at 27.0% 98.4%, rgba(42, 36, 29, 0.131), transparent 0.3px),
-      radial-gradient(circle 0.19px at 77.1% 67.0%, rgba(42, 36, 29, 0.086), transparent 0.44px),
-      radial-gradient(circle 0.47px at 79.9% 27.8%, rgba(42, 36, 29, 0.053), transparent 1.08px),
-      radial-gradient(circle 0.18px at 47.8% 55.3%, rgba(60, 50, 36, 0.067), transparent 0.41px),
-      radial-gradient(circle 0.21px at 88.5% 97.8%, rgba(60, 50, 36, 0.11), transparent 0.48px),
-      radial-gradient(circle 0.13px at 28.2% 76.4%, rgba(60, 50, 36, 0.123), transparent 0.3px),
-      radial-gradient(circle 0.13px at 25.3% 97.3%, rgba(42, 36, 29, 0.125), transparent 0.3px),
-      radial-gradient(circle 0.3px at 20.6% 56.4%, rgba(42, 36, 29, 0.074), transparent 0.69px),
-      radial-gradient(circle 0.14px at 39.8% 67.6%, rgba(42, 36, 29, 0.133), transparent 0.32px),
-      radial-gradient(circle 0.29px at 60.3% 5.0%, rgba(60, 50, 36, 0.139), transparent 0.67px),
-      radial-gradient(circle 0.61px at 60.9% 14.6%, rgba(42, 36, 29, 0.093), transparent 1.4px),
-      radial-gradient(circle 0.29px at 78.9% 5.7%, rgba(60, 50, 36, 0.068), transparent 0.67px),
-      radial-gradient(circle 0.49px at 14.1% 10.1%, rgba(42, 36, 29, 0.076), transparent 1.13px),
-      radial-gradient(circle 0.34px at 75.2% 22.8%, rgba(42, 36, 29, 0.113), transparent 0.78px),
-      radial-gradient(circle 0.54px at 64.8% 74.0%, rgba(42, 36, 29, 0.103), transparent 1.24px),
-      radial-gradient(circle 0.77px at 13.7% 38.3%, rgba(42, 36, 29, 0.052), transparent 1.77px),
-      radial-gradient(circle 0.16px at 35.3% 21.6%, rgba(42, 36, 29, 0.085), transparent 0.37px),
-      radial-gradient(circle 0.31px at 6.7% 31.9%, rgba(42, 36, 29, 0.107), transparent 0.71px),
-      radial-gradient(circle 0.19px at 36.9% 94.6%, rgba(42, 36, 29, 0.125), transparent 0.44px),
-      radial-gradient(circle 0.64px at 81.5% 57.4%, rgba(42, 36, 29, 0.087), transparent 1.47px),
-      radial-gradient(circle 0.16px at 80.8% 18.8%, rgba(60, 50, 36, 0.122), transparent 0.37px),
-      radial-gradient(circle 0.18px at 45.7% 1.3%, rgba(42, 36, 29, 0.119), transparent 0.41px),
-      radial-gradient(circle 0.72px at 39.3% 96.5%, rgba(42, 36, 29, 0.09), transparent 1.66px),
-      radial-gradient(circle 0.74px at 71.5% 15.1%, rgba(42, 36, 29, 0.099), transparent 1.7px),
-      radial-gradient(circle 0.23px at 54.2% 12.9%, rgba(42, 36, 29, 0.072), transparent 0.53px),
-      radial-gradient(circle 0.24px at 79.3% 12.5%, rgba(42, 36, 29, 0.077), transparent 0.55px),
-      radial-gradient(circle 0.52px at 20.3% 35.0%, rgba(42, 36, 29, 0.067), transparent 1.2px),
-      radial-gradient(circle 0.2px at 90.4% 92.9%, rgba(60, 50, 36, 0.119), transparent 0.46px),
-      radial-gradient(circle 0.47px at 78.5% 56.8%, rgba(60, 50, 36, 0.091), transparent 1.08px),
-      radial-gradient(circle 0.84px at 66.4% 12.0%, rgba(42, 36, 29, 0.057), transparent 1.93px),
-      radial-gradient(circle 0.72px at 8.8% 9.0%, rgba(42, 36, 29, 0.107), transparent 1.66px),
-      radial-gradient(circle 0.22px at 4.5% 26.9%, rgba(60, 50, 36, 0.111), transparent 0.51px),
-      radial-gradient(circle 0.73px at 86.8% 20.3%, rgba(60, 50, 36, 0.054), transparent 1.68px),
-      radial-gradient(circle 0.27px at 18.3% 22.3%, rgba(60, 50, 36, 0.071), transparent 0.62px),
-      radial-gradient(circle 0.29px at 59.8% 38.8%, rgba(60, 50, 36, 0.094), transparent 0.67px),
-      radial-gradient(circle 0.56px at 63.4% 14.7%, rgba(42, 36, 29, 0.085), transparent 1.29px),
-      radial-gradient(circle 0.23px at 55.7% 96.6%, rgba(42, 36, 29, 0.097), transparent 0.53px),
-      radial-gradient(circle 0.49px at 66.7% 61.0%, rgba(60, 50, 36, 0.098), transparent 1.13px),
-      radial-gradient(circle 0.34px at 15.0% 14.7%, rgba(42, 36, 29, 0.109), transparent 0.78px),
-      radial-gradient(circle 0.28px at 74.7% 20.3%, rgba(42, 36, 29, 0.112), transparent 0.64px),
-      radial-gradient(circle 0.52px at 92.3% 79.4%, rgba(42, 36, 29, 0.086), transparent 1.2px),
-      radial-gradient(circle 0.46px at 71.4% 94.3%, rgba(42, 36, 29, 0.08), transparent 1.06px),
-      radial-gradient(circle 0.2px at 7.3% 67.4%, rgba(42, 36, 29, 0.125), transparent 0.46px),
-      radial-gradient(circle 0.61px at 25.3% 37.2%, rgba(42, 36, 29, 0.06), transparent 1.4px);
-    mix-blend-mode: multiply;
-    opacity: 0.7;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    object-fit: cover;
+    object-position: left top;
+    z-index: -1;
     pointer-events: none;
   }
 
@@ -156,31 +77,36 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   .cover__elephant {
     width: 54vw;
     left: -6vw;
-    bottom: calc(-7svh + 28px);
+    bottom: -7svh;
     transform: scaleX(-1);
   }
 
   .cover__duck {
     width: clamp(230px, 60vw, 300px);
     right: -3vw;
-    top: calc(-2svh + 15px);
+    top: -2svh;
     transform: scaleX(-1);
     filter: contrast(1.18) brightness(0.94);
     opacity: 1;
   }
 
-  .cover__text {
-    position: relative;
+  .cover__intro {
+    position: absolute;
     z-index: 1;
-    max-width: 22rem;
-    margin-inline-start: 7.5vw;
+    top: 5svh;
+    left: 6vw;
+    max-width: 60vw;
   }
 
   .cover__names {
-    margin-top: 0;
-    margin-inline-start: 1.25rem;
+    position: absolute;
+    z-index: 1;
+    left: 76%;
+    top: 58svh;
+    transform: translateX(-50%);
     width: max-content;
-    max-width: 100%;
+    max-width: 52vw;
+    text-align: center;
   }
 
   .cover__kicker,
@@ -200,23 +126,34 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   .cover__lede {
     font-family: var(--font-serif);
     font-style: italic;
-    font-size: clamp(1.05rem, 4vw, 1.25rem);
+    font-size: clamp(1rem, 4vw, 1.15rem);
     line-height: 1.5;
     max-width: 25ch;
-    margin: 0 0 0.625rem;
+    margin: 0;
   }
 
   .cover__title {
-    font-family: var(--font-serif);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-family: 'Beau Rivage', cursive;
     font-weight: 400;
-    font-size: clamp(1.89rem, 7.5vw, 2.58rem);
-    line-height: 1.05;
-    letter-spacing: 0.01em;
-    margin: 0 0 1.25rem;
+    font-size: clamp(2.6rem, 13vw, 3.6rem);
+    line-height: 1.15;
+    letter-spacing: 0;
+    margin: 0 0 1.1rem;
+  }
+
+  .cover__title span {
+    display: block;
+  }
+
+  .cover__amp {
+    margin: -0.35em 0;
   }
 
   .cover__location {
-    margin-bottom: 2.5rem;
+    margin-bottom: 1.6rem;
   }
 
   .cover__cta {
@@ -224,7 +161,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     align-items: center;
     gap: 0.5rem;
     font-family: var(--font-sans);
-    font-size: 0.85rem;
+    font-size: 0.8rem;
     letter-spacing: 0.08em;
     text-transform: uppercase;
     color: var(--color-ink);
@@ -232,6 +169,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     border-bottom: 1px solid var(--color-accent);
     padding-bottom: 0.35rem;
     width: fit-content;
+    white-space: nowrap;
   }
 
   .cover__cta::after {
@@ -249,157 +187,151 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     }
   }
 
-  /* Tablet vertical: narrative two-block composition */
-  @media (min-width: 768px) {
-    .cover {
-      padding: 10svh 8vw 14svh;
-    }
-
-    .cover__elephant {
-      width: 44vw;
-      left: -6vw;
-      bottom: calc(-4svh + 40px);
-    }
-
-    .cover__duck {
-      width: 38vw;
-      right: 2vw;
-      top: calc(5svh + 22px);
-    }
-
-    .cover__text {
-      max-width: 26rem;
-      margin-inline-start: calc(6vw + 40px);
-      margin-block-start: 0;
-    }
-
-    .cover__names {
-      margin-inline-start: 19vw;
-    }
-
-    .cover__lede {
-      max-width: 27ch;
-      margin-bottom: 0.44rem;
-    }
-
-    .cover__title {
-      font-size: clamp(2.6rem, 6vw, 3.4rem);
-    }
-  }
-
-  /* Tablet horizontal / small desktop */
-  @media (min-width: 1024px) {
-    .cover {
-      padding: 8svh 8vw;
-    }
-
-    .cover__elephant {
-      width: 28vw;
-      left: -8vw;
-      bottom: -7svh;
-    }
-
-    .cover__duck {
-      width: 23vw;
-      right: -1vw;
-      top: calc(3svh + 20px);
-    }
-
-    .cover__text {
-      max-width: 28rem;
-      margin-inline-start: calc(26vw + 28px);
-      margin-block-start: 0;
-    }
-
-    .cover__names {
-      margin-inline-start: 1.75rem;
-    }
-
-    .cover__title {
-      font-size: clamp(2.7rem, 4.5vw, 3.4rem);
-    }
-  }
-
-  /* Desktop */
-  @media (min-width: 1280px) {
-    .cover {
-      padding: 6svh 6vw;
-    }
-
-    .cover__elephant {
-      width: 34vw;
-      left: -3vw;
-      bottom: -19svh;
-    }
-
-    .cover__duck {
-      width: 24vw;
-      right: 3vw;
-      top: 4svh;
-    }
-
-    .cover__text {
-      max-width: 30rem;
-      margin-inline-start: calc(24vw + 70px);
-      margin-block-start: 22px;
-    }
-
-    .cover__names {
-      margin-inline-start: 2rem;
-    }
-
-    .cover__title {
-      font-size: clamp(3.4rem, 4vw, 4.4rem);
-    }
-  }
-
-  /* Mobile horizontal (short viewport, overrides width-based rules above) */
+  /* Phone landscape (844x390) */
   @media (orientation: landscape) and (max-height: 500px) {
-    .cover {
-      flex-direction: row;
-      align-items: center;
-      justify-content: flex-start;
-      padding: 6svh 6vw;
-      gap: 4vw;
-    }
-
     .cover__elephant {
-      width: 32vw;
+      width: 30vw;
       left: -2vw;
-      bottom: -33svh;
+      bottom: -32svh;
     }
 
     .cover__duck {
-      width: 30vw;
+      width: 26vw;
       right: 0;
       top: -1svh;
     }
 
-    .cover__text {
-      max-width: 26rem;
-      margin-inline-start: calc(24vw + 14px);
-      margin-block-start: 0;
+    .cover__intro {
+      top: 8svh;
+      left: 33vw;
+      max-width: 45vw;
     }
 
     .cover__names {
-      margin-top: 0;
-      margin-inline-start: 1rem;
+      left: 63%;
+      top: 60svh;
+      max-width: 34vw;
     }
 
     .cover__title {
-      font-size: clamp(1.6rem, 5.3vw, 2.15rem);
+      flex-direction: row;
+      gap: 0.4em;
+      font-size: clamp(1.7rem, 6vw, 2.3rem);
+      margin-bottom: 0.7rem;
     }
 
-    .cover__lede {
-      margin-bottom: 1rem;
+    .cover__amp {
+      margin: 0;
     }
 
     .cover__location {
+      margin-bottom: 1rem;
+    }
+  }
+
+  /* Tablet portrait / large vertical (1600x2560) */
+  @media (orientation: portrait) and (min-width: 1200px) {
+    .cover__elephant {
+      width: 42vw;
+      left: -4vw;
+      bottom: -5svh;
+    }
+
+    .cover__duck {
+      width: 30vw;
+      right: 1vw;
+      top: 3svh;
+    }
+
+    .cover__intro {
+      top: 7svh;
+      left: 7vw;
+      max-width: 52vw;
+    }
+
+    .cover__intro .cover__kicker {
+      font-size: 1.1rem;
+    }
+
+    .cover__intro .cover__lede {
+      font-size: clamp(1.6rem, 2.6vw, 2rem);
+      max-width: 26ch;
+    }
+
+    .cover__names {
+      left: 68%;
+      top: 76svh;
+      max-width: 34vw;
+    }
+
+    .cover__title {
+      font-size: clamp(4.2rem, 6vw, 5.4rem);
+      margin-bottom: 1.6rem;
+    }
+
+    .cover__location {
+      font-size: 1.05rem;
+      margin-bottom: 2.4rem;
+    }
+
+    .cover__cta {
+      font-size: 1.05rem;
+    }
+  }
+
+  /* Tablet landscape / laptop (2560x1600) */
+  @media (orientation: landscape) and (min-width: 1200px) {
+    .cover__elephant {
+      width: 26vw;
+      left: -3vw;
+      bottom: -12svh;
+    }
+
+    .cover__duck {
+      width: 18vw;
+      right: 2vw;
+      top: 4svh;
+    }
+
+    .cover__intro {
+      top: 8svh;
+      left: 8vw;
+      max-width: 34vw;
+    }
+
+    .cover__intro .cover__kicker {
+      font-size: 1rem;
+    }
+
+    .cover__intro .cover__lede {
+      font-size: clamp(1.3rem, 1.8vw, 1.6rem);
+      max-width: 28ch;
+    }
+
+    .cover__names {
+      left: 55%;
+      top: 80svh;
+      max-width: 30vw;
+    }
+
+    .cover__title {
+      flex-direction: row;
+      gap: 0.45em;
+      font-size: clamp(3rem, 4vw, 4rem);
+      margin-bottom: 1.2rem;
+    }
+
+    .cover__amp {
+      margin: 0;
+    }
+
+    .cover__location {
+      font-size: 0.95rem;
       margin-bottom: 1.8rem;
     }
 
-    .cover__location {
-      margin-bottom: 1.2rem;
+    .cover__cta {
+      font-size: 0.95rem;
     }
   }
 </style>
