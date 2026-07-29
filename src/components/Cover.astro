@@ -17,7 +17,7 @@ const dedicationLength = getDedicationLength(dedication);
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 ---
 
-<header class="cover">
+<header class="cover" data-animation-state="normal">
   <img
     class="cover__texture"
     src={`${base}/images/textura-vertical.png`}
@@ -66,6 +66,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   </svg>
   <img
     class="cover__elephant"
+    data-animation="elephant"
     src={`${base}/images/elephant.png`}
     alt="Ilustración de un elefante de perfil entrando desde la izquierda, trazo fino"
     width="1101"
@@ -74,6 +75,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   />
   <img
     class="cover__duck"
+    data-animation="duck"
     src={`${base}/images/duck.png`}
     alt="Ilustración de un pato mirando hacia el bloque central, trazo fino"
     width="768"
@@ -82,21 +84,21 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   />
 
   <div class="cover__intro" data-length={dedicationLength}>
-    <p class="cover__kicker" data-autofit="width">{displayName}</p>
-    <p class="cover__lede" data-autofit="width">{dedication}</p>
+    <p class="cover__kicker" data-autofit="width" data-animation="guest-name">{displayName}</p>
+    <p class="cover__lede" data-autofit="width" data-animation="dedication">{dedication}</p>
   </div>
 
   <div class="cover__names">
     <h1 class="cover__title" data-autofit="width">
-      <span class="signature-fatima">Fátima</span>
-      <span class="cover__amp signature-amp">&amp;</span>
-      <span class="signature-andres">Andrés</span>
+      <span class="signature-fatima" data-animation="name-fatima">Fátima</span>
+      <span class="cover__amp signature-amp" data-animation="name-separator">&amp;</span>
+      <span class="signature-andres" data-animation="name-andres">Andrés</span>
     </h1>
   </div>
 
   <div class="cover__meta">
-    <p class="cover__location">Imbassaí, Bahía</p>
-    <a class="cover__cta" href="#viaje">Comenzar el viaje</a>
+    <p class="cover__location" data-animation="location">Imbassaí, Bahía</p>
+    <a class="cover__cta" href="#viaje" data-animation="cta">Comenzar el viaje</a>
   </div>
 </header>
 
@@ -569,5 +571,16 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
       border-bottom-color: #a77a46;
       border-bottom-width: 1.4px;
     }
+  }
+
+  /*
+    Preparación técnica para una futura secuencia de animación.
+    Inerte por defecto: solo se activa si el contenedor .cover recibe
+    la clase .is-preparing-animation (no aplicada aún en el markup).
+    No implementa animación real, solo el estado oculto de partida.
+  */
+  .cover.is-preparing-animation [data-animation] {
+    opacity: 0;
+    visibility: hidden;
   }
 </style>
