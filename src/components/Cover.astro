@@ -1,5 +1,7 @@
 ---
-import '@fontsource/beau-rivage';
+import '@fontsource/caveat/500.css';
+import '@fontsource/caveat/600.css';
+import '@fontsource/caveat/700.css';
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 ---
 
@@ -30,9 +32,11 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     loading="eager"
   />
 
-  <div class="cover__intro">
-    <p class="cover__kicker">Estefi y Matías</p>
-    <p class="cover__lede">Hay viajes que no tendrían el mismo sentido sin ciertas personas.</p>
+  <div class="cover__kicker-box">
+    <p class="cover__kicker" data-autofit>Estefi y Matías</p>
+  </div>
+  <div class="cover__lede-box">
+    <p class="cover__lede" data-autofit>Hay viajes que no tendrían el mismo sentido sin ciertas personas.</p>
   </div>
 
   <div class="cover__names">
@@ -45,6 +49,34 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     <a class="cover__cta" href="#viaje">Comenzar el viaje</a>
   </div>
 </header>
+
+<script>
+  function fitText(el: HTMLElement) {
+    const box = el.parentElement;
+    if (!box) return;
+    el.style.fontSize = '';
+    const maxSize = parseFloat(getComputedStyle(el).fontSize);
+    let size = maxSize;
+    let guard = 0;
+    while (
+      (el.scrollHeight > box.clientHeight || el.scrollWidth > box.clientWidth) &&
+      size > 10 &&
+      guard < 80
+    ) {
+      size -= 1;
+      el.style.fontSize = size + 'px';
+      guard++;
+    }
+  }
+
+  function fitAll() {
+    document.querySelectorAll<HTMLElement>('[data-autofit]').forEach(fitText);
+  }
+
+  fitAll();
+  document.fonts?.ready.then(fitAll);
+  window.addEventListener('resize', fitAll);
+</script>
 
 <style>
   .cover {
@@ -72,30 +104,47 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     z-index: 0;
     width: auto;
     height: auto;
+    mix-blend-mode: multiply;
   }
 
   .cover__elephant {
     width: 54vw;
     left: -6vw;
-    bottom: -7svh;
+    bottom: -11svh;
     transform: scaleX(-1);
   }
 
   .cover__duck {
     width: clamp(230px, 60vw, 300px);
-    right: -3vw;
-    top: -2svh;
+    right: -6vw;
+    top: -4svh;
     transform: scaleX(-1);
-    filter: contrast(1.18) brightness(0.94);
+    filter: brightness(0.45) contrast(1.5);
     opacity: 1;
   }
 
-  .cover__intro {
+  .cover__kicker-box {
     position: absolute;
     z-index: 1;
-    top: 5svh;
-    left: 6vw;
-    max-width: 60vw;
+    left: 8.3vw;
+    top: 3svh;
+    width: 60.2vw;
+    height: 9.4svh;
+    display: flex;
+    align-items: flex-start;
+    overflow: hidden;
+  }
+
+  .cover__lede-box {
+    position: absolute;
+    z-index: 1;
+    left: 4.1vw;
+    top: 17svh;
+    width: 63.3vw;
+    height: 29.9svh;
+    display: flex;
+    align-items: flex-start;
+    overflow: hidden;
   }
 
   .cover__names {
@@ -109,7 +158,6 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     text-align: center;
   }
 
-  .cover__kicker,
   .cover__location {
     font-family: var(--font-sans);
     text-transform: uppercase;
@@ -120,15 +168,22 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   }
 
   .cover__kicker {
-    margin-bottom: 0.6rem;
+    width: 100%;
+    font-family: 'Caveat', cursive;
+    font-weight: 600;
+    font-size: 1.7rem;
+    line-height: 1.1;
+    color: var(--color-ink);
+    margin: 0;
   }
 
   .cover__lede {
-    font-family: var(--font-serif);
-    font-style: italic;
-    font-size: clamp(1rem, 4vw, 1.15rem);
-    line-height: 1.5;
-    max-width: 25ch;
+    width: 100%;
+    font-family: 'Caveat', cursive;
+    font-weight: 500;
+    font-size: 1.8rem;
+    line-height: 1.15;
+    color: var(--color-ink);
     margin: 0;
   }
 
@@ -136,10 +191,10 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     display: flex;
     flex-direction: column;
     align-items: center;
-    font-family: 'Beau Rivage', cursive;
-    font-weight: 400;
+    font-family: 'Caveat', cursive;
+    font-weight: 700;
     font-size: clamp(2.6rem, 13vw, 3.6rem);
-    line-height: 1.15;
+    line-height: 1.05;
     letter-spacing: 0;
     margin: 0 0 1.1rem;
   }
@@ -201,10 +256,18 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
       top: -1svh;
     }
 
-    .cover__intro {
-      top: 8svh;
+    .cover__kicker-box {
+      top: 6svh;
       left: 33vw;
-      max-width: 45vw;
+      width: 45vw;
+      height: 16svh;
+    }
+
+    .cover__lede-box {
+      top: 24svh;
+      left: 33vw;
+      width: 45vw;
+      height: 40svh;
     }
 
     .cover__names {
@@ -243,19 +306,26 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
       top: 3svh;
     }
 
-    .cover__intro {
+    .cover__kicker-box {
       top: 7svh;
       left: 7vw;
-      max-width: 52vw;
+      width: 52vw;
+      height: 10svh;
     }
 
-    .cover__intro .cover__kicker {
-      font-size: 1.1rem;
+    .cover__lede-box {
+      top: 19svh;
+      left: 7vw;
+      width: 52vw;
+      height: 28svh;
     }
 
-    .cover__intro .cover__lede {
-      font-size: clamp(1.6rem, 2.6vw, 2rem);
-      max-width: 26ch;
+    .cover__kicker {
+      font-size: 2.2rem;
+    }
+
+    .cover__lede {
+      font-size: 2.4rem;
     }
 
     .cover__names {
@@ -293,19 +363,26 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
       top: 4svh;
     }
 
-    .cover__intro {
+    .cover__kicker-box {
       top: 8svh;
       left: 8vw;
-      max-width: 34vw;
+      width: 34vw;
+      height: 9svh;
     }
 
-    .cover__intro .cover__kicker {
-      font-size: 1rem;
+    .cover__lede-box {
+      top: 19svh;
+      left: 8vw;
+      width: 34vw;
+      height: 22svh;
     }
 
-    .cover__intro .cover__lede {
-      font-size: clamp(1.3rem, 1.8vw, 1.6rem);
-      max-width: 28ch;
+    .cover__kicker {
+      font-size: 1.8rem;
+    }
+
+    .cover__lede {
+      font-size: 2rem;
     }
 
     .cover__names {
