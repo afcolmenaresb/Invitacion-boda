@@ -1,7 +1,5 @@
 ---
-import '@fontsource/caveat/500.css';
-import '@fontsource/caveat/600.css';
-import '@fontsource/caveat/700.css';
+import '@fontsource/sacramento/400.css';
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 ---
 
@@ -93,7 +91,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     height: 100%;
     max-width: none;
     object-fit: cover;
-    object-position: left top;
+    object-position: 25% top;
     z-index: -1;
     pointer-events: none;
   }
@@ -108,14 +106,14 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   }
 
   .cover__elephant {
-    width: 54vw;
-    left: -6vw;
-    bottom: -11svh;
+    width: 60vw;
+    left: -3vw;
+    bottom: 0;
     transform: scaleX(-1);
   }
 
   .cover__duck {
-    width: clamp(230px, 60vw, 300px);
+    width: clamp(250px, 68vw, 320px);
     right: -6vw;
     top: -4svh;
     transform: scaleX(-1);
@@ -169,20 +167,20 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
   .cover__kicker {
     width: 100%;
-    font-family: 'Caveat', cursive;
-    font-weight: 600;
-    font-size: 1.7rem;
-    line-height: 1.1;
+    font-family: 'Sacramento', cursive;
+    font-weight: 400;
+    font-size: 2rem;
+    line-height: 1.15;
     color: var(--color-ink);
     margin: 0;
   }
 
   .cover__lede {
     width: 100%;
-    font-family: 'Caveat', cursive;
-    font-weight: 500;
-    font-size: 1.8rem;
-    line-height: 1.15;
+    font-family: 'Sacramento', cursive;
+    font-weight: 400;
+    font-size: 2.1rem;
+    line-height: 1.25;
     color: var(--color-ink);
     margin: 0;
   }
@@ -191,9 +189,9 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     display: flex;
     flex-direction: column;
     align-items: center;
-    font-family: 'Caveat', cursive;
-    font-weight: 700;
-    font-size: clamp(2.6rem, 13vw, 3.6rem);
+    font-family: 'Sacramento', cursive;
+    font-weight: 400;
+    font-size: clamp(3.2rem, 15vw, 4.4rem);
     line-height: 1.05;
     letter-spacing: 0;
     margin: 0 0 1.1rem;

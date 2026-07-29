@@ -10,7 +10,7 @@
     "astro": "astro"
   },
   "dependencies": {
-    "@fontsource/caveat": "^5.3.0",
+    "@fontsource/sacramento": "^5.3.0",
     "astro": "^7.1.3"
   }
 }
