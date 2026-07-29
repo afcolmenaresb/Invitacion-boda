@@ -1,6 +1,19 @@
 ---
 import '@fontsource/sacramento/400.css';
 import '@fontsource/homemade-apple/400.css';
+import { getDedicationLength } from '../data/guests';
+
+interface Props {
+  displayName?: string;
+  dedication?: string;
+}
+
+const {
+  displayName = 'Estefi y Matías',
+  dedication = 'Hay viajes que no tendrían el mismo sentido sin ciertas personas.',
+} = Astro.props;
+
+const dedicationLength = getDedicationLength(dedication);
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 ---
 
@@ -14,6 +27,43 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     height="967"
     loading="eager"
   />
+  <div
+    class="cover__texture-v2"
+    style={`background-image: url('${base}/images/textura_vertical_2.png')`}
+  >
+  </div>
+  <svg
+    class="cover__foam-abstract"
+    viewBox="0 0 400 200"
+    preserveAspectRatio="xMaxYMax slice"
+    aria-hidden="true"
+    focusable="false"
+  >
+    <defs>
+      <filter id="foamBlur" x="-30%" y="-30%" width="160%" height="160%">
+        <feGaussianBlur stdDeviation="7" />
+      </filter>
+    </defs>
+    <path
+      class="cover__foam-shape"
+      d="M400,200 L400,128 C372,120 344,101 313,105 C282,109 268,132 233,129
+         C198,126 190,148 155,146 C120,144 108,163 72,160
+         C46,158 30,172 0,168 L0,200 Z"
+      fill="#fbf5e7"
+      filter="url(#foamBlur)"
+    />
+    <g class="cover__foam-flecks" fill="#fdf9ef">
+      <circle cx="150" cy="132" r="3" />
+      <circle cx="182" cy="121" r="2" />
+      <circle cx="212" cy="136" r="3.6" />
+      <circle cx="260" cy="110" r="2.2" />
+      <circle cx="296" cy="115" r="3" />
+      <circle cx="330" cy="100" r="2" />
+      <circle cx="103" cy="155" r="2.4" />
+      <circle cx="66" cy="162" r="3" />
+      <circle cx="35" cy="170" r="2" />
+    </g>
+  </svg>
   <img
     class="cover__elephant"
     src={`${base}/images/elephant.png`}
@@ -31,18 +81,16 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     loading="eager"
   />
 
-  <div class="cover__kicker-box">
-    <p class="cover__kicker" data-autofit>Estefi y Matías</p>
-  </div>
-  <div class="cover__lede-box">
-    <p class="cover__lede" data-autofit>Hay viajes que no tendrían el mismo sentido sin ciertas personas.</p>
+  <div class="cover__intro" data-length={dedicationLength}>
+    <p class="cover__kicker" data-autofit="width">{displayName}</p>
+    <p class="cover__lede" data-autofit="width">{dedication}</p>
   </div>
 
   <div class="cover__names">
     <h1 class="cover__title" data-autofit="width">
-      <span>Fátima</span>
-      <span class="cover__amp">&amp;</span>
-      <span>Andrés</span>
+      <span class="signature-fatima">Fátima</span>
+      <span class="cover__amp signature-amp">&amp;</span>
+      <span class="signature-andres">Andrés</span>
     </h1>
   </div>
 
@@ -54,18 +102,11 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 <script>
   function fitText(el: HTMLElement) {
-    const box = el.parentElement;
-    if (!box) return;
-    const checkHeight = el.dataset.autofit !== 'width';
     el.style.fontSize = '';
     const maxSize = parseFloat(getComputedStyle(el).fontSize);
     let size = maxSize;
     let guard = 0;
-    while (
-      (el.scrollWidth > box.clientWidth || (checkHeight && el.scrollHeight > box.clientHeight)) &&
-      size > 10 &&
-      guard < 80
-    ) {
+    while (el.scrollWidth > el.clientWidth && size > 10 && guard < 80) {
       size -= 1;
       el.style.fontSize = size + 'px';
       guard++;
@@ -101,6 +142,38 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     pointer-events: none;
   }
 
+  .cover__texture-v2 {
+    display: none;
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-position: 60% top;
+    z-index: -1;
+    pointer-events: none;
+  }
+
+  .cover__foam-abstract {
+    display: none;
+    position: absolute;
+    z-index: -1;
+    right: 0;
+    bottom: 0;
+    width: 50vw;
+    height: 22svh;
+    pointer-events: none;
+  }
+
+  .cover__foam-shape {
+    opacity: 0.55;
+  }
+
+  .cover__foam-flecks {
+    opacity: 0.5;
+  }
+
   .cover__elephant,
   .cover__duck {
     position: absolute;
@@ -126,30 +199,15 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     opacity: 1;
   }
 
-  .cover__kicker-box {
+  .cover__intro {
     position: absolute;
     z-index: 1;
     left: 7vw;
     top: 6svh;
-    width: 42vw;
-    height: 13svh;
     display: flex;
+    flex-direction: column;
     align-items: flex-start;
     padding-top: 0.15em;
-    overflow: hidden;
-  }
-
-  .cover__lede-box {
-    position: absolute;
-    z-index: 1;
-    left: 7vw;
-    top: 20svh;
-    width: 42vw;
-    height: 24svh;
-    display: flex;
-    align-items: flex-start;
-    padding-top: 0.1em;
-    overflow: hidden;
   }
 
   .cover__names {
@@ -180,7 +238,8 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   }
 
   .cover__kicker {
-    width: 100%;
+    max-width: 42vw;
+    text-wrap: balance;
     font-family: 'Homemade Apple', cursive;
     font-weight: 400;
     font-size: 2.8rem;
@@ -190,13 +249,14 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   }
 
   .cover__lede {
-    width: 100%;
+    max-width: 42vw;
     font-family: 'Homemade Apple', cursive;
     font-weight: 400;
     font-size: 1.9rem;
     line-height: 1.4;
     color: var(--color-ink);
     margin: 0;
+    margin-top: 17px;
   }
 
   .cover__title {
@@ -262,18 +322,24 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
       top: -1svh;
     }
 
-    .cover__kicker-box {
+    .cover__intro {
       top: 6svh;
       left: 33vw;
-      width: 45vw;
-      height: 16svh;
     }
 
-    .cover__lede-box {
-      top: 24svh;
-      left: 33vw;
-      width: 45vw;
-      height: 40svh;
+    .cover__kicker,
+    .cover__lede {
+      max-width: 45vw;
+    }
+
+    .cover__kicker {
+      font-size: 1.6rem;
+    }
+
+    .cover__lede {
+      font-size: 0.95rem;
+      line-height: 1.35;
+      margin-top: 12px;
     }
 
     .cover__names {
@@ -312,18 +378,14 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
       top: 3svh;
     }
 
-    .cover__kicker-box {
+    .cover__intro {
       top: 7svh;
       left: 7vw;
-      width: 52vw;
-      height: 10svh;
     }
 
-    .cover__lede-box {
-      top: 19svh;
-      left: 7vw;
-      width: 52vw;
-      height: 28svh;
+    .cover__kicker,
+    .cover__lede {
+      max-width: 52vw;
     }
 
     .cover__kicker {
@@ -332,6 +394,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
     .cover__lede {
       font-size: 2.4rem;
+      margin-top: 24px;
     }
 
     .cover__names {
@@ -369,18 +432,14 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
       top: 4svh;
     }
 
-    .cover__kicker-box {
+    .cover__intro {
       top: 8svh;
       left: 8vw;
-      width: 34vw;
-      height: 9svh;
     }
 
-    .cover__lede-box {
-      top: 19svh;
-      left: 8vw;
-      width: 34vw;
-      height: 22svh;
+    .cover__kicker,
+    .cover__lede {
+      max-width: 34vw;
     }
 
     .cover__kicker {
@@ -389,6 +448,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
     .cover__lede {
       font-size: 2rem;
+      margin-top: 20px;
     }
 
     .cover__names {
@@ -415,6 +475,99 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
     .cover__cta {
       font-size: 0.95rem;
+    }
+  }
+
+  /* Mobile portrait refinement pass (390x844 only) */
+  @media (orientation: portrait) and (max-width: 1199px) {
+    .cover__texture {
+      display: none;
+    }
+
+    .cover__texture-v2 {
+      display: block;
+    }
+
+    .cover__foam-abstract {
+      display: none;
+    }
+
+    .cover__kicker {
+      opacity: 0.82;
+      color: #7e5e49;
+      font-size: 2.05rem;
+      max-width: 46vw;
+    }
+
+    .cover__lede {
+      opacity: 0.84;
+      color: #5c5047;
+      font-size: 1.05rem;
+      line-height: 1.5;
+      max-width: 48vw;
+      margin-top: 17px;
+    }
+
+    .cover__intro[data-length='short'] .cover__lede {
+      font-size: 1.4rem;
+      line-height: 1.6;
+      max-width: 46vw;
+      margin-top: 21px;
+    }
+
+    .cover__intro[data-length='long'] .cover__lede {
+      font-size: 1rem;
+      line-height: 1.4;
+      max-width: 48vw;
+      margin-top: 13px;
+    }
+
+    .cover__title {
+      gap: 0.3em;
+      font-size: 34.7px;
+      color: #211c18;
+    }
+
+    .signature-fatima {
+      position: relative;
+      top: -12px;
+    }
+
+    .signature-amp {
+      position: relative;
+      top: 10px;
+      left: 6px;
+    }
+
+    .signature-andres {
+      position: relative;
+      top: 36px;
+      left: 13px;
+    }
+
+    .cover__meta {
+      bottom: 11.3svh;
+    }
+
+    .cover__meta::before {
+      content: '';
+      position: absolute;
+      z-index: -1;
+      inset: -14px -22px;
+      background: radial-gradient(ellipse at center, rgba(255, 254, 248, 1), rgba(255, 254, 248, 0) 80%);
+      pointer-events: none;
+    }
+
+    .cover__location {
+      margin-bottom: 0.3rem;
+      color: #756b60;
+    }
+
+    .cover__cta {
+      color: #6b6055;
+      letter-spacing: 0.1em;
+      border-bottom-color: #a77a46;
+      border-bottom-width: 1.4px;
     }
   }
 </style>
