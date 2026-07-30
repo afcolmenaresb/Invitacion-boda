@@ -17,9 +17,26 @@ const dedicationLength = getDedicationLength(dedication);
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 ---
 
-<header class="cover" data-animation-state="normal">
-  <img
-    class="cover__texture"
+<script is:inline>
+  // Runs synchronously, before the fixed-canvas markup below is painted,
+  // so --cover-scale is already correct on first paint (no flash from a
+  // generic fallback value). Re-applied on resize/orientation change.
+  (function () {
+    function applyCoverScale() {
+      var scale = Math.min(window.innerWidth / 390, window.innerHeight / 844);
+      document.documentElement.style.setProperty('--cover-scale', String(scale));
+    }
+    applyCoverScale();
+    window.addEventListener('resize', applyCoverScale);
+    window.addEventListener('orientationchange', applyCoverScale);
+  })();
+</script>
+
+<div class="cover-frame">
+  <div class="cover-canvas">
+    <header class="cover" data-animation-state="normal">
+      <img
+        class="cover__texture"
     src={`${base}/images/textura-vertical.png`}
     alt=""
     role="presentation"
@@ -100,7 +117,9 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     <p class="cover__location" data-animation="location">Imbassaí, Bahía</p>
     <a class="cover__cta" href="#viaje" data-animation="cta">Comenzar el viaje</a>
   </div>
-</header>
+    </header>
+  </div>
+</div>
 
 <script>
   function fitText(el: HTMLElement) {
@@ -310,27 +329,68 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 </script>
 
 <style>
+  /*
+    Fixed logical canvas: the cover is a fixed artistic composition
+    designed at exactly 390x844 -- it no longer redistributes internally
+    per device. .cover-frame fills the real viewport and centers
+    .cover-canvas, a constant 390x844 box holding the untouched 390x844
+    composition below, uniformly scaled via --cover-scale (computed in the
+    inline script above, before first paint) to fit any screen without
+    cropping, deforming, or scrolling. Leftover space is letterboxed in
+    the same cream background color, never stretched or tiled.
+  */
+  .cover-frame {
+    width: 100%;
+    height: 100svh;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-bg);
+  }
+
+  /* @supports keeps this from being minified away as a "duplicate" of the
+     100svh fallback above -- browsers without dvh support correctly keep
+     using svh instead of losing the height declaration entirely. */
+  @supports (height: 100dvh) {
+    .cover-frame {
+      height: 100dvh;
+    }
+  }
+
+  .cover-canvas {
+    width: 390px;
+    height: 844px;
+    flex-shrink: 0;
+    transform-origin: center center;
+    /* Falls back to scale(1) with no JS: still fully visible and
+       centered, just not scale-corrected (cropped by .cover-frame's
+       overflow:hidden on very small screens instead of blank). */
+    transform: scale(var(--cover-scale, 1));
+  }
+
+  /*
+    Below this point the composition is frozen at its approved 390x844
+    pixel values (merged from the old base + "mobile portrait" rules,
+    which is what actually rendered at 390 width). Per-device breakpoints
+    that used to individually reposition/resize text, signature, duck,
+    elephant, meta or CTA are gone -- adapting to the real device is now
+    handled entirely by scaling the canvas above, uniformly.
+  */
   .cover {
     position: relative;
     overflow: hidden;
-    min-height: 100svh;
+    width: 100%;
+    height: 100%;
     isolation: isolate;
   }
 
   .cover__texture {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    max-width: none;
-    object-fit: cover;
-    object-position: 45% top;
-    z-index: -1;
-    pointer-events: none;
+    display: none;
   }
 
   .cover__texture-v2 {
-    display: none;
+    display: block;
     position: absolute;
     inset: 0;
     width: 100%;
@@ -344,21 +404,6 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
   .cover__foam-abstract {
     display: none;
-    position: absolute;
-    z-index: -1;
-    right: 0;
-    bottom: 0;
-    width: 50vw;
-    height: 22svh;
-    pointer-events: none;
-  }
-
-  .cover__foam-shape {
-    opacity: 0.55;
-  }
-
-  .cover__foam-flecks {
-    opacity: 0.5;
   }
 
   .cover__elephant,
@@ -371,16 +416,16 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   }
 
   .cover__elephant {
-    width: 60vw;
-    left: -3vw;
+    width: 234px;
+    left: -11.7px;
     bottom: 0;
     transform: scaleX(-1);
   }
 
   .cover__duck {
-    width: clamp(250px, 68vw, 320px);
-    right: -6vw;
-    top: -4svh;
+    width: 265.2px;
+    right: -23.4px;
+    top: -33.76px;
     transform: scaleX(-1);
     filter: brightness(0.45) contrast(1.5);
     opacity: 1;
@@ -389,8 +434,8 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   .cover__intro {
     position: absolute;
     z-index: 1;
-    left: 7vw;
-    top: 6svh;
+    left: 27.3px;
+    top: 50.64px;
     display: flex;
     flex-direction: column;
     align-items: flex-start;
@@ -401,18 +446,27 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     position: absolute;
     z-index: 1;
     left: 50%;
-    top: 51svh;
+    top: 430.44px;
     transform: translate(-50%, -50%);
-    width: 90vw;
+    width: 351px;
     text-align: center;
   }
 
   .cover__meta {
     position: absolute;
     z-index: 1;
-    right: 6vw;
-    bottom: 6svh;
+    right: 23.4px;
+    bottom: 95.372px;
     text-align: right;
+  }
+
+  .cover__meta::before {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    inset: -14px -22px;
+    background: radial-gradient(ellipse at center, rgba(255, 254, 248, 1), rgba(255, 254, 248, 0) 80%);
+    pointer-events: none;
   }
 
   .cover__location {
@@ -420,30 +474,46 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     text-transform: uppercase;
     letter-spacing: 0.14em;
     font-size: 0.75rem;
-    color: var(--color-muted);
-    margin: 0 0 1rem;
+    color: #756b60;
+    margin: 0 0 0.3rem;
   }
 
   .cover__kicker {
-    max-width: 42vw;
+    opacity: 0.82;
+    max-width: 179.4px;
     text-wrap: balance;
     font-family: 'Homemade Apple', cursive;
     font-weight: 400;
-    font-size: 2.8rem;
+    font-size: 2.05rem;
     line-height: 1.3;
-    color: var(--color-ink);
+    color: #7e5e49;
     margin: 0;
   }
 
   .cover__lede {
-    max-width: 42vw;
+    opacity: 0.84;
+    max-width: 187.2px;
     font-family: 'Homemade Apple', cursive;
     font-weight: 400;
-    font-size: 1.9rem;
-    line-height: 1.4;
-    color: var(--color-ink);
+    font-size: 1.05rem;
+    line-height: 1.5;
+    color: #5c5047;
     margin: 0;
     margin-top: 17px;
+  }
+
+  .cover__intro[data-length='short'] .cover__lede {
+    font-size: 1.4rem;
+    line-height: 1.6;
+    max-width: 179.4px;
+    margin-top: 21px;
+  }
+
+  .cover__intro[data-length='long'] .cover__lede {
+    font-size: 1rem;
+    line-height: 1.4;
+    max-width: 187.2px;
+    margin-top: 13px;
   }
 
   .cover__title {
@@ -451,17 +521,35 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     flex-direction: row;
     align-items: baseline;
     justify-content: center;
-    gap: 0.35em;
+    gap: 0.3em;
     font-family: 'Homemade Apple', cursive;
     font-weight: 400;
-    font-size: clamp(3.4rem, 16vw, 4.4rem);
+    font-size: 34.7px;
     line-height: 1.05;
     letter-spacing: 0;
+    color: #211c18;
     margin: 0;
   }
 
   .cover__amp {
     margin: 0;
+  }
+
+  .signature-fatima {
+    position: relative;
+    top: -12px;
+  }
+
+  .signature-amp {
+    position: relative;
+    top: 10px;
+    left: 6px;
+  }
+
+  .signature-andres {
+    position: relative;
+    top: 36px;
+    left: 13px;
   }
 
   .cover__cta {
@@ -470,11 +558,11 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     gap: 0.5rem;
     font-family: var(--font-sans);
     font-size: 0.8rem;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: var(--color-ink);
+    color: #6b6055;
     text-decoration: none;
-    border-bottom: 1px solid var(--color-accent);
+    border-bottom: 1.4px solid #a77a46;
     padding-bottom: 0.35rem;
     width: fit-content;
     white-space: nowrap;
@@ -492,269 +580,6 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     .cover__cta:hover,
     .cover__cta:focus-visible {
       color: var(--color-accent);
-    }
-  }
-
-  /* Phone landscape (844x390) */
-  @media (orientation: landscape) and (max-height: 500px) {
-    .cover__elephant {
-      width: 30vw;
-      left: -2vw;
-      bottom: -32svh;
-    }
-
-    .cover__duck {
-      width: 26vw;
-      right: 0;
-      top: -1svh;
-    }
-
-    .cover__intro {
-      top: 6svh;
-      left: 33vw;
-    }
-
-    .cover__kicker,
-    .cover__lede {
-      max-width: 45vw;
-    }
-
-    .cover__kicker {
-      font-size: 1.6rem;
-    }
-
-    .cover__lede {
-      font-size: 0.95rem;
-      line-height: 1.35;
-      margin-top: 12px;
-    }
-
-    .cover__names {
-      left: 63%;
-      top: 60svh;
-      max-width: 34vw;
-    }
-
-    .cover__title {
-      flex-direction: row;
-      gap: 0.4em;
-      font-size: clamp(1.7rem, 6vw, 2.3rem);
-      margin-bottom: 0.7rem;
-    }
-
-    .cover__amp {
-      margin: 0;
-    }
-
-    .cover__location {
-      margin-bottom: 1rem;
-    }
-  }
-
-  /* Tablet portrait / large vertical (1600x2560) */
-  @media (orientation: portrait) and (min-width: 1200px) {
-    .cover__elephant {
-      width: 42vw;
-      left: -4vw;
-      bottom: -5svh;
-    }
-
-    .cover__duck {
-      width: 30vw;
-      right: 1vw;
-      top: 3svh;
-    }
-
-    .cover__intro {
-      top: 7svh;
-      left: 7vw;
-    }
-
-    .cover__kicker,
-    .cover__lede {
-      max-width: 52vw;
-    }
-
-    .cover__kicker {
-      font-size: 2.2rem;
-    }
-
-    .cover__lede {
-      font-size: 2.4rem;
-      margin-top: 24px;
-    }
-
-    .cover__names {
-      left: 68%;
-      top: 76svh;
-      max-width: 34vw;
-    }
-
-    .cover__title {
-      font-size: clamp(4.2rem, 6vw, 5.4rem);
-      margin-bottom: 1.6rem;
-    }
-
-    .cover__location {
-      font-size: 1.05rem;
-      margin-bottom: 2.4rem;
-    }
-
-    .cover__cta {
-      font-size: 1.05rem;
-    }
-  }
-
-  /* Tablet landscape / laptop (2560x1600) */
-  @media (orientation: landscape) and (min-width: 1200px) {
-    .cover__elephant {
-      width: 26vw;
-      left: -3vw;
-      bottom: -12svh;
-    }
-
-    .cover__duck {
-      width: 18vw;
-      right: 2vw;
-      top: 4svh;
-    }
-
-    .cover__intro {
-      top: 8svh;
-      left: 8vw;
-    }
-
-    .cover__kicker,
-    .cover__lede {
-      max-width: 34vw;
-    }
-
-    .cover__kicker {
-      font-size: 1.8rem;
-    }
-
-    .cover__lede {
-      font-size: 2rem;
-      margin-top: 20px;
-    }
-
-    .cover__names {
-      left: 55%;
-      top: 80svh;
-      max-width: 30vw;
-    }
-
-    .cover__title {
-      flex-direction: row;
-      gap: 0.45em;
-      font-size: clamp(3rem, 4vw, 4rem);
-      margin-bottom: 1.2rem;
-    }
-
-    .cover__amp {
-      margin: 0;
-    }
-
-    .cover__location {
-      font-size: 0.95rem;
-      margin-bottom: 1.8rem;
-    }
-
-    .cover__cta {
-      font-size: 0.95rem;
-    }
-  }
-
-  /* Mobile portrait refinement pass (390x844 only) */
-  @media (orientation: portrait) and (max-width: 1199px) {
-    .cover__texture {
-      display: none;
-    }
-
-    .cover__texture-v2 {
-      display: block;
-    }
-
-    .cover__foam-abstract {
-      display: none;
-    }
-
-    .cover__kicker {
-      opacity: 0.82;
-      color: #7e5e49;
-      font-size: 2.05rem;
-      max-width: 46vw;
-    }
-
-    .cover__lede {
-      opacity: 0.84;
-      color: #5c5047;
-      font-size: 1.05rem;
-      line-height: 1.5;
-      max-width: 48vw;
-      margin-top: 17px;
-    }
-
-    .cover__intro[data-length='short'] .cover__lede {
-      font-size: 1.4rem;
-      line-height: 1.6;
-      max-width: 46vw;
-      margin-top: 21px;
-    }
-
-    .cover__intro[data-length='long'] .cover__lede {
-      font-size: 1rem;
-      line-height: 1.4;
-      max-width: 48vw;
-      margin-top: 13px;
-    }
-
-    .cover__title {
-      gap: 0.3em;
-      font-size: 34.7px;
-      color: #211c18;
-    }
-
-    .signature-fatima {
-      position: relative;
-      top: -12px;
-    }
-
-    .signature-amp {
-      position: relative;
-      top: 10px;
-      left: 6px;
-    }
-
-    .signature-andres {
-      position: relative;
-      top: 36px;
-      left: 13px;
-    }
-
-    .cover__meta {
-      bottom: 11.3svh;
-    }
-
-    .cover__meta::before {
-      content: '';
-      position: absolute;
-      z-index: -1;
-      inset: -14px -22px;
-      background: radial-gradient(ellipse at center, rgba(255, 254, 248, 1), rgba(255, 254, 248, 0) 80%);
-      pointer-events: none;
-    }
-
-    .cover__location {
-      margin-bottom: 0.3rem;
-      color: #756b60;
-    }
-
-    .cover__cta {
-      color: #6b6055;
-      letter-spacing: 0.1em;
-      border-bottom-color: #a77a46;
-      border-bottom-width: 1.4px;
     }
   }
 

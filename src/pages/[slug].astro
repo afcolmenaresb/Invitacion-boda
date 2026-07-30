@@ -21,7 +21,13 @@ const { guest } = Astro.props;
 </BaseLayout>
 
 <style>
+  /*
+    Anchor target for the cover's "Comenzar el viaje" CTA. No forced
+    height: there is no second section yet, and the cover's own
+    .cover-frame already fills the initial viewport exactly, so this must
+    not add scrollable empty space below it.
+  */
   .scroll-check {
-    min-height: 100svh;
+    height: 0;
   }
 </style>
