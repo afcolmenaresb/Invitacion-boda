@@ -1,0 +1,774 @@
+---
+import '@fontsource/sacramento/400.css';
+import '@fontsource/homemade-apple/400.css';
+import { getDedicationLength } from '../data/guests';
+
+interface Props {
+  displayName?: string;
+  dedication?: string;
+}
+
+const {
+  displayName = 'Estefi y Matías',
+  dedication = 'Hay viajes que no tendrían el mismo sentido sin ciertas personas.',
+} = Astro.props;
+
+const dedicationLength = getDedicationLength(dedication);
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+---
+
+<header class="cover" data-animation-state="normal">
+  <img
+    class="cover__texture"
+    src={`${base}/images/textura-vertical.png`}
+    alt=""
+    role="presentation"
+    width="705"
+    height="967"
+    loading="eager"
+  />
+  <div
+    class="cover__texture-v2"
+    style={`background-image: url('${base}/images/textura_vertical_2.png')`}
+  >
+  </div>
+  <svg
+    class="cover__foam-abstract"
+    viewBox="0 0 400 200"
+    preserveAspectRatio="xMaxYMax slice"
+    aria-hidden="true"
+    focusable="false"
+  >
+    <defs>
+      <filter id="foamBlur" x="-30%" y="-30%" width="160%" height="160%">
+        <feGaussianBlur stdDeviation="7" />
+      </filter>
+    </defs>
+    <path
+      class="cover__foam-shape"
+      d="M400,200 L400,128 C372,120 344,101 313,105 C282,109 268,132 233,129
+         C198,126 190,148 155,146 C120,144 108,163 72,160
+         C46,158 30,172 0,168 L0,200 Z"
+      fill="#fbf5e7"
+      filter="url(#foamBlur)"
+    />
+    <g class="cover__foam-flecks" fill="#fdf9ef">
+      <circle cx="150" cy="132" r="3" />
+      <circle cx="182" cy="121" r="2" />
+      <circle cx="212" cy="136" r="3.6" />
+      <circle cx="260" cy="110" r="2.2" />
+      <circle cx="296" cy="115" r="3" />
+      <circle cx="330" cy="100" r="2" />
+      <circle cx="103" cy="155" r="2.4" />
+      <circle cx="66" cy="162" r="3" />
+      <circle cx="35" cy="170" r="2" />
+    </g>
+  </svg>
+  <img
+    class="cover__elephant"
+    data-animation="elephant"
+    src={`${base}/images/elephant.png`}
+    alt="Ilustración de un elefante de perfil entrando desde la izquierda, trazo fino"
+    width="1101"
+    height="1856"
+    loading="eager"
+  />
+  <img
+    class="cover__duck"
+    data-animation="duck"
+    src={`${base}/images/duck.png`}
+    alt="Ilustración de un pato mirando hacia el bloque central, trazo fino"
+    width="768"
+    height="1376"
+    loading="eager"
+  />
+
+  <div class="cover__intro" data-length={dedicationLength}>
+    <p class="cover__kicker" data-autofit="width" data-animation="guest-name">{displayName}</p>
+    <p class="cover__lede" data-autofit="width" data-animation="dedication">{dedication}</p>
+  </div>
+
+  <div class="cover__names">
+    <h1 class="cover__title" data-autofit="width">
+      <span class="signature-fatima" data-animation="name-fatima">Fátima</span>
+      <span class="cover__amp signature-amp" data-animation="name-separator">&amp;</span>
+      <span class="signature-andres" data-animation="name-andres">Andrés</span>
+    </h1>
+  </div>
+
+  <div class="cover__meta">
+    <p class="cover__location" data-animation="location">Imbassaí, Bahía</p>
+    <a class="cover__cta" href="#viaje" data-animation="cta">Comenzar el viaje</a>
+  </div>
+</header>
+
+<script>
+  function fitText(el: HTMLElement) {
+    el.style.fontSize = '';
+    const maxSize = parseFloat(getComputedStyle(el).fontSize);
+    let size = maxSize;
+    let guard = 0;
+    while (el.scrollWidth > el.clientWidth && size > 10 && guard < 80) {
+      size -= 1;
+      el.style.fontSize = size + 'px';
+      guard++;
+    }
+  }
+
+  function fitAll() {
+    document.querySelectorAll<HTMLElement>('[data-autofit]').forEach(fitText);
+  }
+
+  fitAll();
+  document.fonts?.ready.then(fitAll);
+  window.addEventListener('resize', fitAll);
+
+  // --- Ink-reveal intro sequence (name, dedication, "Fátima", "&", "Andrés") ---
+  const EASE = 'cubic-bezier(0.16, 1, 0.3, 1)';
+
+  function clamp(value: number, min: number, max: number) {
+    return Math.min(max, Math.max(min, value));
+  }
+
+  function sleep(ms: number) {
+    return new Promise<void>((resolve) => setTimeout(resolve, ms));
+  }
+
+  function nextFrame() {
+    return new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+  }
+
+  function waitForImages(root: ParentNode) {
+    const imgs = Array.from(root.querySelectorAll<HTMLImageElement>('img[loading="eager"]'));
+    return Promise.all(
+      imgs.map((img) =>
+        img.complete
+          ? Promise.resolve()
+          : new Promise<void>((resolve) => {
+              img.addEventListener('load', () => resolve(), { once: true });
+              img.addEventListener('error', () => resolve(), { once: true });
+            })
+      )
+    );
+  }
+
+  // Slightly irregular vertical boundary, sampled top-to-bottom, so the
+  // reveal edge reads as an uneven ink stroke rather than a clean sweep.
+  function jaggedClipPath(percent: number, seed: number) {
+    const steps = 6;
+    const points = ['0% 0%'];
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const jitter = Math.sin((t * 6 + seed) * 3.7) * 2.5;
+      const x = clamp(percent + jitter, 0, 100);
+      points.push(`${x.toFixed(2)}% ${(t * 100).toFixed(2)}%`);
+    }
+    points.push('0% 100%');
+    return `polygon(${points.join(', ')})`;
+  }
+
+  // Sets the fully-hidden state instantly (no transition), so this is what
+  // gets painted on the very first frame -- never a flash of the visible
+  // text before it disappears again.
+  function prepareHidden(el: HTMLElement, seed: number) {
+    el.style.transition = 'none';
+    el.style.clipPath = jaggedClipPath(-8, seed);
+    el.style.opacity = '0.82';
+  }
+
+  function triggerReveal(el: HTMLElement, duration: number, delay: number, seed: number) {
+    el.style.transition =
+      `clip-path ${duration}ms ${EASE} ${delay}ms, ` +
+      `opacity ${duration + 180}ms ease-out ${delay}ms`;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        el.style.clipPath = jaggedClipPath(112, seed);
+        el.style.opacity = '1';
+      });
+    });
+  }
+
+  function resetUnit(el: HTMLElement) {
+    el.style.clipPath = '';
+    el.style.opacity = '';
+    el.style.transition = '';
+  }
+
+  // Wraps each word in a span, measures its rendered line via offsetTop,
+  // then regroups the words into per-line wrappers. Works for any text
+  // length/line count without hard-coding a number of lines.
+  function splitIntoLines(el: HTMLElement): HTMLElement[] {
+    const original = el.textContent ?? '';
+    const tokens = original.match(/\S+\s*/g) ?? [original];
+
+    el.textContent = '';
+    const wordEls = tokens.map((token) => {
+      const span = document.createElement('span');
+      span.className = 'ink-word';
+      span.textContent = token;
+      el.appendChild(span);
+      return span;
+    });
+
+    const lineMap = new Map<number, HTMLElement[]>();
+    wordEls.forEach((span) => {
+      const top = span.offsetTop;
+      if (!lineMap.has(top)) lineMap.set(top, []);
+      lineMap.get(top)!.push(span);
+    });
+
+    const tops = [...lineMap.keys()].sort((a, b) => a - b);
+    el.textContent = '';
+    return tops.map((top) => {
+      const lineEl = document.createElement('span');
+      lineEl.className = 'ink-line';
+      lineMap.get(top)!.forEach((span) => lineEl.appendChild(span));
+      el.appendChild(lineEl);
+      return lineEl;
+    });
+  }
+
+  // Reveals lines sequentially top-to-bottom (with a slight overlap so it
+  // doesn't feel mechanical) within the given total duration budget.
+  function revealLines(lines: HTMLElement[], totalDuration: number, seedBase: number) {
+    const n = lines.length;
+    if (n === 0) return 0;
+    const overlap = 0.35;
+    const perLine = totalDuration / Math.max(n - (n - 1) * overlap, 1);
+    lines.forEach((line, i) => {
+      const delay = i * perLine * (1 - overlap);
+      triggerReveal(line, perLine, delay, seedBase + i);
+    });
+    return (n - 1) * perLine * (1 - overlap) + perLine;
+  }
+
+  async function initInkReveal() {
+    const cover = document.querySelector<HTMLElement>('.cover');
+    const nameEl = cover?.querySelector<HTMLElement>('[data-animation="guest-name"]');
+    const dedicationEl = cover?.querySelector<HTMLElement>('[data-animation="dedication"]');
+    const fatimaEl = cover?.querySelector<HTMLElement>('[data-animation="name-fatima"]');
+    const ampEl = cover?.querySelector<HTMLElement>('[data-animation="name-separator"]');
+    const andresEl = cover?.querySelector<HTMLElement>('[data-animation="name-andres"]');
+
+    if (!cover || !nameEl || !dedicationEl || !fatimaEl || !ampEl || !andresEl) return;
+
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduceMotion) {
+      cover.classList.add('is-animation-complete');
+      return;
+    }
+
+    await Promise.all([document.fonts?.ready ?? Promise.resolve(), waitForImages(cover)]);
+    fitAll();
+    await nextFrame();
+
+    const nameLen = (nameEl.textContent ?? '').trim().length;
+    const dedicationLen = (dedicationEl.textContent ?? '').trim().length;
+    const nameDuration = clamp(500 + nameLen * 30, 900, 1200);
+    const dedicationDuration = clamp(700 + dedicationLen * 20, 1600, 2300);
+
+    const originalName = nameEl.textContent ?? '';
+    const originalDedication = dedicationEl.textContent ?? '';
+    const nameLines = splitIntoLines(nameEl);
+    const dedicationLines = splitIntoLines(dedicationEl);
+
+    // Hide every unit up front, in the same tick, so the first thing ever
+    // painted is the hidden state -- not a flash of plain visible text.
+    nameLines.forEach((line, i) => prepareHidden(line, i));
+    dedicationLines.forEach((line, i) => prepareHidden(line, 10 + i));
+    prepareHidden(fatimaEl, 20);
+    prepareHidden(ampEl, 21);
+    prepareHidden(andresEl, 22);
+    cover.classList.add('is-preparing-animation');
+    await nextFrame();
+
+    await sleep(350);
+
+    cover.classList.add('is-animating');
+    revealLines(nameLines, nameDuration, 0);
+    await sleep(nameDuration + 120);
+
+    revealLines(dedicationLines, dedicationDuration, 10);
+    await sleep(dedicationDuration + 250);
+
+    triggerReveal(fatimaEl, 750, 0, 20);
+    await sleep(750);
+    triggerReveal(ampEl, 230, 0, 21);
+    await sleep(230);
+    triggerReveal(andresEl, 800, 0, 22);
+    await sleep(800);
+
+    nameEl.textContent = originalName;
+    dedicationEl.textContent = originalDedication;
+    [fatimaEl, ampEl, andresEl].forEach(resetUnit);
+
+    cover.classList.remove('is-preparing-animation', 'is-animating');
+    cover.classList.add('is-animation-complete');
+  }
+
+  initInkReveal();
+</script>
+
+<style>
+  .cover {
+    position: relative;
+    overflow: hidden;
+    min-height: 100svh;
+    isolation: isolate;
+  }
+
+  .cover__texture {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    max-width: none;
+    object-fit: cover;
+    object-position: 45% top;
+    z-index: -1;
+    pointer-events: none;
+  }
+
+  .cover__texture-v2 {
+    display: none;
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-position: 60% top;
+    z-index: -1;
+    pointer-events: none;
+  }
+
+  .cover__foam-abstract {
+    display: none;
+    position: absolute;
+    z-index: -1;
+    right: 0;
+    bottom: 0;
+    width: 50vw;
+    height: 22svh;
+    pointer-events: none;
+  }
+
+  .cover__foam-shape {
+    opacity: 0.55;
+  }
+
+  .cover__foam-flecks {
+    opacity: 0.5;
+  }
+
+  .cover__elephant,
+  .cover__duck {
+    position: absolute;
+    z-index: 0;
+    width: auto;
+    height: auto;
+    mix-blend-mode: multiply;
+  }
+
+  .cover__elephant {
+    width: 60vw;
+    left: -3vw;
+    bottom: 0;
+    transform: scaleX(-1);
+  }
+
+  .cover__duck {
+    width: clamp(250px, 68vw, 320px);
+    right: -6vw;
+    top: -4svh;
+    transform: scaleX(-1);
+    filter: brightness(0.45) contrast(1.5);
+    opacity: 1;
+  }
+
+  .cover__intro {
+    position: absolute;
+    z-index: 1;
+    left: 7vw;
+    top: 6svh;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    padding-top: 0.15em;
+  }
+
+  .cover__names {
+    position: absolute;
+    z-index: 1;
+    left: 50%;
+    top: 51svh;
+    transform: translate(-50%, -50%);
+    width: 90vw;
+    text-align: center;
+  }
+
+  .cover__meta {
+    position: absolute;
+    z-index: 1;
+    right: 6vw;
+    bottom: 6svh;
+    text-align: right;
+  }
+
+  .cover__location {
+    font-family: var(--font-sans);
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    font-size: 0.75rem;
+    color: var(--color-muted);
+    margin: 0 0 1rem;
+  }
+
+  .cover__kicker {
+    max-width: 42vw;
+    text-wrap: balance;
+    font-family: 'Homemade Apple', cursive;
+    font-weight: 400;
+    font-size: 2.8rem;
+    line-height: 1.3;
+    color: var(--color-ink);
+    margin: 0;
+  }
+
+  .cover__lede {
+    max-width: 42vw;
+    font-family: 'Homemade Apple', cursive;
+    font-weight: 400;
+    font-size: 1.9rem;
+    line-height: 1.4;
+    color: var(--color-ink);
+    margin: 0;
+    margin-top: 17px;
+  }
+
+  .cover__title {
+    display: flex;
+    flex-direction: row;
+    align-items: baseline;
+    justify-content: center;
+    gap: 0.35em;
+    font-family: 'Homemade Apple', cursive;
+    font-weight: 400;
+    font-size: clamp(3.4rem, 16vw, 4.4rem);
+    line-height: 1.05;
+    letter-spacing: 0;
+    margin: 0;
+  }
+
+  .cover__amp {
+    margin: 0;
+  }
+
+  .cover__cta {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: var(--font-sans);
+    font-size: 0.8rem;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-ink);
+    text-decoration: none;
+    border-bottom: 1px solid var(--color-accent);
+    padding-bottom: 0.35rem;
+    width: fit-content;
+    white-space: nowrap;
+  }
+
+  .cover__cta::after {
+    content: '→';
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .cover__cta {
+      transition: color 0.2s ease, border-color 0.2s ease;
+    }
+
+    .cover__cta:hover,
+    .cover__cta:focus-visible {
+      color: var(--color-accent);
+    }
+  }
+
+  /* Phone landscape (844x390) */
+  @media (orientation: landscape) and (max-height: 500px) {
+    .cover__elephant {
+      width: 30vw;
+      left: -2vw;
+      bottom: -32svh;
+    }
+
+    .cover__duck {
+      width: 26vw;
+      right: 0;
+      top: -1svh;
+    }
+
+    .cover__intro {
+      top: 6svh;
+      left: 33vw;
+    }
+
+    .cover__kicker,
+    .cover__lede {
+      max-width: 45vw;
+    }
+
+    .cover__kicker {
+      font-size: 1.6rem;
+    }
+
+    .cover__lede {
+      font-size: 0.95rem;
+      line-height: 1.35;
+      margin-top: 12px;
+    }
+
+    .cover__names {
+      left: 63%;
+      top: 60svh;
+      max-width: 34vw;
+    }
+
+    .cover__title {
+      flex-direction: row;
+      gap: 0.4em;
+      font-size: clamp(1.7rem, 6vw, 2.3rem);
+      margin-bottom: 0.7rem;
+    }
+
+    .cover__amp {
+      margin: 0;
+    }
+
+    .cover__location {
+      margin-bottom: 1rem;
+    }
+  }
+
+  /* Tablet portrait / large vertical (1600x2560) */
+  @media (orientation: portrait) and (min-width: 1200px) {
+    .cover__elephant {
+      width: 42vw;
+      left: -4vw;
+      bottom: -5svh;
+    }
+
+    .cover__duck {
+      width: 30vw;
+      right: 1vw;
+      top: 3svh;
+    }
+
+    .cover__intro {
+      top: 7svh;
+      left: 7vw;
+    }
+
+    .cover__kicker,
+    .cover__lede {
+      max-width: 52vw;
+    }
+
+    .cover__kicker {
+      font-size: 2.2rem;
+    }
+
+    .cover__lede {
+      font-size: 2.4rem;
+      margin-top: 24px;
+    }
+
+    .cover__names {
+      left: 68%;
+      top: 76svh;
+      max-width: 34vw;
+    }
+
+    .cover__title {
+      font-size: clamp(4.2rem, 6vw, 5.4rem);
+      margin-bottom: 1.6rem;
+    }
+
+    .cover__location {
+      font-size: 1.05rem;
+      margin-bottom: 2.4rem;
+    }
+
+    .cover__cta {
+      font-size: 1.05rem;
+    }
+  }
+
+  /* Tablet landscape / laptop (2560x1600) */
+  @media (orientation: landscape) and (min-width: 1200px) {
+    .cover__elephant {
+      width: 26vw;
+      left: -3vw;
+      bottom: -12svh;
+    }
+
+    .cover__duck {
+      width: 18vw;
+      right: 2vw;
+      top: 4svh;
+    }
+
+    .cover__intro {
+      top: 8svh;
+      left: 8vw;
+    }
+
+    .cover__kicker,
+    .cover__lede {
+      max-width: 34vw;
+    }
+
+    .cover__kicker {
+      font-size: 1.8rem;
+    }
+
+    .cover__lede {
+      font-size: 2rem;
+      margin-top: 20px;
+    }
+
+    .cover__names {
+      left: 55%;
+      top: 80svh;
+      max-width: 30vw;
+    }
+
+    .cover__title {
+      flex-direction: row;
+      gap: 0.45em;
+      font-size: clamp(3rem, 4vw, 4rem);
+      margin-bottom: 1.2rem;
+    }
+
+    .cover__amp {
+      margin: 0;
+    }
+
+    .cover__location {
+      font-size: 0.95rem;
+      margin-bottom: 1.8rem;
+    }
+
+    .cover__cta {
+      font-size: 0.95rem;
+    }
+  }
+
+  /* Mobile portrait refinement pass (390x844 only) */
+  @media (orientation: portrait) and (max-width: 1199px) {
+    .cover__texture {
+      display: none;
+    }
+
+    .cover__texture-v2 {
+      display: block;
+    }
+
+    .cover__foam-abstract {
+      display: none;
+    }
+
+    .cover__kicker {
+      opacity: 0.82;
+      color: #7e5e49;
+      font-size: 2.05rem;
+      max-width: 46vw;
+    }
+
+    .cover__lede {
+      opacity: 0.84;
+      color: #5c5047;
+      font-size: 1.05rem;
+      line-height: 1.5;
+      max-width: 48vw;
+      margin-top: 17px;
+    }
+
+    .cover__intro[data-length='short'] .cover__lede {
+      font-size: 1.4rem;
+      line-height: 1.6;
+      max-width: 46vw;
+      margin-top: 21px;
+    }
+
+    .cover__intro[data-length='long'] .cover__lede {
+      font-size: 1rem;
+      line-height: 1.4;
+      max-width: 48vw;
+      margin-top: 13px;
+    }
+
+    .cover__title {
+      gap: 0.3em;
+      font-size: 34.7px;
+      color: #211c18;
+    }
+
+    .signature-fatima {
+      position: relative;
+      top: -12px;
+    }
+
+    .signature-amp {
+      position: relative;
+      top: 10px;
+      left: 6px;
+    }
+
+    .signature-andres {
+      position: relative;
+      top: 36px;
+      left: 13px;
+    }
+
+    .cover__meta {
+      bottom: 11.3svh;
+    }
+
+    .cover__meta::before {
+      content: '';
+      position: absolute;
+      z-index: -1;
+      inset: -14px -22px;
+      background: radial-gradient(ellipse at center, rgba(255, 254, 248, 1), rgba(255, 254, 248, 0) 80%);
+      pointer-events: none;
+    }
+
+    .cover__location {
+      margin-bottom: 0.3rem;
+      color: #756b60;
+    }
+
+    .cover__cta {
+      color: #6b6055;
+      letter-spacing: 0.1em;
+      border-bottom-color: #a77a46;
+      border-bottom-width: 1.4px;
+    }
+  }
+
+  /*
+    Unidades generadas en tiempo de ejecución por el guion de revelado de
+    tinta (nombre, dedicatoria). display:block/inline preserva exactamente
+    el mismo salto de línea ya calculado antes de dividir el texto, así que
+    no altera la composición en reposo ni cuando JS está deshabilitado.
+  */
+  .ink-line {
+    display: block;
+  }
+
+  .ink-word {
+    display: inline;
+  }
+</style>

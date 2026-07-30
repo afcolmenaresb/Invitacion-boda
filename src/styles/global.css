@@ -1,12 +1,37 @@
 :root {
-  color-scheme: light dark;
+  color-scheme: light;
+
+  --color-bg: #f7f2e9;
+  --color-ink: #2a241d;
+  --color-muted: #8c7f6a;
+  --color-accent: #ad8a58;
+
+  --font-serif: 'Iowan Old Style', 'Palatino Linotype', Palatino, 'Book Antiqua', Georgia, serif;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
 }
 
 * {
   box-sizing: border-box;
 }
 
+html {
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
 body {
   margin: 0;
-  font-family: system-ui, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+
+img {
+  display: block;
+  max-width: 100%;
 }
