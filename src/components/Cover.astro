@@ -32,7 +32,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   })();
 </script>
 
-<div class="cover-frame">
+<div class="cover-frame" style={`background-image: url('${base}/images/textura_vertical_2.png')`}>
   <div class="cover-canvas">
     <header class="cover" data-animation-state="normal">
       <img
@@ -142,12 +142,42 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   document.fonts?.ready.then(fitAll);
   window.addEventListener('resize', fitAll);
 
-  // --- Ink-reveal intro sequence (name, dedication, "Fátima", "&", "Andrés") ---
-  const EASE = 'cubic-bezier(0.16, 1, 0.3, 1)';
+  // --- Slow handwritten-ink intro (name, dedication, signature, location, CTA) ---
+  //
+  // Whole sequence targets ~18-23s (default guest ~20.5-21s): a long,
+  // intimate, continuous "ink on paper" reveal, not a fast UI transition.
+  // Duck, elephant, texture and background are never touched here -- they
+  // are visible from the very first frame.
+  const EASE = 'cubic-bezier(0.22, 0.61, 0.36, 1)';
 
   function clamp(value: number, min: number, max: number) {
     return Math.min(max, Math.max(min, value));
   }
+
+  // Evaluates the same curve as EASE, so --reveal can be driven manually
+  // in step with the native CSS transition used for clip-path (see below).
+  function cubicBezierEase(p1x: number, p1y: number, p2x: number, p2y: number) {
+    const cx = 3 * p1x;
+    const bx = 3 * (p2x - p1x) - cx;
+    const ax = 1 - cx - bx;
+    const cy = 3 * p1y;
+    const by = 3 * (p2y - p1y) - cy;
+    const ay = 1 - cy - by;
+    const sampleX = (t: number) => ((ax * t + bx) * t + cx) * t;
+    const sampleY = (t: number) => ((ay * t + by) * t + cy) * t;
+    const sampleDerivativeX = (t: number) => (3 * ax * t + 2 * bx) * t + cx;
+    return (x: number) => {
+      let t = x;
+      for (let i = 0; i < 6; i++) {
+        const dx = sampleX(t) - x;
+        const d = sampleDerivativeX(t);
+        if (Math.abs(d) < 1e-6) break;
+        t -= dx / d;
+      }
+      return sampleY(clamp(t, 0, 1));
+    };
+  }
+  const easeReveal = cubicBezierEase(0.22, 0.61, 0.36, 1);
 
   function sleep(ms: number) {
     return new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -171,14 +201,14 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     );
   }
 
-  // Slightly irregular vertical boundary, sampled top-to-bottom, so the
-  // reveal edge reads as an uneven ink stroke rather than a clean sweep.
+  // Slightly irregular vertical boundary, sampled top-to-bottom, so the ink
+  // front reads as an uneven hand-drawn stroke rather than a ruled line.
   function jaggedClipPath(percent: number, seed: number) {
-    const steps = 6;
+    const steps = 7;
     const points = ['0% 0%'];
     for (let i = 0; i <= steps; i++) {
       const t = i / steps;
-      const jitter = Math.sin((t * 6 + seed) * 3.7) * 2.5;
+      const jitter = Math.sin((t * 6 + seed) * 3.7) * 2.2;
       const x = clamp(percent + jitter, 0, 100);
       points.push(`${x.toFixed(2)}% ${(t * 100).toFixed(2)}%`);
     }
@@ -186,31 +216,143 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     return `polygon(${points.join(', ')})`;
   }
 
+  // A short, soft semi-transparent band riding just ahead of the jagged
+  // clip edge -- "wet ink still settling" -- instead of a hard on/off cut.
+  // Opaque BEFORE --reveal (already written), transparent AFTER it (not
+  // yet reached). Every stop is offset FROM var(--reveal) -- none pinned
+  // to a fixed 0%/100% -- so the whole ramp translates as one piece as
+  // --reveal animates, instead of leaving a fixed band near the left edge
+  // that doesn't track the sweep. At REVEAL_HIDDEN the entire ramp sits
+  // left of 0% (fully transparent across the box); at REVEAL_SHOWN it
+  // sits entirely right of 100% (fully opaque across the box).
+  const INK_MASK =
+    'linear-gradient(90deg, ' +
+    '#000 calc(var(--reveal) - 60%), #000 calc(var(--reveal) - 7%), ' +
+    'rgba(0,0,0,.6) calc(var(--reveal) - 3%), rgba(0,0,0,.18) var(--reveal), ' +
+    'transparent calc(var(--reveal) + 4%), transparent calc(var(--reveal) + 60%))';
+  const REVEAL_HIDDEN_NUM = -12;
+  const REVEAL_SHOWN_NUM = 110;
+  const REVEAL_HIDDEN = `${REVEAL_HIDDEN_NUM}%`;
+  const REVEAL_SHOWN = `${REVEAL_SHOWN_NUM}%`;
+
   // Sets the fully-hidden state instantly (no transition), so this is what
-  // gets painted on the very first frame -- never a flash of the visible
-  // text before it disappears again.
-  function prepareHidden(el: HTMLElement, seed: number) {
+  // gets painted on the very first frame -- never a flash of visible text.
+  function prepareInkHidden(el: HTMLElement, seed: number) {
     el.style.transition = 'none';
-    el.style.clipPath = jaggedClipPath(-8, seed);
-    el.style.opacity = '0.82';
+    el.style.clipPath = jaggedClipPath(-10, seed);
+    el.style.setProperty('--reveal', REVEAL_HIDDEN);
+    el.style.setProperty('mask-image', INK_MASK);
+    el.style.setProperty('-webkit-mask-image', INK_MASK);
   }
 
-  function triggerReveal(el: HTMLElement, duration: number, delay: number, seed: number) {
-    el.style.transition =
-      `clip-path ${duration}ms ${EASE} ${delay}ms, ` +
-      `opacity ${duration + 180}ms ease-out ${delay}ms`;
+  // Whether this engine actually tweens a *typed* custom property. Checked
+  // once, live, instead of assumed: a CSS transition on --reveal only
+  // interpolates smoothly when @property registered it as a <percentage>;
+  // unregistered/unsupported engines snap it instantly at the transition's
+  // halfway point, which is exactly the "signature pops at the end" bug.
+  let revealTransitionVerified: boolean | null = null;
+
+  function verifyRevealInterpolates(el: HTMLElement) {
+    if (revealTransitionVerified !== null) return revealTransitionVerified;
+    const probe = document.createElement('span');
+    probe.style.position = 'absolute';
+    probe.style.visibility = 'hidden';
+    probe.style.setProperty('--reveal', '0%');
+    probe.style.setProperty('transition', '--reveal 100ms linear');
+    document.body.appendChild(probe);
+    void probe.offsetWidth; // force layout so the starting value is committed
+    probe.style.setProperty('--reveal', '100%');
+    const midway = getComputedStyle(probe).getPropertyValue('--reveal').trim();
+    probe.remove();
+    // If the browser can't tween it, the computed value right after the
+    // change either jumps straight to 100% or reports something that
+    // isn't a mid-range percentage -- either way, not real interpolation.
+    const midValue = parseFloat(midway);
+    revealTransitionVerified = Number.isFinite(midValue) && midValue > 0 && midValue < 100;
+    return revealTransitionVerified;
+  }
+
+  // Drives clip-path (a natively-animatable property) via a real CSS
+  // transition, and drives --reveal by hand, frame by frame, with the
+  // *same* easing curve -- so the ink-mask's soft edge always tracks
+  // progressively regardless of @property support, instead of snapping
+  // straight to "fully revealed" only when resetInkUnit later clears the
+  // mask (the "pop"). CSS transition is kept as a harmless no-op fallback
+  // for engines that do support it, since both land on the same values.
+  function triggerInkReveal(el: HTMLElement, duration: number, delay: number, seed: number) {
+    verifyRevealInterpolates(el);
+    el.style.transition = `clip-path ${duration}ms ${EASE} ${delay}ms`;
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         el.style.clipPath = jaggedClipPath(112, seed);
+      });
+    });
+
+    let start: number | null = null;
+    function step(now: number) {
+      if (start === null) start = now;
+      const elapsed = now - start - delay;
+      if (elapsed < 0) {
+        requestAnimationFrame(step);
+        return;
+      }
+      const t = clamp(elapsed / duration, 0, 1);
+      const value = REVEAL_HIDDEN_NUM + (REVEAL_SHOWN_NUM - REVEAL_HIDDEN_NUM) * easeReveal(t);
+      el.style.setProperty('--reveal', `${value.toFixed(2)}%`);
+      if (t < 1) {
+        requestAnimationFrame(step);
+      }
+    }
+    requestAnimationFrame(step);
+  }
+
+  function resetInkUnit(el: HTMLElement) {
+    el.style.clipPath = '';
+    el.style.transition = '';
+    el.style.removeProperty('--reveal');
+    el.style.removeProperty('mask-image');
+    el.style.removeProperty('-webkit-mask-image');
+  }
+
+  // Location and CTA are not "written" -- they simply settle in once the
+  // signature is done, per spec: a plain gentle fade + tiny rise.
+  function prepareFadeHidden(el: HTMLElement) {
+    el.style.transition = 'none';
+    el.style.opacity = '0';
+    el.style.transform = 'translateY(2px)';
+  }
+
+  function triggerFade(el: HTMLElement, duration: number, delay: number) {
+    el.style.transition = `opacity ${duration}ms ease-out ${delay}ms, transform ${duration}ms ease-out ${delay}ms`;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
         el.style.opacity = '1';
+        el.style.transform = 'translateY(0)';
       });
     });
   }
 
-  function resetUnit(el: HTMLElement) {
-    el.style.clipPath = '';
+  function resetFadeUnit(el: HTMLElement) {
     el.style.opacity = '';
+    el.style.transform = '';
     el.style.transition = '';
+  }
+
+  function prepareUnderlineHidden(el: HTMLElement) {
+    el.style.setProperty('--cta-underline', '0%');
+  }
+
+  function triggerUnderline(el: HTMLElement, duration: number, delay: number) {
+    el.style.setProperty('transition', `${el.style.transition ? el.style.transition + ', ' : ''}--cta-underline ${duration}ms ${EASE} ${delay}ms`);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        el.style.setProperty('--cta-underline', '100%');
+      });
+    });
+  }
+
+  function resetUnderline(el: HTMLElement) {
+    el.style.removeProperty('--cta-underline');
   }
 
   // Wraps each word in a span, measures its rendered line via offsetTop,
@@ -247,88 +389,181 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     });
   }
 
-  // Reveals lines sequentially top-to-bottom (with a slight overlap so it
-  // doesn't feel mechanical) within the given total duration budget.
+  // Reveals lines top-to-bottom as one continuous gesture: each line's
+  // share of the total duration is weighted by its actual rendered width
+  // (not char count), and the next line begins before the previous one
+  // has fully settled (LINE_OVERLAP_MS) so the multi-line block reads as
+  // a single unbroken stroke rather than independent chunks loading in.
+  const LINE_OVERLAP_MS = 210;
+  const MIN_LINE_DURATION_MS = 550;
+
   function revealLines(lines: HTMLElement[], totalDuration: number, seedBase: number) {
     const n = lines.length;
     if (n === 0) return 0;
-    const overlap = 0.35;
-    const perLine = totalDuration / Math.max(n - (n - 1) * overlap, 1);
+    if (n === 1) {
+      triggerInkReveal(lines[0], totalDuration, 0, seedBase);
+      return totalDuration;
+    }
+
+    const widths = lines.map((line) => Math.max(line.scrollWidth, 1));
+    const totalWidth = widths.reduce((a, b) => a + b, 0);
+    const overlapBudget = LINE_OVERLAP_MS * (n - 1);
+    const durationBudget = Math.max(totalDuration - overlapBudget, totalDuration * 0.6);
+
+    let durations = widths.map((w) => Math.max(MIN_LINE_DURATION_MS, durationBudget * (w / totalWidth)));
+    const sum = durations.reduce((a, b) => a + b, 0);
+    const scale = sum > 0 ? durationBudget / sum : 1;
+    durations = durations.map((d) => d * scale);
+
+    let cursor = 0;
     lines.forEach((line, i) => {
-      const delay = i * perLine * (1 - overlap);
-      triggerReveal(line, perLine, delay, seedBase + i);
+      triggerInkReveal(line, durations[i], cursor, seedBase + i);
+      if (i < n - 1) cursor += durations[i] - LINE_OVERLAP_MS;
     });
-    return (n - 1) * perLine * (1 - overlap) + perLine;
+    return cursor + durations[n - 1];
+  }
+
+  // Reveals everything immediately, with no timers and no hidden state --
+  // used for reduced-motion, missing elements, and as an error fallback.
+  function showEverythingNow(cover: HTMLElement) {
+    cover.classList.remove('is-preparing-animation', 'is-animating');
+    cover.classList.add('is-animation-complete');
   }
 
   async function initInkReveal() {
     const cover = document.querySelector<HTMLElement>('.cover');
-    const nameEl = cover?.querySelector<HTMLElement>('[data-animation="guest-name"]');
-    const dedicationEl = cover?.querySelector<HTMLElement>('[data-animation="dedication"]');
-    const fatimaEl = cover?.querySelector<HTMLElement>('[data-animation="name-fatima"]');
-    const ampEl = cover?.querySelector<HTMLElement>('[data-animation="name-separator"]');
-    const andresEl = cover?.querySelector<HTMLElement>('[data-animation="name-andres"]');
+    if (!cover) return;
 
-    if (!cover || !nameEl || !dedicationEl || !fatimaEl || !ampEl || !andresEl) return;
+    const nameEl = cover.querySelector<HTMLElement>('[data-animation="guest-name"]');
+    const dedicationEl = cover.querySelector<HTMLElement>('[data-animation="dedication"]');
+    const fatimaEl = cover.querySelector<HTMLElement>('[data-animation="name-fatima"]');
+    const ampEl = cover.querySelector<HTMLElement>('[data-animation="name-separator"]');
+    const andresEl = cover.querySelector<HTMLElement>('[data-animation="name-andres"]');
+    const locationEl = cover.querySelector<HTMLElement>('[data-animation="location"]');
+    const ctaEl = cover.querySelector<HTMLElement>('[data-animation="cta"]');
 
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (reduceMotion) {
-      cover.classList.add('is-animation-complete');
+    if (!nameEl || !dedicationEl || !fatimaEl || !ampEl || !andresEl || !locationEl || !ctaEl) {
       return;
     }
 
-    await Promise.all([document.fonts?.ready ?? Promise.resolve(), waitForImages(cover)]);
-    fitAll();
-    await nextFrame();
-
-    const nameLen = (nameEl.textContent ?? '').trim().length;
-    const dedicationLen = (dedicationEl.textContent ?? '').trim().length;
-    const nameDuration = clamp(500 + nameLen * 30, 900, 1200);
-    const dedicationDuration = clamp(700 + dedicationLen * 20, 1600, 2300);
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduceMotion) {
+      showEverythingNow(cover);
+      return;
+    }
 
     const originalName = nameEl.textContent ?? '';
     const originalDedication = dedicationEl.textContent ?? '';
-    const nameLines = splitIntoLines(nameEl);
-    const dedicationLines = splitIntoLines(dedicationEl);
 
-    // Hide every unit up front, in the same tick, so the first thing ever
-    // painted is the hidden state -- not a flash of plain visible text.
-    nameLines.forEach((line, i) => prepareHidden(line, i));
-    dedicationLines.forEach((line, i) => prepareHidden(line, 10 + i));
-    prepareHidden(fatimaEl, 20);
-    prepareHidden(ampEl, 21);
-    prepareHidden(andresEl, 22);
-    cover.classList.add('is-preparing-animation');
-    await nextFrame();
+    try {
+      await Promise.all([document.fonts?.ready ?? Promise.resolve(), waitForImages(cover)]);
+      fitAll();
+      await nextFrame();
 
-    await sleep(350);
+      const nameLen = originalName.trim().length;
+      const dedicationLen = originalDedication.trim().length;
+      // Calibrated so "Estefi y Matías" (~15 chars) lands near 3.1s and its
+      // dedication (~67 chars) near 7.2s, per the approved choreography.
+      const nameDuration = clamp(2400 + nameLen * 47, 2400, 3900);
+      const dedicationDuration = clamp(3500 + dedicationLen * 55, 5600, 8600);
+      const fatimaDuration = 2700;
+      const ampDuration = 1000;
+      const andresDuration = 2900;
+      const locationDuration = 1200;
+      const ctaDuration = 1200;
+      const ctaStagger = 370;
+      const underlineDuration = 1100;
 
-    cover.classList.add('is-animating');
-    revealLines(nameLines, nameDuration, 0);
-    await sleep(nameDuration + 120);
+      const nameLines = splitIntoLines(nameEl);
+      const dedicationLines = splitIntoLines(dedicationEl);
 
-    revealLines(dedicationLines, dedicationDuration, 10);
-    await sleep(dedicationDuration + 250);
+      // Hide everything up front, in the same tick, so the first thing
+      // ever painted is the hidden state -- not a flash of visible text.
+      nameLines.forEach((line, i) => prepareInkHidden(line, i));
+      dedicationLines.forEach((line, i) => prepareInkHidden(line, 100 + i));
+      prepareInkHidden(fatimaEl, 200);
+      prepareInkHidden(ampEl, 201);
+      prepareInkHidden(andresEl, 202);
+      prepareFadeHidden(locationEl);
+      prepareFadeHidden(ctaEl);
+      prepareUnderlineHidden(ctaEl);
+      cover.classList.add('is-preparing-animation');
+      await nextFrame();
 
-    triggerReveal(fatimaEl, 750, 0, 20);
-    await sleep(750);
-    triggerReveal(ampEl, 230, 0, 21);
-    await sleep(230);
-    triggerReveal(andresEl, 800, 0, 22);
-    await sleep(800);
+      await sleep(1300); // silence: scene visible, nothing written yet
 
-    nameEl.textContent = originalName;
-    dedicationEl.textContent = originalDedication;
-    [fatimaEl, ampEl, andresEl].forEach(resetUnit);
+      cover.classList.add('is-animating');
 
-    cover.classList.remove('is-preparing-animation', 'is-animating');
-    cover.classList.add('is-animation-complete');
+      revealLines(nameLines, nameDuration, 0);
+      await sleep(Math.max(nameDuration - 250, 0));
+
+      revealLines(dedicationLines, dedicationDuration, 100);
+      await sleep(Math.max(dedicationDuration - 250, 0));
+
+      triggerInkReveal(fatimaEl, fatimaDuration, 0, 200);
+      await sleep(Math.max(fatimaDuration - 100, 0));
+
+      triggerInkReveal(ampEl, ampDuration, 0, 201);
+      await sleep(Math.max(ampDuration - 100, 0));
+
+      triggerInkReveal(andresEl, andresDuration, 0, 202);
+      await sleep(Math.max(andresDuration - 150, 0));
+
+      triggerFade(locationEl, locationDuration, 0);
+      triggerFade(ctaEl, ctaDuration, ctaStagger);
+      triggerUnderline(ctaEl, underlineDuration, ctaStagger + ctaDuration * 0.6);
+
+      const metaSpan = Math.max(
+        locationDuration,
+        ctaStagger + ctaDuration,
+        ctaStagger + ctaDuration * 0.6 + underlineDuration
+      );
+      await sleep(metaSpan);
+
+      await sleep(1300); // final settle: nothing else moves
+
+      nameEl.textContent = originalName;
+      dedicationEl.textContent = originalDedication;
+      [fatimaEl, ampEl, andresEl].forEach(resetInkUnit);
+      [locationEl, ctaEl].forEach(resetFadeUnit);
+      resetUnderline(ctaEl);
+
+      showEverythingNow(cover);
+    } catch (err) {
+      // Never leave the cover partially hidden if something goes wrong.
+      nameEl.textContent = originalName;
+      dedicationEl.textContent = originalDedication;
+      [fatimaEl, ampEl, andresEl].forEach(resetInkUnit);
+      [locationEl, ctaEl].forEach(resetFadeUnit);
+      resetUnderline(ctaEl);
+      showEverythingNow(cover);
+    }
   }
 
   initInkReveal();
 </script>
 
+
 <style>
+  /*
+    Registers --reveal as a typed <percentage> custom property. Not load
+    -bearing for the reveal animation anymore (triggerInkReveal above
+    drives --reveal itself, frame by frame, so it never depends on this
+    being honored) but kept so calc() involving it parses as arithmetic
+    on a percentage everywhere, and any browser that *does* support typed
+    custom properties gets a real fallback transition for free. As a
+    selector-less at-rule it can't be (and isn't) scoped by Astro, so it's
+    safe living in the same block as the rest of the component's styles --
+    keeping it in one <style> tag also avoids any risk of a second,
+    accidentally-malformed <style>...<style> block silently dropping the
+    rule that follows it.
+  */
+  @property --reveal {
+    syntax: '<percentage>';
+    inherits: true;
+    initial-value: 0%;
+  }
+
   /*
     Fixed logical canvas: the cover is a fixed artistic composition
     designed at exactly 390x844 -- it no longer redistributes internally
@@ -336,8 +571,11 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     .cover-canvas, a constant 390x844 box holding the untouched 390x844
     composition below, uniformly scaled via --cover-scale (computed in the
     inline script above, before first paint) to fit any screen without
-    cropping, deforming, or scrolling. Leftover space is letterboxed in
-    the same cream background color, never stretched or tiled.
+    cropping, deforming, or scrolling. Leftover space is letterboxed with
+    the same paper texture as the canvas itself (background-image set
+    inline above), scaled with the same object-position/size the canvas
+    texture uses, so the exterior reads as more paper -- not a flat-color
+    frame around it. --color-bg stays as the fallback while it loads.
   */
   .cover-frame {
     width: 100%;
@@ -346,7 +584,10 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     display: flex;
     align-items: center;
     justify-content: center;
-    background: var(--color-bg);
+    background-color: var(--color-bg);
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-position: 60% top;
   }
 
   /* @supports keeps this from being minified away as a "duplicate" of the
@@ -562,7 +803,16 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     text-transform: uppercase;
     color: #6b6055;
     text-decoration: none;
-    border-bottom: 1.4px solid #a77a46;
+    /*
+      Same 1.4px #a77a46 line as before, but as a background so its width
+      can be revealed left-to-right during the intro (background-size).
+      At rest (no JS, or after the animation finishes) --cta-underline is
+      unset and defaults to 100% -- pixel-identical to a plain border.
+    */
+    background-image: linear-gradient(#a77a46, #a77a46);
+    background-repeat: no-repeat;
+    background-position: left bottom;
+    background-size: var(--cta-underline, 100%) 1.4px;
     padding-bottom: 0.35rem;
     width: fit-content;
     white-space: nowrap;
@@ -574,7 +824,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
   @media (prefers-reduced-motion: no-preference) {
     .cover__cta {
-      transition: color 0.2s ease, border-color 0.2s ease;
+      transition: color 0.2s ease;
     }
 
     .cover__cta:hover,
