@@ -122,6 +122,191 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   fitAll();
   document.fonts?.ready.then(fitAll);
   window.addEventListener('resize', fitAll);
+
+  // --- Ink-reveal intro sequence (name, dedication, "Fátima", "&", "Andrés") ---
+  const EASE = 'cubic-bezier(0.16, 1, 0.3, 1)';
+
+  function clamp(value: number, min: number, max: number) {
+    return Math.min(max, Math.max(min, value));
+  }
+
+  function sleep(ms: number) {
+    return new Promise<void>((resolve) => setTimeout(resolve, ms));
+  }
+
+  function nextFrame() {
+    return new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+  }
+
+  function waitForImages(root: ParentNode) {
+    const imgs = Array.from(root.querySelectorAll<HTMLImageElement>('img[loading="eager"]'));
+    return Promise.all(
+      imgs.map((img) =>
+        img.complete
+          ? Promise.resolve()
+          : new Promise<void>((resolve) => {
+              img.addEventListener('load', () => resolve(), { once: true });
+              img.addEventListener('error', () => resolve(), { once: true });
+            })
+      )
+    );
+  }
+
+  // Slightly irregular vertical boundary, sampled top-to-bottom, so the
+  // reveal edge reads as an uneven ink stroke rather than a clean sweep.
+  function jaggedClipPath(percent: number, seed: number) {
+    const steps = 6;
+    const points = ['0% 0%'];
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const jitter = Math.sin((t * 6 + seed) * 3.7) * 2.5;
+      const x = clamp(percent + jitter, 0, 100);
+      points.push(`${x.toFixed(2)}% ${(t * 100).toFixed(2)}%`);
+    }
+    points.push('0% 100%');
+    return `polygon(${points.join(', ')})`;
+  }
+
+  // Sets the fully-hidden state instantly (no transition), so this is what
+  // gets painted on the very first frame -- never a flash of the visible
+  // text before it disappears again.
+  function prepareHidden(el: HTMLElement, seed: number) {
+    el.style.transition = 'none';
+    el.style.clipPath = jaggedClipPath(-8, seed);
+    el.style.opacity = '0.82';
+  }
+
+  function triggerReveal(el: HTMLElement, duration: number, delay: number, seed: number) {
+    el.style.transition =
+      `clip-path ${duration}ms ${EASE} ${delay}ms, ` +
+      `opacity ${duration + 180}ms ease-out ${delay}ms`;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        el.style.clipPath = jaggedClipPath(112, seed);
+        el.style.opacity = '1';
+      });
+    });
+  }
+
+  function resetUnit(el: HTMLElement) {
+    el.style.clipPath = '';
+    el.style.opacity = '';
+    el.style.transition = '';
+  }
+
+  // Wraps each word in a span, measures its rendered line via offsetTop,
+  // then regroups the words into per-line wrappers. Works for any text
+  // length/line count without hard-coding a number of lines.
+  function splitIntoLines(el: HTMLElement): HTMLElement[] {
+    const original = el.textContent ?? '';
+    const tokens = original.match(/\S+\s*/g) ?? [original];
+
+    el.textContent = '';
+    const wordEls = tokens.map((token) => {
+      const span = document.createElement('span');
+      span.className = 'ink-word';
+      span.textContent = token;
+      el.appendChild(span);
+      return span;
+    });
+
+    const lineMap = new Map<number, HTMLElement[]>();
+    wordEls.forEach((span) => {
+      const top = span.offsetTop;
+      if (!lineMap.has(top)) lineMap.set(top, []);
+      lineMap.get(top)!.push(span);
+    });
+
+    const tops = [...lineMap.keys()].sort((a, b) => a - b);
+    el.textContent = '';
+    return tops.map((top) => {
+      const lineEl = document.createElement('span');
+      lineEl.className = 'ink-line';
+      lineMap.get(top)!.forEach((span) => lineEl.appendChild(span));
+      el.appendChild(lineEl);
+      return lineEl;
+    });
+  }
+
+  // Reveals lines sequentially top-to-bottom (with a slight overlap so it
+  // doesn't feel mechanical) within the given total duration budget.
+  function revealLines(lines: HTMLElement[], totalDuration: number, seedBase: number) {
+    const n = lines.length;
+    if (n === 0) return 0;
+    const overlap = 0.35;
+    const perLine = totalDuration / Math.max(n - (n - 1) * overlap, 1);
+    lines.forEach((line, i) => {
+      const delay = i * perLine * (1 - overlap);
+      triggerReveal(line, perLine, delay, seedBase + i);
+    });
+    return (n - 1) * perLine * (1 - overlap) + perLine;
+  }
+
+  async function initInkReveal() {
+    const cover = document.querySelector<HTMLElement>('.cover');
+    const nameEl = cover?.querySelector<HTMLElement>('[data-animation="guest-name"]');
+    const dedicationEl = cover?.querySelector<HTMLElement>('[data-animation="dedication"]');
+    const fatimaEl = cover?.querySelector<HTMLElement>('[data-animation="name-fatima"]');
+    const ampEl = cover?.querySelector<HTMLElement>('[data-animation="name-separator"]');
+    const andresEl = cover?.querySelector<HTMLElement>('[data-animation="name-andres"]');
+
+    if (!cover || !nameEl || !dedicationEl || !fatimaEl || !ampEl || !andresEl) return;
+
+    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduceMotion) {
+      cover.classList.add('is-animation-complete');
+      return;
+    }
+
+    await Promise.all([document.fonts?.ready ?? Promise.resolve(), waitForImages(cover)]);
+    fitAll();
+    await nextFrame();
+
+    const nameLen = (nameEl.textContent ?? '').trim().length;
+    const dedicationLen = (dedicationEl.textContent ?? '').trim().length;
+    const nameDuration = clamp(500 + nameLen * 30, 900, 1200);
+    const dedicationDuration = clamp(700 + dedicationLen * 20, 1600, 2300);
+
+    const originalName = nameEl.textContent ?? '';
+    const originalDedication = dedicationEl.textContent ?? '';
+    const nameLines = splitIntoLines(nameEl);
+    const dedicationLines = splitIntoLines(dedicationEl);
+
+    // Hide every unit up front, in the same tick, so the first thing ever
+    // painted is the hidden state -- not a flash of plain visible text.
+    nameLines.forEach((line, i) => prepareHidden(line, i));
+    dedicationLines.forEach((line, i) => prepareHidden(line, 10 + i));
+    prepareHidden(fatimaEl, 20);
+    prepareHidden(ampEl, 21);
+    prepareHidden(andresEl, 22);
+    cover.classList.add('is-preparing-animation');
+    await nextFrame();
+
+    await sleep(350);
+
+    cover.classList.add('is-animating');
+    revealLines(nameLines, nameDuration, 0);
+    await sleep(nameDuration + 120);
+
+    revealLines(dedicationLines, dedicationDuration, 10);
+    await sleep(dedicationDuration + 250);
+
+    triggerReveal(fatimaEl, 750, 0, 20);
+    await sleep(750);
+    triggerReveal(ampEl, 230, 0, 21);
+    await sleep(230);
+    triggerReveal(andresEl, 800, 0, 22);
+    await sleep(800);
+
+    nameEl.textContent = originalName;
+    dedicationEl.textContent = originalDedication;
+    [fatimaEl, ampEl, andresEl].forEach(resetUnit);
+
+    cover.classList.remove('is-preparing-animation', 'is-animating');
+    cover.classList.add('is-animation-complete');
+  }
+
+  initInkReveal();
 </script>
 
 <style>
@@ -574,13 +759,16 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   }
 
   /*
-    Preparación técnica para una futura secuencia de animación.
-    Inerte por defecto: solo se activa si el contenedor .cover recibe
-    la clase .is-preparing-animation (no aplicada aún en el markup).
-    No implementa animación real, solo el estado oculto de partida.
+    Unidades generadas en tiempo de ejecución por el guion de revelado de
+    tinta (nombre, dedicatoria). display:block/inline preserva exactamente
+    el mismo salto de línea ya calculado antes de dividir el texto, así que
+    no altera la composición en reposo ni cuando JS está deshabilitado.
   */
-  .cover.is-preparing-animation [data-animation] {
-    opacity: 0;
-    visibility: hidden;
+  .ink-line {
+    display: block;
+  }
+
+  .ink-word {
+    display: inline;
   }
 </style>
