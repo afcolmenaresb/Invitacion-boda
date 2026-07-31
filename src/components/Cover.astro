@@ -314,27 +314,29 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     el.style.removeProperty('-webkit-mask-image');
   }
 
-  // --- Signature reveal: plain rectangular clip, left to right ---
+  // --- Signature reveal: one rectangular clip over the whole signature ---
   //
-  // Each word (Fátima / & / Andrés) is its own inline-block span; the
-  // reveal is a single clip-path: inset(...) sweeping over an *expanded*
-  // box -- the word's own measured width plus a fixed safety margin on
-  // every side (14px above, 8px below, 14px left, 14px right) so
-  // ascenders, descenders and calligraphic overshoot (the F/t of
-  // "Fátima", the A of "Andrés", accents) always sit inside the clipped
-  // area, never trimmed by a box clipped tight to the typographic
-  // bounding box. Insets are computed in plain px from the element's own
-  // measured width -- never CSS %, which is always relative to the box's
-  // *own* width alone and can't express "hide the margin too" -- so
-  // progress=0 truly hides the entire expanded box, margin included, not
-  // just the original text width (which is what let a sliver of the F/A
-  // margin show before the sweep even started). The left edge of the
-  // expanded box never moves; only the right edge sweeps, from 0px
-  // visible up to the expanded width.
-  const SIGNATURE_MARGIN_TOP = 14;
-  const SIGNATURE_MARGIN_BOTTOM = 8;
-  const SIGNATURE_MARGIN_LEFT = 14;
-  const SIGNATURE_MARGIN_RIGHT = 14;
+  // "Fátima & Andrés" reveals as a single unit -- one clip-path: inset(...)
+  // applied to .cover__names, whose right edge sweeps from fully-closed to
+  // fully-open. There is no per-word clip, mask or progress: whatever the
+  // sweep has reached (Fátima, then &, then Andrés) is simply whatever
+  // falls inside the currently-visible rectangle. The clip is sized to an
+  // *expanded* box -- .cover__names' own measured width plus a fixed
+  // safety margin on every side (20px above, 55px below, 20px left, 20px
+  // right) so ascenders, descenders and calligraphic overshoot across the
+  // whole signature always sit inside the clipped area, never trimmed by
+  // a box clipped tight to the typographic bounding box. Insets are
+  // computed in plain px from the element's own measured width -- never
+  // CSS %, which is always relative to the box's *own* width alone and
+  // can't express "hide the margin too" -- so progress=0 truly hides the
+  // entire expanded box, margin included, not just the original width.
+  // The left edge of the expanded box never moves (never used to drive
+  // progress); only the right edge sweeps, from 0px visible up to the
+  // expanded width.
+  const SIGNATURE_MARGIN_TOP = 20;
+  const SIGNATURE_MARGIN_BOTTOM = 55;
+  const SIGNATURE_MARGIN_LEFT = 20;
+  const SIGNATURE_MARGIN_RIGHT = 20;
 
   function signatureClipPath(progress: number, width: number): string {
     const expandedWidth = width + SIGNATURE_MARGIN_LEFT + SIGNATURE_MARGIN_RIGHT;
@@ -343,14 +345,14 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   }
 
   // Closes the clip down to nothing, instantly, so this is what's painted
-  // on the very first frame -- never a flash of the fully-written word.
+  // on the very first frame -- never a flash of any part of the signature.
   function prepareSignatureHidden(el: HTMLElement) {
-    el.style.clipPath = signatureClipPath(0, el.getBoundingClientRect().width);
+    el.style.clipPath = signatureClipPath(0, el.offsetWidth);
   }
 
   // Linear, frame-driven progress: the whole assigned duration is spent
-  // sweeping (no easing curve lets the clip "arrive early"), so the word
-  // advances uniformly and is never near-complete early on.
+  // sweeping (no easing curve lets the clip "arrive early"), so the
+  // signature advances uniformly and is never near-complete early on.
   function signatureProgress(t: number): number {
     if (t <= 0) return 0;
     if (t >= 1) return 1;
@@ -358,7 +360,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   }
 
   function triggerSignatureReveal(el: HTMLElement, duration: number, delay: number) {
-    const width = el.getBoundingClientRect().width;
+    const width = el.offsetWidth;
     const startTime = performance.now() + delay;
     let resetFrames = 0;
 
@@ -371,9 +373,10 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
         return;
       }
 
-      // progress === 1: the word is already fully visible -- wait two
-      // more frames, invisibly holding that finished state, before any
-      // caller-side cleanup runs, so the reset never overlaps the settle.
+      // progress === 1: the signature is already fully visible -- wait
+      // two more frames, invisibly holding that finished state, before
+      // any caller-side cleanup runs, so the reset never overlaps the
+      // settle.
       if (resetFrames < 2) {
         resetFrames += 1;
         requestAnimationFrame(step);
@@ -390,7 +393,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   function resetSignatureUnit(el: HTMLElement) {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        el.style.clipPath = signatureClipPath(1, el.getBoundingClientRect().width);
+        el.style.clipPath = signatureClipPath(1, el.offsetWidth);
       });
     });
   }
@@ -517,13 +520,11 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
     const nameEl = cover.querySelector<HTMLElement>('[data-animation="guest-name"]');
     const dedicationEl = cover.querySelector<HTMLElement>('[data-animation="dedication"]');
-    const fatimaEl = cover.querySelector<HTMLElement>('[data-animation="name-fatima"]');
-    const ampEl = cover.querySelector<HTMLElement>('[data-animation="name-separator"]');
-    const andresEl = cover.querySelector<HTMLElement>('[data-animation="name-andres"]');
+    const namesEl = cover.querySelector<HTMLElement>('.cover__names');
     const locationEl = cover.querySelector<HTMLElement>('[data-animation="location"]');
     const ctaEl = cover.querySelector<HTMLElement>('[data-animation="cta"]');
 
-    if (!nameEl || !dedicationEl || !fatimaEl || !ampEl || !andresEl || !locationEl || !ctaEl) {
+    if (!nameEl || !dedicationEl || !namesEl || !locationEl || !ctaEl) {
       return;
     }
 
@@ -547,9 +548,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
       // dedication (~67 chars) near 7.2s, per the approved choreography.
       const nameDuration = clamp(2400 + nameLen * 47, 2400, 3900);
       const dedicationDuration = clamp(3500 + dedicationLen * 55, 5600, 8600);
-      const fatimaDuration = 2700;
-      const ampDuration = 1000;
-      const andresDuration = 2900;
+      const signatureDuration = 6500;
       const locationDuration = 1200;
       const ctaDuration = 1200;
       const ctaStagger = 370;
@@ -562,9 +561,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
       // ever painted is the hidden state -- not a flash of visible text.
       nameLines.forEach((line, i) => prepareInkHidden(line, i));
       dedicationLines.forEach((line, i) => prepareInkHidden(line, 100 + i));
-      prepareSignatureHidden(fatimaEl);
-      prepareSignatureHidden(ampEl);
-      prepareSignatureHidden(andresEl);
+      prepareSignatureHidden(namesEl);
       prepareFadeHidden(locationEl);
       prepareFadeHidden(ctaEl);
       prepareUnderlineHidden(ctaEl);
@@ -581,14 +578,8 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
       revealLines(dedicationLines, dedicationDuration, 100);
       await sleep(Math.max(dedicationDuration - 250, 0));
 
-      triggerSignatureReveal(fatimaEl, fatimaDuration, 0);
-      await sleep(Math.max(fatimaDuration - 100, 0));
-
-      triggerSignatureReveal(ampEl, ampDuration, 0);
-      await sleep(Math.max(ampDuration - 100, 0));
-
-      triggerSignatureReveal(andresEl, andresDuration, 0);
-      await sleep(Math.max(andresDuration - 150, 0));
+      triggerSignatureReveal(namesEl, signatureDuration, 0);
+      await sleep(Math.max(signatureDuration - 150, 0));
 
       triggerFade(locationEl, locationDuration, 0);
       triggerFade(ctaEl, ctaDuration, ctaStagger);
@@ -605,7 +596,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
       nameEl.textContent = originalName;
       dedicationEl.textContent = originalDedication;
-      [fatimaEl, ampEl, andresEl].forEach(resetSignatureUnit);
+      resetSignatureUnit(namesEl);
       [locationEl, ctaEl].forEach(resetFadeUnit);
       resetUnderline(ctaEl);
 
@@ -614,7 +605,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
       // Never leave the cover partially hidden if something goes wrong.
       nameEl.textContent = originalName;
       dedicationEl.textContent = originalDedication;
-      [fatimaEl, ampEl, andresEl].forEach(resetSignatureUnit);
+      resetSignatureUnit(namesEl);
       [locationEl, ctaEl].forEach(resetFadeUnit);
       resetUnderline(ctaEl);
       showEverythingNow(cover);
@@ -858,31 +849,24 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   }
 
   /*
-    Signature reveal: each word is a plain inline-block span, clipped
-    *only* by a JS-driven clip-path: inset(...) whose right edge sweeps
-    from fully-closed to fully-open. No overflow:hidden here -- the box
-    itself must never clip, otherwise it trims glyph overshoot (the F/t of
-    "Fátima", the A of "Andrés", accents) tighter than the animated
-    clip-path's own margins allow. No clip-path is set here either, so
-    with no JS, or before the script runs, the word is already fully
-    visible -- identical to no clip at all. JS only closes it down to
-    animate the reveal; final HTML text never changes.
+    These three spans exist only to keep "Fátima", "&" and "Andrés"
+    individually positioned within .cover__title -- the reveal itself is a
+    single clip-path animated on their shared ancestor, .cover__names (see
+    the script above), not on these spans. No mask, clip-path or overflow
+    of their own.
   */
   .signature-fatima {
-    display: inline-block;
     position: relative;
     top: -12px;
   }
 
   .signature-amp {
-    display: inline-block;
     position: relative;
     top: 10px;
     left: 6px;
   }
 
   .signature-andres {
-    display: inline-block;
     position: relative;
     top: 36px;
     left: 13px;
