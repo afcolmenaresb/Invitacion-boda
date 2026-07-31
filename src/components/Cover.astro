@@ -317,22 +317,35 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   // --- Signature reveal: plain rectangular clip, left to right ---
   //
   // Each word (Fátima / & / Andrés) is its own inline-block span; the
-  // reveal is a single clip-path: inset(...) whose right edge retreats
-  // from fully-closed to fully-open (box width + 10px) as progress goes 0
-  // to 1. Top/bottom/left carry constant, asymmetric margins -- 12px
-  // above, 6px below, 10px to the left -- so ascenders, descenders and
-  // calligraphic overshoot (the F/t of "Fátima", the A of "Andrés",
-  // accents) always sit inside the clipped area, never trimmed by a box
-  // clipped tight to the typographic bounding box.
-  function signatureClipPath(progress: number): string {
-    const rightInset = `calc(${(1 - progress) * 100}% - ${progress * 10}px)`;
-    return `inset(-12px ${rightInset} -6px -10px)`;
+  // reveal is a single clip-path: inset(...) sweeping over an *expanded*
+  // box -- the word's own measured width plus a fixed safety margin on
+  // every side (14px above, 8px below, 14px left, 14px right) so
+  // ascenders, descenders and calligraphic overshoot (the F/t of
+  // "Fátima", the A of "Andrés", accents) always sit inside the clipped
+  // area, never trimmed by a box clipped tight to the typographic
+  // bounding box. Insets are computed in plain px from the element's own
+  // measured width -- never CSS %, which is always relative to the box's
+  // *own* width alone and can't express "hide the margin too" -- so
+  // progress=0 truly hides the entire expanded box, margin included, not
+  // just the original text width (which is what let a sliver of the F/A
+  // margin show before the sweep even started). The left edge of the
+  // expanded box never moves; only the right edge sweeps, from 0px
+  // visible up to the expanded width.
+  const SIGNATURE_MARGIN_TOP = 14;
+  const SIGNATURE_MARGIN_BOTTOM = 8;
+  const SIGNATURE_MARGIN_LEFT = 14;
+  const SIGNATURE_MARGIN_RIGHT = 14;
+
+  function signatureClipPath(progress: number, width: number): string {
+    const expandedWidth = width + SIGNATURE_MARGIN_LEFT + SIGNATURE_MARGIN_RIGHT;
+    const rightInset = (1 - progress) * expandedWidth - SIGNATURE_MARGIN_RIGHT;
+    return `inset(-${SIGNATURE_MARGIN_TOP}px ${rightInset}px -${SIGNATURE_MARGIN_BOTTOM}px -${SIGNATURE_MARGIN_LEFT}px)`;
   }
 
   // Closes the clip down to nothing, instantly, so this is what's painted
   // on the very first frame -- never a flash of the fully-written word.
   function prepareSignatureHidden(el: HTMLElement) {
-    el.style.clipPath = signatureClipPath(0);
+    el.style.clipPath = signatureClipPath(0, el.getBoundingClientRect().width);
   }
 
   // Linear, frame-driven progress: the whole assigned duration is spent
@@ -345,12 +358,13 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   }
 
   function triggerSignatureReveal(el: HTMLElement, duration: number, delay: number) {
+    const width = el.getBoundingClientRect().width;
     const startTime = performance.now() + delay;
     let resetFrames = 0;
 
     function step(now: number) {
       const progress = clamp((now - startTime) / duration, 0, 1);
-      el.style.clipPath = signatureClipPath(signatureProgress(progress));
+      el.style.clipPath = signatureClipPath(signatureProgress(progress), width);
 
       if (progress < 1) {
         requestAnimationFrame(step);
@@ -376,7 +390,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   function resetSignatureUnit(el: HTMLElement) {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        el.style.clipPath = signatureClipPath(1);
+        el.style.clipPath = signatureClipPath(1, el.getBoundingClientRect().width);
       });
     });
   }
