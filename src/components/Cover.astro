@@ -107,33 +107,9 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
   <div class="cover__names">
     <h1 class="cover__title" data-autofit="width">
-      <span class="signature-fatima" data-animation="name-fatima"
-        ><svg class="signature-ink-defs" aria-hidden="true" focusable="false" style="position:absolute;width:0;height:0"
-          ><defs>
-            <mask id="sigmask-fatima" maskUnits="userSpaceOnUse" x="0" y="-50" width="450" height="220">
-              <rect class="signature-band" data-full-width="450" x="0" y="-50" width="450" height="220" fill="#fff" />
-            </mask>
-          </defs></svg
-        >Fátima</span
-      >
-      <span class="cover__amp signature-amp" data-animation="name-separator"
-        ><svg class="signature-ink-defs" aria-hidden="true" focusable="false" style="position:absolute;width:0;height:0"
-          ><defs>
-            <mask id="sigmask-amp" maskUnits="userSpaceOnUse" x="-30" y="-40" width="160" height="180">
-              <rect class="signature-band" data-full-width="160" x="-30" y="-40" width="160" height="180" fill="#fff" />
-            </mask>
-          </defs></svg
-        >&amp;</span
-      >
-      <span class="signature-andres" data-animation="name-andres"
-        ><svg class="signature-ink-defs" aria-hidden="true" focusable="false" style="position:absolute;width:0;height:0"
-          ><defs>
-            <mask id="sigmask-andres" maskUnits="userSpaceOnUse" x="0" y="-50" width="480" height="220">
-              <rect class="signature-band" data-full-width="480" x="0" y="-50" width="480" height="220" fill="#fff" />
-            </mask>
-          </defs></svg
-        >Andrés</span
-      >
+      <span class="signature-fatima" data-animation="name-fatima">Fátima</span>
+      <span class="cover__amp signature-amp" data-animation="name-separator">&amp;</span>
+      <span class="signature-andres" data-animation="name-andres">Andrés</span>
     </h1>
   </div>
 
@@ -338,33 +314,28 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     el.style.removeProperty('-webkit-mask-image');
   }
 
-  // --- Signature reveal: full-height rectangular band, left to right ---
+  // --- Signature reveal: plain rectangular clip, left to right ---
   //
-  // Each word (Fátima / & / Andrés) carries its own inline <mask> (defined
-  // in the markup) with a single <rect class="signature-band">. The rect's
-  // height already equals the mask's full height (which CSS mask-size:100%
-  // 100% stretches to exactly cover the word's rendered box, top to
-  // bottom), so at every instant the band reveals the complete vertical
-  // extent of the glyph -- no accents/ascenders/descenders ever wait on a
-  // late fill. Only the rect's width is animated, from 0 up to its full
-  // value (data-full-width), sweeping the reveal left to right.
-  function signatureBand(el: HTMLElement): SVGRectElement | null {
-    return el.querySelector<SVGRectElement>('mask .signature-band');
+  // Each word (Fátima / & / Andrés) is its own inline-block span with
+  // overflow:hidden; the reveal is a single clip-path: inset(...) whose
+  // right edge retreats from 100% (nothing visible) to 0% (fully visible)
+  // as progress goes 0 to 1. Top/bottom/left carry a constant -3px so the
+  // clip region extends 3px beyond the box on those sides -- a fixed
+  // safety margin around the word's full visible height, not something
+  // that grows or changes during the sweep.
+  function signatureClipPath(progress: number): string {
+    const rightInset = (1 - progress) * 100;
+    return `inset(-3px ${rightInset}% -3px -3px)`;
   }
 
-  // Closes the band down to zero width, instantly, so this is what's
-  // painted on the very first frame -- never a flash of the fully-written
-  // word.
+  // Closes the clip down to nothing, instantly, so this is what's painted
+  // on the very first frame -- never a flash of the fully-written word.
   function prepareSignatureHidden(el: HTMLElement) {
-    const band = signatureBand(el);
-    if (band) {
-      band.style.transition = 'none';
-      band.setAttribute('width', '0');
-    }
+    el.style.clipPath = signatureClipPath(0);
   }
 
   // Linear, frame-driven progress: the whole assigned duration is spent
-  // sweeping (no easing curve lets the band "arrive early"), so the word
+  // sweeping (no easing curve lets the clip "arrive early"), so the word
   // advances uniformly and is never near-complete early on.
   function signatureProgress(t: number): number {
     if (t <= 0) return 0;
@@ -373,48 +344,38 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   }
 
   function triggerSignatureReveal(el: HTMLElement, duration: number, delay: number) {
-    const band = signatureBand(el);
-    if (!band) return;
-    const fullWidth = parseFloat(band.dataset.fullWidth ?? '0');
     const startTime = performance.now() + delay;
     let resetFrames = 0;
 
     function step(now: number) {
       const progress = clamp((now - startTime) / duration, 0, 1);
-      band.setAttribute('width', `${fullWidth * signatureProgress(progress)}`);
+      el.style.clipPath = signatureClipPath(signatureProgress(progress));
 
       if (progress < 1) {
         requestAnimationFrame(step);
         return;
       }
 
-      // progress === 1: the band already covers the full width and height
-      // -- wait two more frames, invisibly holding that finished state,
-      // before any caller-side cleanup runs, so the reset never overlaps
-      // the settle.
+      // progress === 1: the word is already fully visible -- wait two
+      // more frames, invisibly holding that finished state, before any
+      // caller-side cleanup runs, so the reset never overlaps the settle.
       if (resetFrames < 2) {
         resetFrames += 1;
         requestAnimationFrame(step);
       }
     }
 
-    band.style.transition = 'none';
-    band.setAttribute('width', '0');
     requestAnimationFrame(step);
   }
 
   // Waits exactly two rAF frames (never setTimeout) past the fully-revealed
-  // state before touching the band's inline styles, then restores it to
-  // its full width -- the same value it already held -- so the frame right
-  // before and right after this runs are visually identical, never a pop.
+  // state before touching the clip-path, then re-applies the very same
+  // fully-revealed value -- so the frame right before and right after this
+  // runs are visually identical, never a pop.
   function resetSignatureUnit(el: HTMLElement) {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        const band = signatureBand(el);
-        if (band) {
-          band.style.transition = '';
-          band.setAttribute('width', band.dataset.fullWidth ?? '0');
-        }
+        el.style.clipPath = signatureClipPath(1);
       });
     });
   }
@@ -882,47 +843,34 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   }
 
   /*
-    Signature reveal: each word masks itself against its own inline
-    <mask> (defined in the markup, one per span), holding a single
-    full-height rect whose width sweeps left to right. The rect defaults
-    to its full width (see the SVG's own attributes) so with no JS, or
-    before the script runs, the mask is already wide open -- visually
-    identical to no mask at all. JS only closes it down to animate the
+    Signature reveal: each word is a plain inline-block span, clipped by a
+    JS-driven clip-path: inset(...) whose right edge sweeps from 100%
+    (hidden) to 0% (fully visible). No clip-path is set here, so with no
+    JS, or before the script runs, the word is already fully visible --
+    identical to no clip at all. JS only closes it down to animate the
     reveal; final HTML text never changes.
   */
   .signature-fatima {
+    display: inline-block;
     position: relative;
     top: -12px;
-    mask: url(#sigmask-fatima);
-    -webkit-mask: url(#sigmask-fatima);
-    mask-repeat: no-repeat;
-    -webkit-mask-repeat: no-repeat;
-    mask-size: 100% 100%;
-    -webkit-mask-size: 100% 100%;
+    overflow: hidden;
   }
 
   .signature-amp {
+    display: inline-block;
     position: relative;
     top: 10px;
     left: 6px;
-    mask: url(#sigmask-amp);
-    -webkit-mask: url(#sigmask-amp);
-    mask-repeat: no-repeat;
-    -webkit-mask-repeat: no-repeat;
-    mask-size: 100% 100%;
-    -webkit-mask-size: 100% 100%;
+    overflow: hidden;
   }
 
   .signature-andres {
+    display: inline-block;
     position: relative;
     top: 36px;
     left: 13px;
-    mask: url(#sigmask-andres);
-    -webkit-mask: url(#sigmask-andres);
-    mask-repeat: no-repeat;
-    -webkit-mask-repeat: no-repeat;
-    mask-size: 100% 100%;
-    -webkit-mask-size: 100% 100%;
+    overflow: hidden;
   }
 
   .cover__cta {
