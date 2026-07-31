@@ -107,9 +107,81 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
   <div class="cover__names">
     <h1 class="cover__title" data-autofit="width">
-      <span class="signature-fatima" data-animation="name-fatima">Fátima</span>
-      <span class="cover__amp signature-amp" data-animation="name-separator">&amp;</span>
-      <span class="signature-andres" data-animation="name-andres">Andrés</span>
+      <span class="signature-fatima" data-animation="name-fatima"
+        ><svg class="signature-ink-defs" aria-hidden="true" focusable="false" style="position:absolute;width:0;height:0"
+          ><defs>
+            <mask id="sigmask-fatima" maskUnits="userSpaceOnUse" x="0" y="-50" width="450" height="220">
+              <rect x="0" y="-50" width="450" height="220" fill="black" />
+              <path
+                class="ink-stroke"
+                pathLength="1"
+                fill="none"
+                stroke="#fff"
+                stroke-width="58"
+                stroke-linecap="round"
+                d="M -20,35 C 60,10 110,55 175,25 C 230,0 300,50 360,18 C 405,0 435,20 470,10"
+              />
+              <path
+                class="ink-stroke"
+                pathLength="1"
+                fill="none"
+                stroke="#fff"
+                stroke-width="58"
+                stroke-linecap="round"
+                d="M -20,100 C 60,72 110,120 175,88 C 230,60 300,112 360,80 C 405,60 435,82 470,70"
+              />
+              <rect class="ink-fill" x="0" y="-50" width="450" height="220" fill="#fff" opacity="0" />
+            </mask>
+          </defs></svg
+        >Fátima</span
+      >
+      <span class="cover__amp signature-amp" data-animation="name-separator"
+        ><svg class="signature-ink-defs" aria-hidden="true" focusable="false" style="position:absolute;width:0;height:0"
+          ><defs>
+            <mask id="sigmask-amp" maskUnits="userSpaceOnUse" x="-30" y="-40" width="160" height="180">
+              <rect x="-30" y="-40" width="160" height="180" fill="black" />
+              <path
+                class="ink-stroke"
+                pathLength="1"
+                fill="none"
+                stroke="#fff"
+                stroke-width="46"
+                stroke-linecap="round"
+                d="M 15,95 C -15,70 5,25 40,30 C 75,35 65,75 30,80 C -5,85 5,40 45,15 C 75,-3 105,15 100,45 C 96,72 65,88 40,95"
+              />
+              <rect class="ink-fill" x="-30" y="-40" width="160" height="180" fill="#fff" opacity="0" />
+            </mask>
+          </defs></svg
+        >&amp;</span
+      >
+      <span class="signature-andres" data-animation="name-andres"
+        ><svg class="signature-ink-defs" aria-hidden="true" focusable="false" style="position:absolute;width:0;height:0"
+          ><defs>
+            <mask id="sigmask-andres" maskUnits="userSpaceOnUse" x="0" y="-50" width="480" height="220">
+              <rect x="0" y="-50" width="480" height="220" fill="black" />
+              <path
+                class="ink-stroke"
+                pathLength="1"
+                fill="none"
+                stroke="#fff"
+                stroke-width="60"
+                stroke-linecap="round"
+                d="M -20,30 C 70,5 130,45 200,20 C 260,0 320,40 380,15 C 420,2 450,20 490,10"
+              />
+              <path
+                class="ink-stroke"
+                pathLength="1"
+                fill="none"
+                stroke="#fff"
+                stroke-width="60"
+                stroke-linecap="round"
+                d="M -20,98 C 70,70 130,115 200,85 C 260,60 320,105 380,78 C 420,62 450,80 490,68"
+              />
+              <rect class="ink-fill" x="0" y="-50" width="480" height="220" fill="#fff" opacity="0" />
+            </mask>
+          </defs></svg
+        >Andrés</span
+      >
     </h1>
   </div>
 
@@ -314,6 +386,84 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     el.style.removeProperty('-webkit-mask-image');
   }
 
+  // --- Signature reveal: calligraphic strokes, not a horizontal mask sweep ---
+  //
+  // Each word (Fátima / & / Andrés) carries its own inline <mask> (defined
+  // in the markup) with 1-2 thick, soft stroke paths plus a full-cover
+  // "ink-fill" rect. stroke-dashoffset is a plain, natively-animatable SVG
+  // property -- unlike --reveal elsewhere in this file, it needs no
+  // @property registration to interpolate correctly. pathLength="1" on
+  // each <path> normalizes its length to 1, so dasharray/dashoffset are
+  // always simple 0-1 fractions regardless of the curve's real geometry.
+  function signatureStrokes(el: HTMLElement): SVGPathElement[] {
+    return Array.from(el.querySelectorAll<SVGPathElement>('mask .ink-stroke'));
+  }
+
+  function signatureFill(el: HTMLElement): SVGRectElement | null {
+    return el.querySelector<SVGRectElement>('mask .ink-fill');
+  }
+
+  // Closes the mask down to nothing, instantly, so this is what's painted
+  // on the very first frame -- never a flash of the fully-written word.
+  function prepareSignatureHidden(el: HTMLElement) {
+    signatureStrokes(el).forEach((path) => {
+      path.style.transition = 'none';
+      path.setAttribute('stroke-dasharray', '1');
+      path.setAttribute('stroke-dashoffset', '1');
+    });
+    const fill = signatureFill(el);
+    if (fill) {
+      fill.style.transition = 'none';
+      fill.setAttribute('opacity', '0');
+    }
+  }
+
+  // Draws each stroke left-to-right like a pen gesture (slightly staggered
+  // so two strokes don't read as one rigid block), then blends in the
+  // full-cover fill over the last stretch -- guaranteeing the final state
+  // is 100% of the glyph's ink with no gaps the approximate strokes might
+  // have missed, timed to land exactly as the strokes finish so it reads
+  // as ink settling, not a swap.
+  function triggerSignatureReveal(el: HTMLElement, duration: number, delay: number) {
+    const strokes = signatureStrokes(el);
+    const strokeStagger = strokes.length > 1 ? Math.min(140, duration * 0.12) : 0;
+    strokes.forEach((path, i) => {
+      const strokeDelay = delay + i * strokeStagger;
+      const strokeDuration = duration - i * strokeStagger;
+      path.style.transition = `stroke-dashoffset ${strokeDuration}ms ${EASE} ${strokeDelay}ms`;
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          path.setAttribute('stroke-dashoffset', '0');
+        });
+      });
+    });
+
+    const fill = signatureFill(el);
+    if (fill) {
+      const fillDuration = duration * 0.3;
+      const fillDelay = delay + duration - fillDuration;
+      fill.style.transition = `opacity ${fillDuration}ms ease-out ${fillDelay}ms`;
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          fill.setAttribute('opacity', '1');
+        });
+      });
+    }
+  }
+
+  function resetSignatureUnit(el: HTMLElement) {
+    signatureStrokes(el).forEach((path) => {
+      path.style.transition = '';
+      path.removeAttribute('stroke-dasharray');
+      path.removeAttribute('stroke-dashoffset');
+    });
+    const fill = signatureFill(el);
+    if (fill) {
+      fill.style.transition = '';
+      fill.removeAttribute('opacity');
+    }
+  }
+
   // Location and CTA are not "written" -- they simply settle in once the
   // signature is done, per spec: a plain gentle fade + tiny rise.
   function prepareFadeHidden(el: HTMLElement) {
@@ -481,9 +631,9 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
       // ever painted is the hidden state -- not a flash of visible text.
       nameLines.forEach((line, i) => prepareInkHidden(line, i));
       dedicationLines.forEach((line, i) => prepareInkHidden(line, 100 + i));
-      prepareInkHidden(fatimaEl, 200);
-      prepareInkHidden(ampEl, 201);
-      prepareInkHidden(andresEl, 202);
+      prepareSignatureHidden(fatimaEl);
+      prepareSignatureHidden(ampEl);
+      prepareSignatureHidden(andresEl);
       prepareFadeHidden(locationEl);
       prepareFadeHidden(ctaEl);
       prepareUnderlineHidden(ctaEl);
@@ -500,13 +650,13 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
       revealLines(dedicationLines, dedicationDuration, 100);
       await sleep(Math.max(dedicationDuration - 250, 0));
 
-      triggerInkReveal(fatimaEl, fatimaDuration, 0, 200);
+      triggerSignatureReveal(fatimaEl, fatimaDuration, 0);
       await sleep(Math.max(fatimaDuration - 100, 0));
 
-      triggerInkReveal(ampEl, ampDuration, 0, 201);
+      triggerSignatureReveal(ampEl, ampDuration, 0);
       await sleep(Math.max(ampDuration - 100, 0));
 
-      triggerInkReveal(andresEl, andresDuration, 0, 202);
+      triggerSignatureReveal(andresEl, andresDuration, 0);
       await sleep(Math.max(andresDuration - 150, 0));
 
       triggerFade(locationEl, locationDuration, 0);
@@ -524,7 +674,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
       nameEl.textContent = originalName;
       dedicationEl.textContent = originalDedication;
-      [fatimaEl, ampEl, andresEl].forEach(resetInkUnit);
+      [fatimaEl, ampEl, andresEl].forEach(resetSignatureUnit);
       [locationEl, ctaEl].forEach(resetFadeUnit);
       resetUnderline(ctaEl);
 
@@ -533,7 +683,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
       // Never leave the cover partially hidden if something goes wrong.
       nameEl.textContent = originalName;
       dedicationEl.textContent = originalDedication;
-      [fatimaEl, ampEl, andresEl].forEach(resetInkUnit);
+      [fatimaEl, ampEl, andresEl].forEach(resetSignatureUnit);
       [locationEl, ctaEl].forEach(resetFadeUnit);
       resetUnderline(ctaEl);
       showEverythingNow(cover);
@@ -776,21 +926,47 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     margin: 0;
   }
 
+  /*
+    Signature reveal: each word masks itself against its own inline
+    <mask> (defined in the markup, one per span). The mask's paths default
+    to fully drawn (stroke-dashoffset 0, see the SVG's own attributes) so
+    with no JS, or before the script runs, the mask is already wide open --
+    visually identical to no mask at all. JS only closes it down to
+    animate the reveal; final HTML text never changes.
+  */
   .signature-fatima {
     position: relative;
     top: -12px;
+    mask: url(#sigmask-fatima);
+    -webkit-mask: url(#sigmask-fatima);
+    mask-repeat: no-repeat;
+    -webkit-mask-repeat: no-repeat;
+    mask-size: 100% 100%;
+    -webkit-mask-size: 100% 100%;
   }
 
   .signature-amp {
     position: relative;
     top: 10px;
     left: 6px;
+    mask: url(#sigmask-amp);
+    -webkit-mask: url(#sigmask-amp);
+    mask-repeat: no-repeat;
+    -webkit-mask-repeat: no-repeat;
+    mask-size: 100% 100%;
+    -webkit-mask-size: 100% 100%;
   }
 
   .signature-andres {
     position: relative;
     top: 36px;
     left: 13px;
+    mask: url(#sigmask-andres);
+    -webkit-mask: url(#sigmask-andres);
+    mask-repeat: no-repeat;
+    -webkit-mask-repeat: no-repeat;
+    mask-size: 100% 100%;
+    -webkit-mask-size: 100% 100%;
   }
 
   .cover__cta {
