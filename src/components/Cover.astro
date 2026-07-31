@@ -111,26 +111,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
         ><svg class="signature-ink-defs" aria-hidden="true" focusable="false" style="position:absolute;width:0;height:0"
           ><defs>
             <mask id="sigmask-fatima" maskUnits="userSpaceOnUse" x="0" y="-50" width="450" height="220">
-              <rect x="0" y="-50" width="450" height="220" fill="black" />
-              <path
-                class="ink-stroke"
-                pathLength="1"
-                fill="none"
-                stroke="#fff"
-                stroke-width="96"
-                stroke-linecap="round"
-                d="M -20,35 C 60,10 110,55 175,25 C 230,0 300,50 360,18 C 405,0 435,20 470,10"
-              />
-              <path
-                class="ink-stroke"
-                pathLength="1"
-                fill="none"
-                stroke="#fff"
-                stroke-width="96"
-                stroke-linecap="round"
-                d="M -20,100 C 60,72 110,120 175,88 C 230,60 300,112 360,80 C 405,60 435,82 470,70"
-              />
-              <rect class="ink-fill" x="0" y="-50" width="450" height="220" fill="#fff" opacity="0" />
+              <rect class="signature-band" data-full-width="450" x="0" y="-50" width="450" height="220" fill="#fff" />
             </mask>
           </defs></svg
         >Fátima</span
@@ -139,17 +120,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
         ><svg class="signature-ink-defs" aria-hidden="true" focusable="false" style="position:absolute;width:0;height:0"
           ><defs>
             <mask id="sigmask-amp" maskUnits="userSpaceOnUse" x="-30" y="-40" width="160" height="180">
-              <rect x="-30" y="-40" width="160" height="180" fill="black" />
-              <path
-                class="ink-stroke"
-                pathLength="1"
-                fill="none"
-                stroke="#fff"
-                stroke-width="88"
-                stroke-linecap="round"
-                d="M 15,95 C -15,70 5,25 40,30 C 75,35 65,75 30,80 C -5,85 5,40 45,15 C 75,-3 105,15 100,45 C 96,72 65,88 40,95"
-              />
-              <rect class="ink-fill" x="-30" y="-40" width="160" height="180" fill="#fff" opacity="0" />
+              <rect class="signature-band" data-full-width="160" x="-30" y="-40" width="160" height="180" fill="#fff" />
             </mask>
           </defs></svg
         >&amp;</span
@@ -158,26 +129,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
         ><svg class="signature-ink-defs" aria-hidden="true" focusable="false" style="position:absolute;width:0;height:0"
           ><defs>
             <mask id="sigmask-andres" maskUnits="userSpaceOnUse" x="0" y="-50" width="480" height="220">
-              <rect x="0" y="-50" width="480" height="220" fill="black" />
-              <path
-                class="ink-stroke"
-                pathLength="1"
-                fill="none"
-                stroke="#fff"
-                stroke-width="104"
-                stroke-linecap="round"
-                d="M -20,30 C 70,5 130,45 200,20 C 260,0 320,40 380,15 C 420,2 450,20 490,10"
-              />
-              <path
-                class="ink-stroke"
-                pathLength="1"
-                fill="none"
-                stroke="#fff"
-                stroke-width="104"
-                stroke-linecap="round"
-                d="M -20,98 C 70,70 130,115 200,85 C 260,60 320,105 380,78 C 420,62 450,80 490,68"
-              />
-              <rect class="ink-fill" x="0" y="-50" width="480" height="220" fill="#fff" opacity="0" />
+              <rect class="signature-band" data-full-width="480" x="0" y="-50" width="480" height="220" fill="#fff" />
             </mask>
           </defs></svg
         >Andrés</span
@@ -386,48 +338,34 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     el.style.removeProperty('-webkit-mask-image');
   }
 
-  // --- Signature reveal: calligraphic strokes, not a horizontal mask sweep ---
+  // --- Signature reveal: full-height rectangular band, left to right ---
   //
   // Each word (Fátima / & / Andrés) carries its own inline <mask> (defined
-  // in the markup) with 1-2 thick, soft stroke paths plus a full-cover
-  // "ink-fill" rect. stroke-dashoffset is a plain, natively-animatable SVG
-  // property -- unlike --reveal elsewhere in this file, it needs no
-  // @property registration to interpolate correctly. pathLength="1" on
-  // each <path> normalizes its length to 1, so dasharray/dashoffset are
-  // always simple 0-1 fractions regardless of the curve's real geometry.
-  function signatureStrokes(el: HTMLElement): SVGPathElement[] {
-    return Array.from(el.querySelectorAll<SVGPathElement>('mask .ink-stroke'));
+  // in the markup) with a single <rect class="signature-band">. The rect's
+  // height already equals the mask's full height (which CSS mask-size:100%
+  // 100% stretches to exactly cover the word's rendered box, top to
+  // bottom), so at every instant the band reveals the complete vertical
+  // extent of the glyph -- no accents/ascenders/descenders ever wait on a
+  // late fill. Only the rect's width is animated, from 0 up to its full
+  // value (data-full-width), sweeping the reveal left to right.
+  function signatureBand(el: HTMLElement): SVGRectElement | null {
+    return el.querySelector<SVGRectElement>('mask .signature-band');
   }
 
-  function signatureFill(el: HTMLElement): SVGRectElement | null {
-    return el.querySelector<SVGRectElement>('mask .ink-fill');
-  }
-
-  // Closes the mask down to nothing, instantly, so this is what's painted
-  // on the very first frame -- never a flash of the fully-written word.
+  // Closes the band down to zero width, instantly, so this is what's
+  // painted on the very first frame -- never a flash of the fully-written
+  // word.
   function prepareSignatureHidden(el: HTMLElement) {
-    signatureStrokes(el).forEach((path) => {
-      path.style.transition = 'none';
-      path.setAttribute('stroke-dasharray', '1');
-      path.setAttribute('stroke-dashoffset', '1');
-    });
-    const fill = signatureFill(el);
-    if (fill) {
-      fill.style.transition = 'none';
-      fill.setAttribute('opacity', '0');
+    const band = signatureBand(el);
+    if (band) {
+      band.style.transition = 'none';
+      band.setAttribute('width', '0');
     }
   }
 
-  // Draws each stroke left-to-right like a pen gesture (slightly staggered
-  // so two strokes don't read as one rigid block), then blends in the
-  // full-cover fill over the last stretch -- guaranteeing the final state
-  // is 100% of the glyph's ink with no gaps the approximate strokes might
-  // have missed, timed to land exactly as the strokes finish so it reads
-  // as ink settling, not a swap.
   // Linear, frame-driven progress: the whole assigned duration is spent
-  // drawing (no easing curve lets the stroke "arrive early"), and the
-  // final-cover rect stays invisible until the last 8% of the word's
-  // window so it can never read as an early pop.
+  // sweeping (no easing curve lets the band "arrive early"), so the word
+  // advances uniformly and is never near-complete early on.
   function signatureProgress(t: number): number {
     if (t <= 0) return 0;
     if (t >= 1) return 1;
@@ -435,65 +373,47 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   }
 
   function triggerSignatureReveal(el: HTMLElement, duration: number, delay: number) {
-    const strokes = signatureStrokes(el);
-    const fill = signatureFill(el);
+    const band = signatureBand(el);
+    if (!band) return;
+    const fullWidth = parseFloat(band.dataset.fullWidth ?? '0');
     const startTime = performance.now() + delay;
     let resetFrames = 0;
 
     function step(now: number) {
       const progress = clamp((now - startTime) / duration, 0, 1);
-      const dashOffset = 1 - signatureProgress(progress);
-      strokes.forEach((path) => {
-        path.setAttribute('stroke-dashoffset', `${dashOffset}`);
-      });
+      band.setAttribute('width', `${fullWidth * signatureProgress(progress)}`);
 
-      const fillProgress = clamp((progress - 0.92) / 0.08, 0, 1);
-      if (fill) {
-        fill.setAttribute('opacity', `${fillProgress}`);
-      }
-
-      if (progress < 1 || fillProgress < 1) {
+      if (progress < 1) {
         requestAnimationFrame(step);
         return;
       }
 
-      // progress === 1 and fillProgress === 1: wait two more frames,
-      // invisibly holding the finished state, before any caller-side
-      // cleanup runs -- so the reset never overlaps the settle.
+      // progress === 1: the band already covers the full width and height
+      // -- wait two more frames, invisibly holding that finished state,
+      // before any caller-side cleanup runs, so the reset never overlaps
+      // the settle.
       if (resetFrames < 2) {
         resetFrames += 1;
         requestAnimationFrame(step);
       }
     }
 
-    strokes.forEach((path) => {
-      path.style.transition = 'none';
-      path.setAttribute('stroke-dasharray', '1');
-      path.setAttribute('stroke-dashoffset', '1');
-    });
-    if (fill) {
-      fill.style.transition = 'none';
-      fill.setAttribute('opacity', '0');
-    }
+    band.style.transition = 'none';
+    band.setAttribute('width', '0');
     requestAnimationFrame(step);
   }
 
-  // Waits exactly two rAF frames (never setTimeout) past the fully-drawn,
-  // fully-covered state before clearing the mask's inline styles, so the
-  // swap to the plain final markup lands on a frame that already looks
-  // identical -- never a visible pop.
+  // Waits exactly two rAF frames (never setTimeout) past the fully-revealed
+  // state before touching the band's inline styles, then restores it to
+  // its full width -- the same value it already held -- so the frame right
+  // before and right after this runs are visually identical, never a pop.
   function resetSignatureUnit(el: HTMLElement) {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        signatureStrokes(el).forEach((path) => {
-          path.style.transition = '';
-          path.removeAttribute('stroke-dasharray');
-          path.removeAttribute('stroke-dashoffset');
-        });
-        const fill = signatureFill(el);
-        if (fill) {
-          fill.style.transition = '';
-          fill.removeAttribute('opacity');
+        const band = signatureBand(el);
+        if (band) {
+          band.style.transition = '';
+          band.setAttribute('width', band.dataset.fullWidth ?? '0');
         }
       });
     });
@@ -963,11 +883,12 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
   /*
     Signature reveal: each word masks itself against its own inline
-    <mask> (defined in the markup, one per span). The mask's paths default
-    to fully drawn (stroke-dashoffset 0, see the SVG's own attributes) so
-    with no JS, or before the script runs, the mask is already wide open --
-    visually identical to no mask at all. JS only closes it down to
-    animate the reveal; final HTML text never changes.
+    <mask> (defined in the markup, one per span), holding a single
+    full-height rect whose width sweeps left to right. The rect defaults
+    to its full width (see the SVG's own attributes) so with no JS, or
+    before the script runs, the mask is already wide open -- visually
+    identical to no mask at all. JS only closes it down to animate the
+    reveal; final HTML text never changes.
   */
   .signature-fatima {
     position: relative;
