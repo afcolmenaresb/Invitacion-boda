@@ -424,44 +424,79 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   // is 100% of the glyph's ink with no gaps the approximate strokes might
   // have missed, timed to land exactly as the strokes finish so it reads
   // as ink settling, not a swap.
-  function triggerSignatureReveal(el: HTMLElement, duration: number, delay: number) {
-    const strokes = signatureStrokes(el);
-    const strokeStagger = strokes.length > 1 ? Math.min(140, duration * 0.12) : 0;
-    strokes.forEach((path, i) => {
-      const strokeDelay = delay + i * strokeStagger;
-      const strokeDuration = duration - i * strokeStagger;
-      path.style.transition = `stroke-dashoffset ${strokeDuration}ms ${EASE} ${strokeDelay}ms`;
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          path.setAttribute('stroke-dashoffset', '0');
-        });
-      });
-    });
-
-    const fill = signatureFill(el);
-    if (fill) {
-      const fillDuration = duration * 0.3;
-      const fillDelay = delay + duration - fillDuration;
-      fill.style.transition = `opacity ${fillDuration}ms ease-out ${fillDelay}ms`;
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          fill.setAttribute('opacity', '1');
-        });
-      });
-    }
+  // Linear, frame-driven progress: the whole assigned duration is spent
+  // drawing (no easing curve lets the stroke "arrive early"), and the
+  // final-cover rect stays invisible until the last 8% of the word's
+  // window so it can never read as an early pop.
+  function signatureProgress(t: number): number {
+    if (t <= 0) return 0;
+    if (t >= 1) return 1;
+    return t;
   }
 
-  function resetSignatureUnit(el: HTMLElement) {
-    signatureStrokes(el).forEach((path) => {
-      path.style.transition = '';
-      path.removeAttribute('stroke-dasharray');
-      path.removeAttribute('stroke-dashoffset');
-    });
+  function triggerSignatureReveal(el: HTMLElement, duration: number, delay: number) {
+    const strokes = signatureStrokes(el);
     const fill = signatureFill(el);
-    if (fill) {
-      fill.style.transition = '';
-      fill.removeAttribute('opacity');
+    const startTime = performance.now() + delay;
+    let resetFrames = 0;
+
+    function step(now: number) {
+      const progress = clamp((now - startTime) / duration, 0, 1);
+      const dashOffset = 1 - signatureProgress(progress);
+      strokes.forEach((path) => {
+        path.setAttribute('stroke-dashoffset', `${dashOffset}`);
+      });
+
+      const fillProgress = clamp((progress - 0.92) / 0.08, 0, 1);
+      if (fill) {
+        fill.setAttribute('opacity', `${fillProgress}`);
+      }
+
+      if (progress < 1 || fillProgress < 1) {
+        requestAnimationFrame(step);
+        return;
+      }
+
+      // progress === 1 and fillProgress === 1: wait two more frames,
+      // invisibly holding the finished state, before any caller-side
+      // cleanup runs -- so the reset never overlaps the settle.
+      if (resetFrames < 2) {
+        resetFrames += 1;
+        requestAnimationFrame(step);
+      }
     }
+
+    strokes.forEach((path) => {
+      path.style.transition = 'none';
+      path.setAttribute('stroke-dasharray', '1');
+      path.setAttribute('stroke-dashoffset', '1');
+    });
+    if (fill) {
+      fill.style.transition = 'none';
+      fill.setAttribute('opacity', '0');
+    }
+    requestAnimationFrame(step);
+  }
+
+  // Waits exactly two rAF frames (never setTimeout) past the fully-drawn,
+  // fully-covered state before clearing the mask's inline styles, so the
+  // swap to the plain final markup lands on a frame that already looks
+  // identical -- never a visible pop.
+  function resetSignatureUnit(el: HTMLElement) {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        signatureStrokes(el).forEach((path) => {
+          path.style.transition = '';
+          path.removeAttribute('stroke-dasharray');
+          path.removeAttribute('stroke-dashoffset');
+        });
+        const fill = signatureFill(el);
+        if (fill) {
+          fill.style.transition = '';
+          fill.removeAttribute('opacity');
+        }
+      });
+    });
   }
 
   // Location and CTA are not "written" -- they simply settle in once the
