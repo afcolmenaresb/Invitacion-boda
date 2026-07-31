@@ -316,16 +316,17 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
   // --- Signature reveal: plain rectangular clip, left to right ---
   //
-  // Each word (Fátima / & / Andrés) is its own inline-block span with
-  // overflow:hidden; the reveal is a single clip-path: inset(...) whose
-  // right edge retreats from 100% (nothing visible) to 0% (fully visible)
-  // as progress goes 0 to 1. Top/bottom/left carry a constant -3px so the
-  // clip region extends 3px beyond the box on those sides -- a fixed
-  // safety margin around the word's full visible height, not something
-  // that grows or changes during the sweep.
+  // Each word (Fátima / & / Andrés) is its own inline-block span; the
+  // reveal is a single clip-path: inset(...) whose right edge retreats
+  // from fully-closed to fully-open (box width + 10px) as progress goes 0
+  // to 1. Top/bottom/left carry constant, asymmetric margins -- 12px
+  // above, 6px below, 10px to the left -- so ascenders, descenders and
+  // calligraphic overshoot (the F/t of "Fátima", the A of "Andrés",
+  // accents) always sit inside the clipped area, never trimmed by a box
+  // clipped tight to the typographic bounding box.
   function signatureClipPath(progress: number): string {
-    const rightInset = (1 - progress) * 100;
-    return `inset(-3px ${rightInset}% -3px -3px)`;
+    const rightInset = `calc(${(1 - progress) * 100}% - ${progress * 10}px)`;
+    return `inset(-12px ${rightInset} -6px -10px)`;
   }
 
   // Closes the clip down to nothing, instantly, so this is what's painted
@@ -843,18 +844,20 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   }
 
   /*
-    Signature reveal: each word is a plain inline-block span, clipped by a
-    JS-driven clip-path: inset(...) whose right edge sweeps from 100%
-    (hidden) to 0% (fully visible). No clip-path is set here, so with no
-    JS, or before the script runs, the word is already fully visible --
-    identical to no clip at all. JS only closes it down to animate the
-    reveal; final HTML text never changes.
+    Signature reveal: each word is a plain inline-block span, clipped
+    *only* by a JS-driven clip-path: inset(...) whose right edge sweeps
+    from fully-closed to fully-open. No overflow:hidden here -- the box
+    itself must never clip, otherwise it trims glyph overshoot (the F/t of
+    "Fátima", the A of "Andrés", accents) tighter than the animated
+    clip-path's own margins allow. No clip-path is set here either, so
+    with no JS, or before the script runs, the word is already fully
+    visible -- identical to no clip at all. JS only closes it down to
+    animate the reveal; final HTML text never changes.
   */
   .signature-fatima {
     display: inline-block;
     position: relative;
     top: -12px;
-    overflow: hidden;
   }
 
   .signature-amp {
@@ -862,7 +865,6 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     position: relative;
     top: 10px;
     left: 6px;
-    overflow: hidden;
   }
 
   .signature-andres {
@@ -870,7 +872,6 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     position: relative;
     top: 36px;
     left: 13px;
-    overflow: hidden;
   }
 
   .cover__cta {
