@@ -21,22 +21,28 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   // Runs synchronously, before the fixed-canvas markup below is painted, so
   // every --cover-scale* variable is already correct on first paint (no
   // flash from a generic fallback value, no temporary margins). One single
-  // recalculation function handles both device paths so there is exactly
-  // one set of listeners:
+  // recalculation function handles every device path so there is exactly
+  // one set of listeners.
   //
-  // - viewportWidth >= 1200 (laptops/desktops): untouched from before --
-  //   a single uniform --cover-scale = Math.min(innerWidth/390,
-  //   innerHeight/844), read verbatim by .cover-canvas's existing rule.
-  // - portrait AND viewportWidth < 1200 (phones/tablets upright): the
+  // Whether a device counts as "mobile/tablet" is decided by input type,
+  // never by window width alone -- a laptop resized to a narrow window is
+  // still a laptop. isMobileOrTablet requires BOTH a coarse pointer (or
+  // touch points) AND a short side of 1024px or less:
+  //
+  // - isMobileOrTablet && portrait (viewportWidth <= viewportHeight): the
   //   fixed 390x844 canvas is stretched, non-uniformly, to exactly fill
   //   the visible viewport -- --cover-scale-x/--cover-scale-y -- via the
   //   `is-fill-viewport` class on <html>, which also removes any outer
   //   margin/scroll (see the global styles below).
-  // - landscape AND short side < 1200 (phones/tablets on their side): the
+  // - isMobileOrTablet && landscape (viewportWidth > viewportHeight): the
   //   invitation itself never shows -- `is-landscape-locked` on <html>
   //   reveals the full-viewport rotate-device notice instead.
+  // - anything else (laptops/desktops, in any orientation or window size):
+  //   untouched from before -- a single uniform --cover-scale =
+  //   Math.min(viewportWidth/390, viewportHeight/844), read verbatim by
+  //   .cover-canvas's existing rule; the rotate-device notice never shows.
   (function () {
-    var MOBILE_BREAKPOINT = 1200;
+    var TOUCH_SHORT_SIDE_MAX = 1024;
     var CANVAS_WIDTH = 390;
     var CANVAS_HEIGHT = 844;
     var root = document.documentElement;
@@ -57,11 +63,15 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
       var viewportWidth = getViewportWidth();
       var viewportHeight = getViewportHeight();
-      var isPortrait = window.matchMedia('(orientation: portrait)').matches;
-      var shortSide = Math.min(viewportWidth, viewportHeight);
 
-      var isFillViewport = isPortrait && viewportWidth < MOBILE_BREAKPOINT;
-      var isLandscapeLocked = !isPortrait && shortSide < MOBILE_BREAKPOINT;
+      var isTouchDevice =
+        window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
+      var shortSide = Math.min(viewportWidth, viewportHeight);
+      var isMobileOrTablet = isTouchDevice && shortSide <= TOUCH_SHORT_SIDE_MAX;
+      var isLandscape = viewportWidth > viewportHeight;
+
+      var isFillViewport = isMobileOrTablet && !isLandscape;
+      var isLandscapeLocked = isMobileOrTablet && isLandscape;
 
       root.classList.toggle('is-fill-viewport', isFillViewport);
       root.classList.toggle('is-landscape-locked', isLandscapeLocked);
@@ -76,10 +86,11 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
         root.style.setProperty('--cover-scale-y', String(viewportHeight / CANVAS_HEIGHT));
         root.style.setProperty('--cover-viewport-width', viewportWidth + 'px');
         root.style.setProperty('--cover-viewport-height', viewportHeight + 'px');
-      } else if (!isLandscapeLocked) {
-        // Desktop/laptop path -- untouched: window.innerWidth/innerHeight,
-        // Math.min, the same single uniform --cover-scale as before.
-        var scale = Math.min(window.innerWidth / CANVAS_WIDTH, window.innerHeight / CANVAS_HEIGHT);
+      } else if (!isMobileOrTablet) {
+        // Laptop/desktop path -- untouched: the same single uniform
+        // (contain-style) --cover-scale as before, in any orientation or
+        // window size, never gated by touch/pointer.
+        var scale = Math.min(viewportWidth / CANVAS_WIDTH, viewportHeight / CANVAS_HEIGHT);
         root.style.setProperty('--cover-scale', String(scale));
       }
     }
