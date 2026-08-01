@@ -3,8 +3,48 @@ export interface Guest {
   slug: string;
   /** Guest name(s) as shown on the invitation. Recommended max 32 characters. */
   displayName: string;
-  /** Personalized message. Recommended 55-110 characters, hard cap 130. */
+  /**
+   * Personalized message. Recommended up to 120 visible characters, hard cap
+   * MAX_DEDICATION_LENGTH (160 visible characters -- see getVisibleDedicationLength).
+   *
+   * Write it plainly, in normal Spanish -- Cover.astro automatically runs
+   * it through hyphenateSpanishText() (src/lib/spanishHyphenation.ts) at
+   * build time, which inserts soft hyphens (U+00AD) at safe, real syllable
+   * boundaries wherever a word needs to break across lines. You do not need
+   * to hand-annotate long words yourself.
+   *
+   * Manual override: if you ever need to force (or forbid) a specific break
+   * point, insert U+00AD yourself as the `\u00AD` escape -- a word that
+   * already contains one is left completely untouched by the automatic
+   * hyphenation. Always write it as `\u00AD`, never as a literal invisible
+   * character, so it stays visible/greppable in the source.
+   * Example: `'incondicional\u00ADmente'`.
+   * The automatic hyphenation already skips proper names, surnames, place
+   * names (heuristically: capitalized words not at the start of a
+   * sentence), acronyms, and URLs on its own -- you shouldn't normally need
+   * the override for those.
+   */
   dedication: string;
+}
+
+/**
+ * Absolute cap on Guest.dedication, counting spaces and punctuation but not
+ * soft hyphens (U+00AD) -- see getVisibleDedicationLength. Cover.astro scales
+ * the dedication's font-size/line-height continuously up to this length (see
+ * computeDedicationTypography there); nothing past it has been designed for
+ * or validated to fit safely above .cover__names.
+ */
+export const MAX_DEDICATION_LENGTH = 160;
+
+/**
+ * Dedication length for every visual/timing purpose (typography ramp,
+ * writing-animation duration, this max-length check): soft hyphens are
+ * invisible unless the browser actually breaks the word there, so they must
+ * never count as visible weight -- otherwise an editor adding one or two for
+ * better wrapping would unfairly lose real, visible characters off their cap.
+ */
+export function getVisibleDedicationLength(dedication: string): number {
+  return dedication.replace(/\u00AD/g, '').length;
 }
 
 // Test data only — the definitive guest list is not loaded yet.
@@ -30,17 +70,64 @@ export const guests: Guest[] = [
     displayName: 'María Fernanda y Juan Sebastián',
     dedication: 'Su presencia hará que este viaje tenga un sentido aún más especial para nosotros dos.',
   },
+
+  // ---------------------------------------------------------------------
+  // QA PREVIEW FIXTURES -- Vercel preview only, remove after visual sign
+  // -off on the dedication zone / Spanish auto-hyphenation work. Not real
+  // guests. Safe to delete this whole block (through the closing "END QA
+  // PREVIEW FIXTURES" marker) once approved -- nothing else references
+  // these slugs.
+  // ---------------------------------------------------------------------
+  {
+    // Case 1 -- short: same guest/dedication as the real 'estefi-y-matias'
+    // entry above, under its own slug so it doesn't collide with it.
+    slug: 'qa-cover-short',
+    displayName: 'Estefi y Matías',
+    dedication: 'Hay viajes que no tendrían el mismo sentido sin ciertas personas.',
+  },
+  {
+    // Case 2 -- medium: same guest/dedication as the real
+    // 'familia-gonzalez-benitez' entry above, under its own slug.
+    slug: 'qa-cover-medium',
+    displayName: 'Familia González Benítez',
+    dedication:
+      'Desde el primer encuentro supimos que esta familia sería parte esencial de la historia que hoy comenzamos a escribir juntos.',
+  },
+  {
+    // Case 3 -- long, ~160 visible chars, written plainly with no manual
+    // soft hyphens: exercises automatic Spanish syllabification alone.
+    slug: 'qa-cover-long',
+    displayName: 'QA Cover Long',
+    dedication:
+      'Agradecemos profundamente tu extraordinaria generosidad, acompañamiento incondicional y complicidad inquebrantable durante estos preparativos matrimoniales',
+  },
+  {
+    // Case 4 -- long, ~160 visible chars, includes a long name + surname
+    // ("Bartolomé Etchegoyen") that the proper-noun heuristic must leave
+    // whole, while the rest of the text still auto-hyphenates normally.
+    slug: 'qa-cover-protected-name',
+    displayName: 'QA Cover Protected Name',
+    dedication:
+      'Gracias Bartolomé Etchegoyen por acompañarnos incondicionalmente durante estos preparativos matrimoniales tan especiales y significativos para nosotros',
+  },
+  // --------------------- END QA PREVIEW FIXTURES ------------------------
 ];
 
 export function getGuestBySlug(slug: string): Guest | undefined {
   return guests.find((guest) => guest.slug === slug);
 }
 
-export type DedicationLength = 'short' | 'medium' | 'long';
-
-export function getDedicationLength(dedication: string): DedicationLength {
-  const length = dedication.length;
-  if (length <= 70) return 'short';
-  if (length <= 100) return 'medium';
-  return 'long';
+// Runs at module load, i.e. every `astro dev`/`astro build` -- this module
+// only ever executes on the server/build side, never in the browser. Fails
+// loudly and early, naming the offending guest and the length found, rather
+// than letting an over-length dedication reach Cover.astro's height-fit
+// fallback silently.
+for (const guest of guests) {
+  const visibleLength = getVisibleDedicationLength(guest.dedication);
+  if (visibleLength > MAX_DEDICATION_LENGTH) {
+    throw new Error(
+      `[guests] La dedicatoria de "${guest.slug}" tiene ${visibleLength} caracteres visibles; ` +
+        `el máximo permitido es ${MAX_DEDICATION_LENGTH}.`
+    );
+  }
 }

@@ -1,7 +1,8 @@
 ---
 import '@fontsource/sacramento/400.css';
 import '@fontsource/homemade-apple/400.css';
-import { getDedicationLength } from '../data/guests';
+import { getVisibleDedicationLength } from '../data/guests';
+import { hyphenateSpanishText } from '../lib/spanishHyphenation';
 
 interface Props {
   displayName?: string;
@@ -13,7 +14,56 @@ const {
   dedication = 'Hay viajes que no tendrían el mismo sentido sin ciertas personas.',
 } = Astro.props;
 
-const dedicationLength = getDedicationLength(dedication);
+// Continuous size ramp for the dedication (replaces the old 3-bucket
+// short/medium/long system): font-size and line-height shrink smoothly as
+// the character count grows, instead of jumping between fixed steps. Below
+// DEDICATION_SCALE_START_LEN the size is clamped at its max (keeps today's
+// short dedications visually unchanged); at/after DEDICATION_SCALE_END_LEN
+// (the absolute 160-char cap enforced in guests.ts) it's clamped at its
+// legible minimum. This is the *first* pass, computed server-side from
+// character count alone; the client script below adds a second, height
+// -based pass that shrinks further only if the rendered block still runs
+// into .cover__names' safe margin (see fitDedicationHeight).
+const DEDICATION_SCALE_START_LEN = 55;
+const DEDICATION_SCALE_END_LEN = 160;
+const DEDICATION_FONT_SIZE_MAX_REM = 1.4;
+const DEDICATION_FONT_SIZE_MIN_REM = 0.85;
+const DEDICATION_LINE_HEIGHT_MAX = 1.6;
+const DEDICATION_LINE_HEIGHT_MIN = 1.3;
+
+function clampNumber(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function computeDedicationTypography(length: number) {
+  const t = clampNumber(
+    (length - DEDICATION_SCALE_START_LEN) / (DEDICATION_SCALE_END_LEN - DEDICATION_SCALE_START_LEN),
+    0,
+    1
+  );
+  const fontSize = DEDICATION_FONT_SIZE_MAX_REM - (DEDICATION_FONT_SIZE_MAX_REM - DEDICATION_FONT_SIZE_MIN_REM) * t;
+  const lineHeight = DEDICATION_LINE_HEIGHT_MAX - (DEDICATION_LINE_HEIGHT_MAX - DEDICATION_LINE_HEIGHT_MIN) * t;
+  return { fontSize, lineHeight };
+}
+
+// Soft hyphens (U+00AD, see guests.ts) are invisible unless the browser
+// actually breaks a word there -- they must never inflate the character
+// count that drives sizing/timing, or an editor adding one for better
+// wrapping would unfairly lose real, visible characters off their budget.
+const dedicationLength = getVisibleDedicationLength(dedication);
+const { fontSize: dedicationFontSize, lineHeight: dedicationLineHeight } =
+  computeDedicationTypography(dedicationLength);
+
+// Editorial rule: a word may only ever break across lines at an explicit,
+// visible hyphen -- never a blind cut. Rather than requiring every guest
+// dedication to be hand-annotated with \u00AD, this runs deterministic
+// Spanish syllabification (see spanishHyphenation.ts) once, at build time,
+// over the *unmodified* `dedication` prop, and only the resulting display
+// string (with soft hyphens inserted at safe syllable boundaries) is
+// rendered. Any \u00AD an editor already typed by hand is honored verbatim
+// as an override, never re-processed. `dedication` itself -- used above for
+// length/duration, and again below for aria-label -- is never touched.
+const dedicationDisplay = hyphenateSpanishText(dedication);
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 ---
 
@@ -207,9 +257,16 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     loading="eager"
   />
 
-  <div class="cover__intro" data-length={dedicationLength}>
+  <div class="cover__intro">
     <p class="cover__kicker" data-autofit="width" data-animation="guest-name">{displayName}</p>
-    <p class="cover__lede" data-autofit="width" data-animation="dedication">{dedication}</p>
+    <p
+      class="cover__lede"
+      lang="es"
+      aria-label={dedication}
+      data-autofit="width"
+      data-animation="dedication"
+      style={`--dedication-font-size: ${dedicationFontSize.toFixed(3)}rem; --dedication-line-height: ${dedicationLineHeight.toFixed(3)};`}
+    >{dedicationDisplay}</p>
   </div>
 
   <div class="cover__names">
@@ -241,8 +298,178 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     }
   }
 
+  // Second, height-based pass for the dedication -- on top of the
+  // character-count ramp computed server-side (see computeDedicationTypography
+  // in the frontmatter). Character count alone can't guarantee a safe fit:
+  // the same length wraps into a different number of lines depending on word
+  // lengths, so this defines an explicit max-height budget for the protected
+  // zone (.cover__lede) -- namesTop minus a fixed safe margin, minus however
+  // much room the kicker (guest name) already took above it -- and shrinks
+  // font-size/line-height in small steps only if the block's actual rendered
+  // height still exceeds that budget. Never hides or truncates text and
+  // never moves .cover__names, the kicker, or any other element -- if the
+  // hard floor is reached and it still doesn't fit, it simply stops there
+  // and accepts the reduced (but still present) margin.
+  const DEDICATION_SAFE_MARGIN_PX = 24;
+  const DEDICATION_FONT_HARD_MIN_PX = 11.5;
+
+  // The composition is a fixed 390x844 logical canvas, uniformly (desktop)
+  // or non-uniformly (mobile fill-viewport, see the inline script above)
+  // *scaled* to fit the real viewport -- a paint-time transform, not a
+  // layout change. getBoundingClientRect() reports post-scale pixels, so a
+  // vertical measurement taken that way must be divided by the vertical
+  // scale factor to compare against a value defined in logical px.
+  function getVerticalCoverScale(): number {
+    const root = document.documentElement;
+    const raw = root.classList.contains('is-fill-viewport')
+      ? getComputedStyle(root).getPropertyValue('--cover-scale-y')
+      : getComputedStyle(root).getPropertyValue('--cover-scale');
+    const value = parseFloat(raw);
+    return Number.isFinite(value) && value > 0 ? value : 1;
+  }
+
+  function fitDedicationHeight() {
+    const ledeEl = document.querySelector<HTMLElement>('[data-animation="dedication"]');
+    const namesEl = document.querySelector<HTMLElement>('.cover__names');
+    if (!ledeEl || !namesEl) return;
+
+    // Always start from the SSR-computed baseline (--dedication-font-size/
+    // --dedication-line-height) so this never compounds shrinkage across
+    // repeated calls (resize, font load, etc.).
+    ledeEl.style.removeProperty('font-size');
+    ledeEl.style.removeProperty('line-height');
+    ledeEl.style.removeProperty('max-height');
+
+    const scale = getVerticalCoverScale();
+    // The zone's own top only depends on the kicker (guest name) above it,
+    // never on the dedication's own length -- so this budget is constant
+    // for a given guest, exactly matching the "constant zone" requirement.
+    const zoneTop = ledeEl.getBoundingClientRect().top / scale;
+    const namesTop = namesEl.getBoundingClientRect().top / scale;
+    const maxHeight = Math.max(0, namesTop - DEDICATION_SAFE_MARGIN_PX - zoneTop);
+    // Applied as a real CSS constraint (with overflow left at its default
+    // "visible" -- never "hidden", which would clip manuscript strokes), so
+    // the zone itself provably cannot grow past this budget. It alone
+    // doesn't shrink the text though: with overflow:visible, content past
+    // max-height simply paints outside the box rather than being clamped,
+    // so the loop below still has to measure the *actual* rendered content
+    // (via Range, which reports the true glyph extent regardless of the
+    // container's own capped box height -- unlike scrollHeight, which is
+    // unreliable on an overflow:visible element) and shrink until it fits.
+    ledeEl.style.maxHeight = `${maxHeight}px`;
+
+    function measureContentHeight() {
+      const range = document.createRange();
+      range.selectNodeContents(ledeEl);
+      return range.getBoundingClientRect().height / scale;
+    }
+
+    const baselineSize = parseFloat(getComputedStyle(ledeEl).fontSize);
+    const baselineLineHeight = parseFloat(getComputedStyle(ledeEl).lineHeight);
+    const ratio = baselineLineHeight / baselineSize;
+
+    function applySize(size: number) {
+      ledeEl!.style.fontSize = `${size}px`;
+      ledeEl!.style.lineHeight = `${size * ratio}px`;
+      return measureContentHeight();
+    }
+
+    // Real Spanish hyphenation (see spanishHyphenation.ts) plus the wider,
+    // fixed 140px zone both mean the text often wraps into noticeably fewer
+    // lines than the character-count ramp's baseline assumed -- so rather
+    // than only ever shrinking down from that baseline (which would leave
+    // unused vertical space on the table whenever the real wrapping turned
+    // out more efficient than the ramp's rough guess), this searches the
+    // *entire* approved typographic range for the largest size that still
+    // fits the zone's max-height budget. DEDICATION_FONT_SIZE_MAX_REM_PX
+    // mirrors DEDICATION_FONT_SIZE_MAX_REM from the frontmatter ramp (kept
+    // in sync manually -- separate script, separate scope) as the ceiling,
+    // so a long dedication can still end up larger than its own SSR
+    // baseline guess, but never past what a short one is allowed.
+    const rootFontSizePx = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+    const DEDICATION_FONT_SIZE_MAX_REM_PX = 1.4 * rootFontSizePx;
+
+    if (applySize(DEDICATION_FONT_SIZE_MAX_REM_PX) <= maxHeight) {
+      // Fits at the full typographic ceiling -- use it outright.
+      return;
+    }
+
+    if (applySize(DEDICATION_FONT_HARD_MIN_PX) > maxHeight) {
+      // Doesn't fit even at the hard floor -- settle there (best effort;
+      // checkDedicationOverflow below reports anything that still doesn't
+      // fit) rather than shrinking indefinitely.
+      return;
+    }
+
+    // Binary search for the *largest* font-size that fits the budget,
+    // across the whole [hard floor, typographic ceiling] range. 20
+    // iterations over a ~1rem range is well under 0.01px precision --
+    // plenty tighter than any visible difference.
+    let lo = DEDICATION_FONT_HARD_MIN_PX;
+    let hi = DEDICATION_FONT_SIZE_MAX_REM_PX;
+    for (let i = 0; i < 20; i++) {
+      const mid = (lo + hi) / 2;
+      if (applySize(mid) <= maxHeight) {
+        lo = mid;
+      } else {
+        hi = mid;
+      }
+    }
+    applySize(lo);
+  }
+
+  // Editorial rule: a word may only ever break across lines at an explicit
+  // soft hyphen (U+00AD) -- never a blind, unmarked cut. .cover__lede no
+  // longer sets overflow-wrap: break-word (see the CSS), so the browser's
+  // default word-breaking already refuses to cut a word with no eligible
+  // break point; it lets it overflow the zone's width instead. This runs
+  // *after* fitDedicationHeight has already tried shrinking font-size all
+  // the way to its hard floor (per the editorial spec: autofit first, down
+  // to the approved typographic minimum), and only reports words that still
+  // don't fit at that final, settled size -- via console.warn, so it's a
+  // visible, discoverable authoring problem (add a soft hyphen, shorten the
+  // word) instead of ever silently degrading into an ugly unmarked cut.
+  function checkDedicationOverflow() {
+    const ledeEl = document.querySelector<HTMLElement>('[data-animation="dedication"]');
+    if (!ledeEl) return;
+
+    const zoneWidth = ledeEl.clientWidth;
+    const text = ledeEl.textContent ?? '';
+    const words = text.split(/\s+/).filter(Boolean);
+    if (words.length === 0 || zoneWidth <= 0) return;
+
+    const cs = getComputedStyle(ledeEl);
+    const probe = document.createElement('span');
+    probe.style.position = 'absolute';
+    probe.style.visibility = 'hidden';
+    probe.style.whiteSpace = 'nowrap';
+    probe.style.fontFamily = cs.fontFamily;
+    probe.style.fontSize = cs.fontSize;
+    probe.style.fontWeight = cs.fontWeight;
+    document.body.appendChild(probe);
+
+    const offenders: string[] = [];
+    for (const word of words) {
+      if (word.indexOf('\u00AD') !== -1) continue; // has an eligible break point
+      probe.textContent = word;
+      if (probe.offsetWidth > zoneWidth) offenders.push(word);
+    }
+    probe.remove();
+
+    if (offenders.length > 0) {
+      console.warn(
+        '[dedication] Palabra(s) sin soft hyphen que no caben en la zona ' +
+          'ni al tamaño tipográfico mínimo -- revisar el contenido o añadir ' +
+          '\\u00AD en un punto de sílaba: ' +
+          offenders.map((w) => JSON.stringify(w)).join(', ')
+      );
+    }
+  }
+
   function fitAll() {
     document.querySelectorAll<HTMLElement>('[data-autofit]').forEach(fitText);
+    fitDedicationHeight();
+    checkDedicationOverflow();
   }
 
   fitAll();
@@ -260,6 +487,35 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
   function clamp(value: number, min: number, max: number) {
     return Math.min(max, Math.max(min, value));
+  }
+
+  // Dedication writing duration: unchanged below DEDICATION_DURATION_BREAK_LEN
+  // chars (same base/slope/floor as before -- "Estefi y Matías"'s ~67-char
+  // dedication still lands at ~7.2s, per the approved choreography). Past
+  // that point it used to flatline at a fixed 8600ms ceiling; it now keeps
+  // growing, on a second, shallower linear ramp anchored so a 160-char
+  // dedication (the absolute cap enforced in guests.ts) lands at ~11000ms.
+  // The two segments share their boundary value exactly (computed, not
+  // hardcoded), so there's no jump at the breakpoint.
+  const DEDICATION_DURATION_BASE = 3500;
+  const DEDICATION_DURATION_SLOPE1 = 55;
+  const DEDICATION_DURATION_MIN = 5600;
+  const DEDICATION_DURATION_BREAK_LEN = 93;
+  const DEDICATION_DURATION_MAX = 11000;
+  const DEDICATION_DURATION_MAX_LEN = 160;
+
+  function dedicationDurationFor(length: number) {
+    const breakDuration = DEDICATION_DURATION_BASE + DEDICATION_DURATION_BREAK_LEN * DEDICATION_DURATION_SLOPE1;
+    if (length <= DEDICATION_DURATION_BREAK_LEN) {
+      return clamp(DEDICATION_DURATION_BASE + length * DEDICATION_DURATION_SLOPE1, DEDICATION_DURATION_MIN, breakDuration);
+    }
+    const slope2 =
+      (DEDICATION_DURATION_MAX - breakDuration) / (DEDICATION_DURATION_MAX_LEN - DEDICATION_DURATION_BREAK_LEN);
+    return clamp(
+      breakDuration + (length - DEDICATION_DURATION_BREAK_LEN) * slope2,
+      breakDuration,
+      DEDICATION_DURATION_MAX
+    );
   }
 
   // Evaluates the same curve as EASE, so --reveal can be driven manually
@@ -586,18 +842,65 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   // Wraps each word in a span, measures its rendered line via offsetTop,
   // then regroups the words into per-line wrappers. Works for any text
   // length/line count without hard-coding a number of lines.
+  // A word containing a soft hyphen (U+00AD, see guests.ts) is one token
+  // here -- \S matches it, it's not whitespace -- but if the browser
+  // actually breaks the word there, that one <span> now visually spans two
+  // rendered lines. offsetTop alone (used below) would then attribute the
+  // *whole* word, including the part that visually overflows onto the next
+  // line, to only the first line's ink-reveal wrapper. This walks the
+  // span's own text character-by-character (via Range, cheap for a single
+  // word) to find exactly where the render breaks, and splits the DOM
+  // there into two fresh spans -- one per visual line -- so each is grouped
+  // correctly below. A no-op (returns the original span) for the vast
+  // majority of words that only ever render on one line.
+  function splitWrappedWordSpan(span: HTMLElement): HTMLElement[] {
+    const text = span.textContent ?? '';
+    const textNode = span.firstChild;
+    if (!textNode || text.length < 2) return [span];
+
+    const range = document.createRange();
+    const firstTop = span.getClientRects()[0]?.top;
+    if (firstTop === undefined) return [span];
+
+    let splitIndex = -1;
+    for (let i = 1; i < text.length; i++) {
+      range.setStart(textNode, 0);
+      range.setEnd(textNode, i);
+      const rects = range.getClientRects();
+      const lastRect = rects[rects.length - 1];
+      if (lastRect && Math.abs(lastRect.top - firstTop) > 1) {
+        splitIndex = i - 1;
+        break;
+      }
+    }
+    if (splitIndex < 1 || splitIndex >= text.length) return [span];
+
+    const firstSpan = document.createElement('span');
+    firstSpan.className = 'ink-word';
+    firstSpan.textContent = text.slice(0, splitIndex);
+    const secondSpan = document.createElement('span');
+    secondSpan.className = 'ink-word';
+    secondSpan.textContent = text.slice(splitIndex);
+    span.replaceWith(firstSpan, secondSpan);
+    return [firstSpan, secondSpan];
+  }
+
   function splitIntoLines(el: HTMLElement): HTMLElement[] {
     const original = el.textContent ?? '';
     const tokens = original.match(/\S+\s*/g) ?? [original];
 
     el.textContent = '';
-    const wordEls = tokens.map((token) => {
+    let wordEls = tokens.map((token) => {
       const span = document.createElement('span');
       span.className = 'ink-word';
       span.textContent = token;
       el.appendChild(span);
       return span;
     });
+
+    wordEls = wordEls.flatMap((span) =>
+      span.getClientRects().length > 1 ? splitWrappedWordSpan(span) : [span]
+    );
 
     const lineMap = new Map<number, HTMLElement[]>();
     wordEls.forEach((span) => {
@@ -735,11 +1038,16 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
       }
 
       const nameLen = originalName.trim().length;
-      const dedicationLen = originalDedication.trim().length;
+      // Soft hyphens (U+00AD) are invisible unless actually broken across a
+      // line -- excluded here too, so they never inflate the writing
+      // duration (matches getVisibleDedicationLength in guests.ts).
+      const dedicationLen = originalDedication.trim().replace(/\u00AD/g, '').length;
       // Calibrated so "Estefi y Matías" (~15 chars) lands near 3.1s and its
       // dedication (~67 chars) near 7.2s, per the approved choreography.
+      // Longer dedications (up to the 160-char cap) keep growing past that
+      // via dedicationDurationFor -- see its definition above.
       const nameDuration = clamp(2400 + nameLen * 47, 2400, 3900);
-      const dedicationDuration = clamp(3500 + dedicationLen * 55, 5600, 8600);
+      const dedicationDuration = dedicationDurationFor(dedicationLen);
       const signatureDuration = 5000;
       const locationDuration = 1200;
       const ctaDuration = 1200;
@@ -776,7 +1084,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
       // Animals draw in slowly, overlapping the text sequence rather than
       // blocking it. Elephant leads (delay 0), duck follows with a small
-      // stagger (delay 250ms); both run 6000ms, well past the point the
+      // stagger (delay 250ms); both run 11000ms, well past the point the
       // text sequence starts below.
       const elephantRevealDelay = 0;
       const elephantRevealDuration = 11000;
@@ -1145,30 +1453,57 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     margin: 0;
   }
 
+  /*
+    Protected, constant editorial zone for the dedication -- width and left
+    position (inherited from .cover__intro's own left: 27.3px, unchanged)
+    are fixed at 140px for every dedication, regardless of length: this is
+    a real `width`, not a `max-width`, so the box never grows sideways.
+    140px was set from a pixel-level measurement of the duck illustration
+    (not just its CSS bounding box, which is far more generous than its
+    actual visible ink): the duck's own leftmost visible stroke, within the
+    vertical band this zone can ever occupy, sits at logical x=179px --
+    140px width (left 27.3 + width 140 = right edge 167.3px) keeps a
+    ~11-12px hard gap from that worst-case point. `max-height` is set
+    inline per guest by fitDedicationHeight() below (namesTop minus a safe
+    margin, minus however tall the kicker/guest-name already is) --
+    deliberately NOT overflow:hidden, which would clip the manuscript
+    font's strokes; the zone's own height is instead kept within budget by
+    having fitDedicationHeight shrink font-size/line-height until the
+    actual rendered content fits, never by clipping or truncating it.
+    font-size/line-height come from --dedication-font-size/--dedication
+    -line-height, set inline per-guest from computeDedicationTypography()
+    above (continuous ramp by character count) as the first pass; the
+    var()'s fallback value only applies if that inline style is ever
+    missing.
+  */
+  /*
+    Editorial rule: a word may only break across lines at an explicit,
+    visible soft hyphen -- never a blind, unmarked cut. Every dedication is
+    run through hyphenateSpanishText() at build time (see the frontmatter
+    above and spanishHyphenation.ts), which inserts soft hyphens (U+00AD) at
+    safe, linguistically valid syllable boundaries -- that's now the
+    *primary* mechanism, not something an editor has to type by hand.
+    Leaving overflow-wrap at its default ("normal") means a word that still
+    has no eligible break point after that (an excluded proper noun/acronym
+    /URL, or one genuinely too long) is never sliced mid-glyph; it overflows
+    the zone's width instead, which checkDedicationOverflow() below detects
+    and reports for review, rather than silently degrading into an
+    unmarked cut. hyphens is also left at its default ("manual"), so a soft
+    hyphen -- automatic or hand-typed -- is the *only* thing that can ever
+    introduce a visible hyphen; no browser/dictionary-based auto
+    -hyphenation is ever involved, which is exactly why the outcome is
+    identical in every browser.
+  */
   .cover__lede {
     opacity: 0.84;
-    max-width: 187.2px;
+    width: 140px;
     font-family: 'Homemade Apple', cursive;
     font-weight: 400;
-    font-size: 1.05rem;
-    line-height: 1.5;
+    font-size: var(--dedication-font-size, 1.05rem);
+    line-height: var(--dedication-line-height, 1.5);
     color: #5c5047;
     margin: 0;
     margin-top: 17px;
-  }
-
-  .cover__intro[data-length='short'] .cover__lede {
-    font-size: 1.4rem;
-    line-height: 1.6;
-    max-width: 179.4px;
-    margin-top: 21px;
-  }
-
-  .cover__intro[data-length='long'] .cover__lede {
-    font-size: 1rem;
-    line-height: 1.4;
-    max-width: 187.2px;
-    margin-top: 13px;
   }
 
   .cover__title {
