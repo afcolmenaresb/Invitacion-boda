@@ -311,7 +311,36 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   // hard floor is reached and it still doesn't fit, it simply stops there
   // and accepts the reduced (but still present) margin.
   const DEDICATION_SAFE_MARGIN_PX = 24;
-  const DEDICATION_FONT_HARD_MIN_PX = 11.5;
+  // Real visual floor -- never render the dedication smaller than this,
+  // full stop. Below it the text stops being comfortably legible, so an
+  // unfittable combination is reported (see reportDedicationTooTight) as an
+  // editorial problem to fix (shorten the dedication/name) rather than
+  // silently squeezed further.
+  const DEDICATION_FONT_HARD_MIN_PX = 13;
+
+  // Best-effort "which guest is this" for the error message below -- the
+  // page's own path is exactly the slug (see src/pages/[slug].astro), and
+  // there's no need to thread the slug through as a separate prop just for
+  // this diagnostic.
+  function currentGuestSlugForDiagnostics(): string {
+    const segments = location.pathname.split('/').filter(Boolean);
+    return segments[segments.length - 1] || '(desconocido)';
+  }
+
+  function reportDedicationTooTight(ledeEl: HTMLElement, maxHeight: number) {
+    const kickerEl = document.querySelector<HTMLElement>('[data-animation="guest-name"]');
+    const nameLength = kickerEl?.textContent?.trim().length ?? 0;
+    const dedicationVisibleLength = (ledeEl.textContent ?? '').replace(/\u00AD/g, '').length;
+    console.error(
+      '[dedication] La combinación de nombre + dedicatoria no cabe con un ' +
+        `tamaño legible (mínimo ${DEDICATION_FONT_HARD_MIN_PX}px) por encima de la firma. ` +
+        `Invitado: "${currentGuestSlugForDiagnostics()}" -- nombre: ${nameLength} caracteres, ` +
+        `dedicatoria: ${dedicationVisibleLength} caracteres visibles, ` +
+        `espacio vertical disponible: ${maxHeight.toFixed(1)}px. ` +
+        'El texto se muestra completo (nunca se oculta ni se recorta), pero excede ' +
+        'ese espacio. Solución editorial: acortar la dedicatoria (o el nombre del invitado).'
+    );
+  }
 
   // The composition is a fixed 390x844 logical canvas, uniformly (desktop)
   // or non-uniformly (mobile fill-viewport, see the inline script above)
@@ -395,9 +424,17 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     }
 
     if (applySize(DEDICATION_FONT_HARD_MIN_PX) > maxHeight) {
-      // Doesn't fit even at the hard floor -- settle there (best effort;
-      // checkDedicationOverflow below reports anything that still doesn't
-      // fit) rather than shrinking indefinitely.
+      // Doesn't fit even at the hard visual floor. This jointly reflects
+      // (a) the kicker/guest-name's own rendered height (baked into
+      // zoneTop above), (b) the dedication's own rendered height (just
+      // measured), and (c) the safe margin to the signature (baked into
+      // maxHeight) -- so this is the combined "no valid layout exists at a
+      // legible size" case. Never hides, crops, or truncates the text: it
+      // still renders in full at the hard floor (already applied by the
+      // applySize call above), simply extending past the safe margin. The
+      // real fix is editorial (shorten the dedication or the guest name),
+      // so this is reported loudly rather than silently accepted.
+      reportDedicationTooTight(ledeEl, maxHeight);
       return;
     }
 

@@ -49,8 +49,20 @@ const INSEPARABLE_ONSETS = new Set([
 // Minimum characters required on each side of a break point -- standard
 // typographic rule: never leave a single dangling letter on either line.
 const MIN_FRAGMENT_LENGTH = 2;
-// Words shorter than this are never worth hyphenating even if they could be.
-const MIN_WORD_LENGTH_TO_HYPHENATE = 6;
+
+// Editorial tiers, by the dedication's own *visible* length (soft hyphens
+// excluded): short dedications were coming out with distracting, unneeded
+// hyphens ("ten-drían", "senti-do") -- these tiers hold hyphenation back
+// until the text is actually long enough to need the help, and even then
+// only for words long enough that they're plausibly the ones causing it.
+const HYPHENATION_TIER_LOW_MAX_LEN = 90; // <= this: no auto-hyphenation at all
+const HYPHENATION_TIER_MID_MAX_LEN = 120; // <= this: only long words, capped
+const HYPHENATION_TIER_MID_MIN_WORD_LENGTH = 12;
+const HYPHENATION_TIER_MID_MAX_WORDS = 3;
+// > HYPHENATION_TIER_MID_MAX_LEN: normal, unrestricted hyphenation -- a
+// genuinely long dedication (up to the 160-char cap) can have many long
+// words that all really do need help, so no cap applies here.
+const HYPHENATION_TIER_HIGH_MIN_WORD_LENGTH = 6;
 
 function isVowelChar(ch: string): boolean {
   return VOWELS_LOWER.includes(ch.toLowerCase());
@@ -179,11 +191,12 @@ export function syllabifySpanishWord(word: string): string[] {
 /**
  * Inserts a soft hyphen (U+00AD) at every syllable boundary of `word` that's
  * a safe break point (at least MIN_FRAGMENT_LENGTH characters on each side),
- * skipping words too short to be worth it. Case/accents are preserved
- * verbatim -- only U+00AD characters are added, nothing else changes.
+ * skipping words shorter than `minWordLength` (tier-dependent -- see the
+ * HYPHENATION_TIER_* constants). Case/accents are preserved verbatim -- only
+ * U+00AD characters are added, nothing else changes.
  */
-export function hyphenateSpanishWord(word: string): string {
-  if (word.length < MIN_WORD_LENGTH_TO_HYPHENATE) return word;
+export function hyphenateSpanishWord(word: string, minWordLength: number): string {
+  if (word.length < minWordLength) return word;
   const syllables = syllabifySpanishWord(word);
   if (syllables.length < 2) return word;
 
@@ -212,10 +225,10 @@ const SENTENCE_END_RE = /[.!?]$/;
  * hyphenation: proper nouns/surnames/place names (heuristic: capitalized
  * and not the first word of a sentence), acronyms/initialisms (all
  * uppercase), anything that looks like a URL/code (contains a digit or
- * @, /, ., _), and words too short to matter.
+ * @, /, ., _), and words shorter than `minWordLength`.
  */
-function shouldSkipAutoHyphenation(word: string, isSentenceStart: boolean): boolean {
-  if (word.length < MIN_WORD_LENGTH_TO_HYPHENATE) return true;
+function shouldSkipAutoHyphenation(word: string, isSentenceStart: boolean, minWordLength: number): boolean {
+  if (word.length < minWordLength) return true;
   if (URL_OR_CODE_RE.test(word)) return true;
   if (word.length > 1 && ACRONYM_RE.test(word)) return true;
   const firstChar = word[0];
@@ -226,56 +239,90 @@ function shouldSkipAutoHyphenation(word: string, isSentenceStart: boolean): bool
   return false;
 }
 
+function stripSoftHyphens(text: string): string {
+  return text.split(SOFT_HYPHEN).join('');
+}
+
 /**
  * Applies automatic Spanish hyphenation to an entire dedication string,
  * word by word, preserving all original whitespace and punctuation exactly.
  * A word that already contains a manually-authored soft hyphen (an
  * editorial override, see Guest.dedication's docs) is passed through
- * untouched -- never double-hyphenated, never second-guessed.
+ * untouched -- never double-hyphenated, never second-guessed, and never
+ * counted against the tier's word cap below.
+ *
+ * How much auto-hyphenation is applied depends on the dedication's own
+ * *visible* length (see the HYPHENATION_TIER_* constants above):
+ *   - <= 90 chars: none at all -- short dedications read naturally.
+ *   - 91-120 chars: only words of HYPHENATION_TIER_MID_MIN_WORD_LENGTH+
+ *     letters, and at most HYPHENATION_TIER_MID_MAX_WORDS of them (the
+ *     longest ones win) -- enough to fix a genuinely awkward word without
+ *     peppering a short-ish dedication with hyphens.
+ *   - > 120 chars: normal, unrestricted hyphenation (HYPHENATION_TIER_HIGH_
+ *     MIN_WORD_LENGTH+ letters, no cap) -- a dedication this long can
+ *     legitimately have many long words that all need the help.
  */
 export function hyphenateSpanishText(text: string): string {
+  const visibleLength = stripSoftHyphens(text).length;
+  if (visibleLength <= HYPHENATION_TIER_LOW_MAX_LEN) {
+    return text;
+  }
+  const isMidTier = visibleLength <= HYPHENATION_TIER_MID_MAX_LEN;
+  const minWordLength = isMidTier ? HYPHENATION_TIER_MID_MIN_WORD_LENGTH : HYPHENATION_TIER_HIGH_MIN_WORD_LENGTH;
+  const maxWordsToHyphenate = isMidTier ? HYPHENATION_TIER_MID_MAX_WORDS : Infinity;
+
   const tokens = text.match(/\S+|\s+/g) ?? [text];
+
+  // First pass: figure out which tokens are eligible at all (not
+  // whitespace, no manual override already present, has a letter core,
+  // not skipped as a proper noun/acronym/URL/too-short), and decompose
+  // each into its lead/core/trail punctuation split -- without hyphenating
+  // yet, since the mid tier needs to see *every* candidate before deciding
+  // which HYPHENATION_TIER_MID_MAX_WORDS of them actually get it.
+  type Parsed = { token: string; isWhitespace: boolean; lead?: string; core?: string; trail?: string; eligible: boolean };
+  const parsed: Parsed[] = [];
   let sentenceStart = true;
-  const out: string[] = [];
 
   for (const token of tokens) {
     if (/^\s+$/.test(token)) {
-      out.push(token);
+      parsed.push({ token, isWhitespace: true, eligible: false });
       continue;
     }
-
     if (token.indexOf(SOFT_HYPHEN) !== -1) {
-      // Manual override already present -- honor it verbatim.
-      out.push(token);
+      // Manual override already present -- honor it verbatim, never
+      // reprocessed, never competing for the tier's word cap.
+      parsed.push({ token, isWhitespace: false, eligible: false });
       sentenceStart = SENTENCE_END_RE.test(token);
       continue;
     }
 
-    // Split off leading/trailing punctuation so only the letter core is
-    // considered for hyphenation and the "is this a sigla/acronym" and
-    // "is this capitalized" checks aren't confused by punctuation.
     const match = token.match(/^([^A-Za-zÁÉÍÓÚÑáéíóúñü]*)([A-Za-zÁÉÍÓÚÑáéíóúñü]*)([^A-Za-zÁÉÍÓÚÑáéíóúñü]*)$/);
-    if (!match) {
-      out.push(token);
-      sentenceStart = SENTENCE_END_RE.test(token);
-      continue;
-    }
-    const [, lead, core, trail] = match;
     const wasSentenceStart = sentenceStart;
     sentenceStart = SENTENCE_END_RE.test(token);
 
-    if (!core) {
-      out.push(token);
+    if (!match || !match[2]) {
+      parsed.push({ token, isWhitespace: false, eligible: false });
       continue;
     }
-
-    if (shouldSkipAutoHyphenation(core, wasSentenceStart)) {
-      out.push(lead + core + trail);
-      continue;
-    }
-
-    out.push(lead + hyphenateSpanishWord(core) + trail);
+    const [, lead, core, trail] = match;
+    const eligible = !shouldSkipAutoHyphenation(core, wasSentenceStart, minWordLength);
+    parsed.push({ token, isWhitespace: false, lead, core, trail, eligible });
   }
 
-  return out.join('');
+  // Second pass: among eligible candidates, keep only the longest
+  // maxWordsToHyphenate (ties broken by original order) -- the words most
+  // plausibly responsible for awkward wrapping.
+  const eligibleIndexes = parsed
+    .map((p, i) => (p.eligible ? i : -1))
+    .filter((i) => i !== -1)
+    .sort((a, b) => (parsed[b].core as string).length - (parsed[a].core as string).length);
+  const selected = new Set(eligibleIndexes.slice(0, maxWordsToHyphenate));
+
+  return parsed
+    .map((p, i) => {
+      if (p.isWhitespace || p.lead === undefined) return p.token;
+      if (!p.eligible || !selected.has(i)) return p.lead + p.core + p.trail;
+      return p.lead + hyphenateSpanishWord(p.core as string, minWordLength) + p.trail;
+    })
+    .join('');
 }
