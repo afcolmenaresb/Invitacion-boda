@@ -141,7 +141,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
 <div class="cover-frame" style={`background-image: url('${base}/images/textura_vertical_2.png')`}>
   <div class="cover-canvas">
-    <header class="cover" data-animation-state="normal">
+    <header class="cover" data-animation-state="normal" data-cover-boot="pending">
       <img
         class="cover__texture"
     src={`${base}/images/textura-vertical.png`}
@@ -306,6 +306,26 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
             })
       )
     );
+  }
+
+  // document.fonts.ready is the primary, cross-browser guarantee that the
+  // custom typeface used by name/dedication/signature (all "Homemade
+  // Apple") has finished loading. document.fonts.check is an extra,
+  // best-effort confirmation on top of it -- wrapped in try/catch since
+  // it isn't universally supported and a malformed/unsupported call must
+  // never block the boot guard from ever lifting.
+  async function waitForSignatureFonts(): Promise<void> {
+    if (!document.fonts) return;
+    await document.fonts.ready;
+    try {
+      const spec = '400 16px "Homemade Apple"';
+      if (!document.fonts.check(spec)) {
+        await document.fonts.load(spec);
+      }
+    } catch {
+      // Unsupported in this engine -- document.fonts.ready above already
+      // resolved, which is the real guarantee.
+    }
   }
 
   // Slightly irregular vertical boundary, sampled top-to-bottom, so the ink
@@ -615,43 +635,50 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   }
 
   // Reveals everything immediately, with no timers and no hidden state --
-  // used for reduced-motion, missing elements, and as an error fallback.
+  // used for reduced-motion, missing elements, the error fallback, and
+  // the 8s safety timeout. Always lifts the FOUC boot guard too, so
+  // nothing ever depends on the timed sequence having run for the cover
+  // to become fully, finally visible.
   function showEverythingNow(cover: HTMLElement) {
+    bootCompleted = true;
+    cover.removeAttribute('data-cover-boot');
     cover.classList.remove('is-preparing-animation', 'is-animating');
     cover.classList.add('is-animation-complete');
   }
 
-  // While the device is landscape with a short side under 1200px, the
-  // inline script (above) keeps `is-landscape-locked` on <html> and shows
-  // the full-viewport rotate-device notice over everything. Nothing here
-  // should start hiding or timing the reveal until that clears, so a
-  // load that begins in landscape starts the whole sequence from scratch
-  // the moment the device is turned upright -- never a partial start.
-  function isLandscapeLocked() {
+  // True whenever <html> carries is-landscape-locked -- set by the inline
+  // script above only for phones/tablets (coarse pointer or touch
+  // points, short side <= 1024px) currently in landscape. Laptops/desktops
+  // never set it, so this is always false for them.
+  function isLandscapeGate(): boolean {
     return document.documentElement.classList.contains('is-landscape-locked');
   }
 
-  function waitWhilePortraitLocked(): Promise<void> {
-    if (!isLandscapeLocked()) return Promise.resolve();
-    return new Promise((resolve) => {
-      function check() {
-        if (!isLandscapeLocked()) {
-          window.removeEventListener('resize', check);
-          window.removeEventListener('orientationchange', check);
-          window.visualViewport?.removeEventListener('resize', check);
-          resolve();
-        }
-      }
-      window.addEventListener('resize', check);
-      window.addEventListener('orientationchange', check);
-      window.visualViewport?.addEventListener('resize', check);
-    });
+  // animationStarted / waitingForPortrait / animationRunToken / bootCompleted:
+  // the whole start-once, restart-safe state machine lives in these four.
+  // animationRunToken is bumped on every real (re)start attempt so any
+  // `await` still in flight from a superseded attempt (device rotated
+  // back to landscape mid-load, or the 8s safety fired) can tell it's
+  // stale and stop touching the DOM.
+  let animationStarted = false;
+  let waitingForPortrait = false;
+  let animationRunToken = 0;
+  let bootCompleted = false;
+
+  // Section 3 / step 6 of the landscape-return sequence: wait for fonts,
+  // critical images, two more animation frames, then report whether the
+  // device is still in an allowed (non-landscape-gated) state. Never
+  // mutates anything -- callers decide what to do with the result.
+  async function waitForReadyState(token: number, cover: HTMLElement): Promise<boolean> {
+    await Promise.all([waitForSignatureFonts(), waitForImages(cover)]);
+    if (token !== animationRunToken) return false;
+    fitAll();
+    await nextFrame();
+    if (token !== animationRunToken) return false;
+    return !isLandscapeGate();
   }
 
-  async function initInkReveal() {
-    const cover = document.querySelector<HTMLElement>('.cover');
-    if (!cover) return;
-
+  async function startAnimationOnce(token: number, cover: HTMLElement) {
     const nameEl = cover.querySelector<HTMLElement>('[data-animation="guest-name"]');
     const dedicationEl = cover.querySelector<HTMLElement>('[data-animation="dedication"]');
     const namesEl = cover.querySelector<HTMLElement>('.cover__names');
@@ -659,11 +686,6 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     const ctaEl = cover.querySelector<HTMLElement>('[data-animation="cta"]');
 
     if (!nameEl || !dedicationEl || !namesEl || !locationEl || !ctaEl) {
-      return;
-    }
-
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (reduceMotion) {
       showEverythingNow(cover);
       return;
     }
@@ -672,10 +694,26 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     const originalDedication = dedicationEl.textContent ?? '';
 
     try {
-      await waitWhilePortraitLocked();
-      await Promise.all([document.fonts?.ready ?? Promise.resolve(), waitForImages(cover)]);
-      fitAll();
-      await nextFrame();
+      const ready = await waitForReadyState(token, cover);
+      if (token !== animationRunToken) return;
+      if (!ready) {
+        // Rotated back to landscape while fonts/images were still
+        // loading -- go back to the waiting state; the orientation
+        // checker below calls startAnimationOnce again, from scratch,
+        // once is-landscape-locked clears for real.
+        animationStarted = false;
+        waitingForPortrait = true;
+        return;
+      }
+
+      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (reduceMotion) {
+        // Straight from the protected initial state to the final one --
+        // no timers, no masks, no intermediate frame with incomplete
+        // styles.
+        showEverythingNow(cover);
+        return;
+      }
 
       const nameLen = originalName.trim().length;
       const dedicationLen = originalDedication.trim().length;
@@ -702,19 +740,31 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
       prepareUnderlineHidden(ctaEl);
       cover.classList.add('is-preparing-animation');
       await nextFrame();
+      if (token !== animationRunToken) return;
+
+      // The finer-grained per-element hidden state above (clip-path/mask/
+      // opacity) is now in place and painted, so lifting the coarse FOUC
+      // guard here causes no visible change -- both states already look
+      // fully hidden.
+      bootCompleted = true;
+      cover.removeAttribute('data-cover-boot');
 
       await sleep(1300); // silence: scene visible, nothing written yet
+      if (token !== animationRunToken) return;
 
       cover.classList.add('is-animating');
 
       revealLines(nameLines, nameDuration, 0);
       await sleep(Math.max(nameDuration - 250, 0));
+      if (token !== animationRunToken) return;
 
       revealLines(dedicationLines, dedicationDuration, 100);
       await sleep(Math.max(dedicationDuration - 250, 0));
+      if (token !== animationRunToken) return;
 
       triggerSignatureReveal(namesEl, signatureDuration, 0);
       await sleep(Math.max(signatureDuration - 150, 0));
+      if (token !== animationRunToken) return;
 
       triggerFade(locationEl, locationDuration, 0);
       triggerFade(ctaEl, ctaDuration, ctaStagger);
@@ -726,8 +776,10 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
         ctaStagger + ctaDuration * 0.6 + underlineDuration
       );
       await sleep(metaSpan);
+      if (token !== animationRunToken) return;
 
       await sleep(1300); // final settle: nothing else moves
+      if (token !== animationRunToken) return;
 
       nameEl.textContent = originalName;
       dedicationEl.textContent = originalDedication;
@@ -747,7 +799,48 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     }
   }
 
-  initInkReveal();
+  // The single entry point, matching the spec's central condition
+  // exactly: starts once, restarts after a landscape round-trip only if
+  // it never truly started, and never restarts once it has.
+  function maybeStartAnimation() {
+    if (animationStarted) return;
+    const cover = document.querySelector<HTMLElement>('.cover');
+    if (!cover) return;
+
+    if (isLandscapeGate()) {
+      waitingForPortrait = true;
+      return;
+    }
+
+    waitingForPortrait = false;
+    animationStarted = true;
+    const token = ++animationRunToken;
+    startAnimationOnce(token, cover);
+  }
+
+  // Re-checks after every event that could flip is-landscape-locked.
+  // Double rAF so this always runs *after* the inline script's own
+  // (single-rAF-scheduled) class update for the same event -- otherwise
+  // this could read a stale class on the very frame orientation changes.
+  function scheduleAnimationCheck() {
+    requestAnimationFrame(() => requestAnimationFrame(maybeStartAnimation));
+  }
+
+  maybeStartAnimation();
+  window.addEventListener('resize', scheduleAnimationCheck);
+  window.addEventListener('orientationchange', scheduleAnimationCheck);
+  window.visualViewport?.addEventListener('resize', scheduleAnimationCheck);
+
+  // Pure safety net, never part of the normal flow: a stuck load (a JS
+  // error nothing caught, a font/image that never resolves, a device
+  // stuck reporting landscape) must never hide the invitation forever.
+  window.setTimeout(() => {
+    if (bootCompleted) return;
+    animationRunToken += 1; // invalidate any run still in flight
+    animationStarted = true;
+    const cover = document.querySelector<HTMLElement>('.cover');
+    if (cover) showEverythingNow(cover);
+  }, 8000);
 </script>
 
 
@@ -880,6 +973,29 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     width: 100%;
     height: 100%;
     isolation: isolate;
+  }
+
+  /*
+    FOUC guard: data-cover-boot="pending" is rendered server-side, right
+    in the markup, so it is already present on the very first paint --
+    nothing here waits on JS timing. While it is set, exactly the five
+    pieces the reveal sequence writes (name, dedication, signature,
+    location, CTA) are hidden via opacity+visibility, which keeps their
+    layout space -- no reflow when they later appear, and no display:none.
+    Everything else (background, texture, duck, elephant, the orientation
+    notice) is untouched and visible from the first frame. The attribute
+    is removed by the script above the instant the reveal's own per
+    -element hidden state (clip-path/mask) is already in place, so the
+    handoff causes no visible change -- never a frame with the full,
+    final content flashed.
+  */
+  .cover[data-cover-boot='pending'] [data-animation='guest-name'],
+  .cover[data-cover-boot='pending'] [data-animation='dedication'],
+  .cover[data-cover-boot='pending'] .cover__names,
+  .cover[data-cover-boot='pending'] [data-animation='location'],
+  .cover[data-cover-boot='pending'] [data-animation='cta'] {
+    opacity: 0;
+    visibility: hidden;
   }
 
   .cover__texture {
