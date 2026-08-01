@@ -17,9 +17,133 @@ const dedicationLength = getDedicationLength(dedication);
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 ---
 
-<header class="cover" data-animation-state="normal">
-  <img
-    class="cover__texture"
+<script is:inline>
+  // Runs synchronously, before the fixed-canvas markup below is painted, so
+  // every --cover-scale* variable is already correct on first paint (no
+  // flash from a generic fallback value, no temporary margins). One single
+  // recalculation function handles every device path so there is exactly
+  // one set of listeners.
+  //
+  // Whether a device counts as "mobile/tablet" is decided by input type,
+  // never by window width alone -- a laptop resized to a narrow window is
+  // still a laptop. isMobileOrTablet requires BOTH a coarse pointer (or
+  // touch points) AND a short side of 1024px or less:
+  //
+  // - isMobileOrTablet && portrait (viewportWidth <= viewportHeight): the
+  //   fixed 390x844 canvas is stretched, non-uniformly, to exactly fill
+  //   the visible viewport -- --cover-scale-x/--cover-scale-y -- via the
+  //   `is-fill-viewport` class on <html>, which also removes any outer
+  //   margin/scroll (see the global styles below).
+  // - isMobileOrTablet && landscape (viewportWidth > viewportHeight): the
+  //   invitation itself never shows -- `is-landscape-locked` on <html>
+  //   reveals the full-viewport rotate-device notice instead.
+  // - anything else (laptops/desktops, in any orientation or window size):
+  //   untouched from before -- a single uniform --cover-scale =
+  //   Math.min(viewportWidth/390, viewportHeight/844), read verbatim by
+  //   .cover-canvas's existing rule; the rotate-device notice never shows.
+  (function () {
+    var TOUCH_SHORT_SIDE_MAX = 1024;
+    var CANVAS_WIDTH = 390;
+    var CANVAS_HEIGHT = 844;
+    var root = document.documentElement;
+    var scheduled = false;
+
+    // Section 3's exact formula: visualViewport first (it tracks mobile
+    // toolbars, the on-screen keyboard and pinch-zoom correctly), falling
+    // back to the documentElement's client box.
+    function getViewportWidth() {
+      return (window.visualViewport && window.visualViewport.width) || document.documentElement.clientWidth;
+    }
+    function getViewportHeight() {
+      return (window.visualViewport && window.visualViewport.height) || document.documentElement.clientHeight;
+    }
+
+    function update() {
+      scheduled = false;
+
+      var viewportWidth = getViewportWidth();
+      var viewportHeight = getViewportHeight();
+
+      var isTouchDevice =
+        window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
+      var shortSide = Math.min(viewportWidth, viewportHeight);
+      var isMobileOrTablet = isTouchDevice && shortSide <= TOUCH_SHORT_SIDE_MAX;
+      var isLandscape = viewportWidth > viewportHeight;
+
+      var isFillViewport = isMobileOrTablet && !isLandscape;
+      var isLandscapeLocked = isMobileOrTablet && isLandscape;
+
+      root.classList.toggle('is-fill-viewport', isFillViewport);
+      root.classList.toggle('is-landscape-locked', isLandscapeLocked);
+      var locked = isFillViewport || isLandscapeLocked;
+      root.classList.toggle('is-viewport-locked', locked);
+      if (document.body) {
+        document.body.classList.toggle('is-viewport-locked', locked);
+      }
+
+      if (isFillViewport) {
+        root.style.setProperty('--cover-scale-x', String(viewportWidth / CANVAS_WIDTH));
+        root.style.setProperty('--cover-scale-y', String(viewportHeight / CANVAS_HEIGHT));
+        root.style.setProperty('--cover-viewport-width', viewportWidth + 'px');
+        root.style.setProperty('--cover-viewport-height', viewportHeight + 'px');
+      } else if (!isMobileOrTablet) {
+        // Laptop/desktop path -- untouched: the same single uniform
+        // (contain-style) --cover-scale as before, in any orientation or
+        // window size, never gated by touch/pointer.
+        var scale = Math.min(viewportWidth / CANVAS_WIDTH, viewportHeight / CANVAS_HEIGHT);
+        root.style.setProperty('--cover-scale', String(scale));
+      }
+    }
+
+    function scheduleUpdate() {
+      if (scheduled) return;
+      scheduled = true;
+      requestAnimationFrame(update);
+    }
+
+    update();
+    window.addEventListener('resize', scheduleUpdate);
+    window.addEventListener('orientationchange', scheduleUpdate);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', scheduleUpdate);
+      // Mobile browsers shrink/grow the visual viewport (address bar,
+      // on-screen keyboard) by scrolling it, not just resizing it.
+      window.visualViewport.addEventListener('scroll', scheduleUpdate);
+    }
+
+    // Best-effort only -- orientation can't be forced; the rotate-device
+    // overlay above is the real, always-working fallback.
+    if (screen.orientation && screen.orientation.lock) {
+      screen.orientation.lock('portrait').catch(function () {});
+    }
+  })();
+</script>
+
+<div
+  class="orientation-lock"
+  style={`background-image: url('${base}/images/textura_vertical_2.png')`}
+>
+  <div class="orientation-lock__content">
+    <svg
+      class="orientation-lock__icon"
+      viewBox="0 0 48 80"
+      width="48"
+      height="80"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <rect x="4" y="4" width="40" height="72" rx="8" fill="none" stroke="currentColor" stroke-width="3" />
+      <line x1="18" y1="70" x2="30" y2="70" stroke="currentColor" stroke-width="3" stroke-linecap="round" />
+    </svg>
+    <p class="orientation-lock__text">Para vivir esta experiencia,<br />gira tu dispositivo.</p>
+  </div>
+</div>
+
+<div class="cover-frame" style={`background-image: url('${base}/images/textura_vertical_2.png')`}>
+  <div class="cover-canvas">
+    <header class="cover" data-animation-state="normal" data-cover-boot="pending">
+      <img
+        class="cover__texture"
     src={`${base}/images/textura-vertical.png`}
     alt=""
     role="presentation"
@@ -100,7 +224,9 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     <p class="cover__location" data-animation="location">Imbassaí, Bahía</p>
     <a class="cover__cta" href="#viaje" data-animation="cta">Comenzar el viaje</a>
   </div>
-</header>
+    </header>
+  </div>
+</div>
 
 <script>
   function fitText(el: HTMLElement) {
@@ -123,12 +249,42 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   document.fonts?.ready.then(fitAll);
   window.addEventListener('resize', fitAll);
 
-  // --- Ink-reveal intro sequence (name, dedication, "Fátima", "&", "Andrés") ---
-  const EASE = 'cubic-bezier(0.16, 1, 0.3, 1)';
+  // --- Slow handwritten-ink intro (name, dedication, signature, location, CTA) ---
+  //
+  // Whole sequence targets ~18-23s (default guest ~20.5-21s): a long,
+  // intimate, continuous "ink on paper" reveal, not a fast UI transition.
+  // Duck, elephant, texture and background are never touched here -- they
+  // are visible from the very first frame.
+  const EASE = 'cubic-bezier(0.22, 0.61, 0.36, 1)';
 
   function clamp(value: number, min: number, max: number) {
     return Math.min(max, Math.max(min, value));
   }
+
+  // Evaluates the same curve as EASE, so --reveal can be driven manually
+  // in step with the native CSS transition used for clip-path (see below).
+  function cubicBezierEase(p1x: number, p1y: number, p2x: number, p2y: number) {
+    const cx = 3 * p1x;
+    const bx = 3 * (p2x - p1x) - cx;
+    const ax = 1 - cx - bx;
+    const cy = 3 * p1y;
+    const by = 3 * (p2y - p1y) - cy;
+    const ay = 1 - cy - by;
+    const sampleX = (t: number) => ((ax * t + bx) * t + cx) * t;
+    const sampleY = (t: number) => ((ay * t + by) * t + cy) * t;
+    const sampleDerivativeX = (t: number) => (3 * ax * t + 2 * bx) * t + cx;
+    return (x: number) => {
+      let t = x;
+      for (let i = 0; i < 6; i++) {
+        const dx = sampleX(t) - x;
+        const d = sampleDerivativeX(t);
+        if (Math.abs(d) < 1e-6) break;
+        t -= dx / d;
+      }
+      return sampleY(clamp(t, 0, 1));
+    };
+  }
+  const easeReveal = cubicBezierEase(0.22, 0.61, 0.36, 1);
 
   function sleep(ms: number) {
     return new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -152,14 +308,34 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     );
   }
 
-  // Slightly irregular vertical boundary, sampled top-to-bottom, so the
-  // reveal edge reads as an uneven ink stroke rather than a clean sweep.
+  // document.fonts.ready is the primary, cross-browser guarantee that the
+  // custom typeface used by name/dedication/signature (all "Homemade
+  // Apple") has finished loading. document.fonts.check is an extra,
+  // best-effort confirmation on top of it -- wrapped in try/catch since
+  // it isn't universally supported and a malformed/unsupported call must
+  // never block the boot guard from ever lifting.
+  async function waitForSignatureFonts(): Promise<void> {
+    if (!document.fonts) return;
+    await document.fonts.ready;
+    try {
+      const spec = '400 16px "Homemade Apple"';
+      if (!document.fonts.check(spec)) {
+        await document.fonts.load(spec);
+      }
+    } catch {
+      // Unsupported in this engine -- document.fonts.ready above already
+      // resolved, which is the real guarantee.
+    }
+  }
+
+  // Slightly irregular vertical boundary, sampled top-to-bottom, so the ink
+  // front reads as an uneven hand-drawn stroke rather than a ruled line.
   function jaggedClipPath(percent: number, seed: number) {
-    const steps = 6;
+    const steps = 7;
     const points = ['0% 0%'];
     for (let i = 0; i <= steps; i++) {
       const t = i / steps;
-      const jitter = Math.sin((t * 6 + seed) * 3.7) * 2.5;
+      const jitter = Math.sin((t * 6 + seed) * 3.7) * 2.2;
       const x = clamp(percent + jitter, 0, 100);
       points.push(`${x.toFixed(2)}% ${(t * 100).toFixed(2)}%`);
     }
@@ -167,31 +343,227 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     return `polygon(${points.join(', ')})`;
   }
 
+  // A short, soft semi-transparent band riding just ahead of the jagged
+  // clip edge -- "wet ink still settling" -- instead of a hard on/off cut.
+  // Opaque BEFORE --reveal (already written), transparent AFTER it (not
+  // yet reached). Every stop is offset FROM var(--reveal) -- none pinned
+  // to a fixed 0%/100% -- so the whole ramp translates as one piece as
+  // --reveal animates, instead of leaving a fixed band near the left edge
+  // that doesn't track the sweep. At REVEAL_HIDDEN the entire ramp sits
+  // left of 0% (fully transparent across the box); at REVEAL_SHOWN it
+  // sits entirely right of 100% (fully opaque across the box).
+  const INK_MASK =
+    'linear-gradient(90deg, ' +
+    '#000 calc(var(--reveal) - 60%), #000 calc(var(--reveal) - 7%), ' +
+    'rgba(0,0,0,.6) calc(var(--reveal) - 3%), rgba(0,0,0,.18) var(--reveal), ' +
+    'transparent calc(var(--reveal) + 4%), transparent calc(var(--reveal) + 60%))';
+  const REVEAL_HIDDEN_NUM = -12;
+  const REVEAL_SHOWN_NUM = 110;
+  const REVEAL_HIDDEN = `${REVEAL_HIDDEN_NUM}%`;
+  const REVEAL_SHOWN = `${REVEAL_SHOWN_NUM}%`;
+
   // Sets the fully-hidden state instantly (no transition), so this is what
-  // gets painted on the very first frame -- never a flash of the visible
-  // text before it disappears again.
-  function prepareHidden(el: HTMLElement, seed: number) {
+  // gets painted on the very first frame -- never a flash of visible text.
+  function prepareInkHidden(el: HTMLElement, seed: number) {
     el.style.transition = 'none';
-    el.style.clipPath = jaggedClipPath(-8, seed);
-    el.style.opacity = '0.82';
+    el.style.clipPath = jaggedClipPath(-10, seed);
+    el.style.setProperty('--reveal', REVEAL_HIDDEN);
+    el.style.setProperty('mask-image', INK_MASK);
+    el.style.setProperty('-webkit-mask-image', INK_MASK);
   }
 
-  function triggerReveal(el: HTMLElement, duration: number, delay: number, seed: number) {
-    el.style.transition =
-      `clip-path ${duration}ms ${EASE} ${delay}ms, ` +
-      `opacity ${duration + 180}ms ease-out ${delay}ms`;
+  // Whether this engine actually tweens a *typed* custom property. Checked
+  // once, live, instead of assumed: a CSS transition on --reveal only
+  // interpolates smoothly when @property registered it as a <percentage>;
+  // unregistered/unsupported engines snap it instantly at the transition's
+  // halfway point, which is exactly the "signature pops at the end" bug.
+  let revealTransitionVerified: boolean | null = null;
+
+  function verifyRevealInterpolates(el: HTMLElement) {
+    if (revealTransitionVerified !== null) return revealTransitionVerified;
+    const probe = document.createElement('span');
+    probe.style.position = 'absolute';
+    probe.style.visibility = 'hidden';
+    probe.style.setProperty('--reveal', '0%');
+    probe.style.setProperty('transition', '--reveal 100ms linear');
+    document.body.appendChild(probe);
+    void probe.offsetWidth; // force layout so the starting value is committed
+    probe.style.setProperty('--reveal', '100%');
+    const midway = getComputedStyle(probe).getPropertyValue('--reveal').trim();
+    probe.remove();
+    // If the browser can't tween it, the computed value right after the
+    // change either jumps straight to 100% or reports something that
+    // isn't a mid-range percentage -- either way, not real interpolation.
+    const midValue = parseFloat(midway);
+    revealTransitionVerified = Number.isFinite(midValue) && midValue > 0 && midValue < 100;
+    return revealTransitionVerified;
+  }
+
+  // Drives clip-path (a natively-animatable property) via a real CSS
+  // transition, and drives --reveal by hand, frame by frame, with the
+  // *same* easing curve -- so the ink-mask's soft edge always tracks
+  // progressively regardless of @property support, instead of snapping
+  // straight to "fully revealed" only when resetInkUnit later clears the
+  // mask (the "pop"). CSS transition is kept as a harmless no-op fallback
+  // for engines that do support it, since both land on the same values.
+  function triggerInkReveal(el: HTMLElement, duration: number, delay: number, seed: number) {
+    verifyRevealInterpolates(el);
+    el.style.transition = `clip-path ${duration}ms ${EASE} ${delay}ms`;
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         el.style.clipPath = jaggedClipPath(112, seed);
-        el.style.opacity = '1';
+      });
+    });
+
+    let start: number | null = null;
+    function step(now: number) {
+      if (start === null) start = now;
+      const elapsed = now - start - delay;
+      if (elapsed < 0) {
+        requestAnimationFrame(step);
+        return;
+      }
+      const t = clamp(elapsed / duration, 0, 1);
+      const value = REVEAL_HIDDEN_NUM + (REVEAL_SHOWN_NUM - REVEAL_HIDDEN_NUM) * easeReveal(t);
+      el.style.setProperty('--reveal', `${value.toFixed(2)}%`);
+      if (t < 1) {
+        requestAnimationFrame(step);
+      }
+    }
+    requestAnimationFrame(step);
+  }
+
+  function resetInkUnit(el: HTMLElement) {
+    el.style.clipPath = '';
+    el.style.transition = '';
+    el.style.removeProperty('--reveal');
+    el.style.removeProperty('mask-image');
+    el.style.removeProperty('-webkit-mask-image');
+  }
+
+  // --- Signature reveal: one rectangular clip over the whole signature ---
+  //
+  // "Fátima & Andrés" reveals as a single unit -- one clip-path: inset(...)
+  // applied to .cover__names, whose right edge sweeps from fully-closed to
+  // fully-open. There is no per-word clip, mask or progress: whatever the
+  // sweep has reached (Fátima, then &, then Andrés) is simply whatever
+  // falls inside the currently-visible rectangle. The clip is sized to an
+  // *expanded* box -- .cover__names' own measured width plus a fixed
+  // safety margin on every side (20px above, 55px below, 20px left, 20px
+  // right) so ascenders, descenders and calligraphic overshoot across the
+  // whole signature always sit inside the clipped area, never trimmed by
+  // a box clipped tight to the typographic bounding box. Insets are
+  // computed in plain px from the element's own measured width -- never
+  // CSS %, which is always relative to the box's *own* width alone and
+  // can't express "hide the margin too" -- so progress=0 truly hides the
+  // entire expanded box, margin included, not just the original width.
+  // The left edge of the expanded box never moves (never used to drive
+  // progress); only the right edge sweeps, from 0px visible up to the
+  // expanded width.
+  const SIGNATURE_MARGIN_TOP = 20;
+  const SIGNATURE_MARGIN_BOTTOM = 55;
+  const SIGNATURE_MARGIN_LEFT = 20;
+  const SIGNATURE_MARGIN_RIGHT = 20;
+
+  function signatureClipPath(progress: number, width: number): string {
+    const expandedWidth = width + SIGNATURE_MARGIN_LEFT + SIGNATURE_MARGIN_RIGHT;
+    const rightInset = (1 - progress) * expandedWidth - SIGNATURE_MARGIN_RIGHT;
+    return `inset(-${SIGNATURE_MARGIN_TOP}px ${rightInset}px -${SIGNATURE_MARGIN_BOTTOM}px -${SIGNATURE_MARGIN_LEFT}px)`;
+  }
+
+  // Closes the clip down to nothing, instantly, so this is what's painted
+  // on the very first frame -- never a flash of any part of the signature.
+  function prepareSignatureHidden(el: HTMLElement) {
+    el.style.clipPath = signatureClipPath(0, el.offsetWidth);
+  }
+
+  // Linear, frame-driven progress: the whole assigned duration is spent
+  // sweeping (no easing curve lets the clip "arrive early"), so the
+  // signature advances uniformly and is never near-complete early on.
+  function signatureProgress(t: number): number {
+    if (t <= 0) return 0;
+    if (t >= 1) return 1;
+    return t;
+  }
+
+  function triggerSignatureReveal(el: HTMLElement, duration: number, delay: number) {
+    const width = el.offsetWidth;
+    const startTime = performance.now() + delay;
+    let resetFrames = 0;
+
+    function step(now: number) {
+      const progress = clamp((now - startTime) / duration, 0, 1);
+      el.style.clipPath = signatureClipPath(signatureProgress(progress), width);
+
+      if (progress < 1) {
+        requestAnimationFrame(step);
+        return;
+      }
+
+      // progress === 1: the signature is already fully visible -- wait
+      // two more frames, invisibly holding that finished state, before
+      // any caller-side cleanup runs, so the reset never overlaps the
+      // settle.
+      if (resetFrames < 2) {
+        resetFrames += 1;
+        requestAnimationFrame(step);
+      }
+    }
+
+    requestAnimationFrame(step);
+  }
+
+  // Waits exactly two rAF frames (never setTimeout) past the fully-revealed
+  // state before touching the clip-path, then re-applies the very same
+  // fully-revealed value -- so the frame right before and right after this
+  // runs are visually identical, never a pop.
+  function resetSignatureUnit(el: HTMLElement) {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        el.style.clipPath = signatureClipPath(1, el.offsetWidth);
       });
     });
   }
 
-  function resetUnit(el: HTMLElement) {
-    el.style.clipPath = '';
+  // Location and CTA are not "written" -- they simply settle in once the
+  // signature is done, per spec: a plain gentle fade + tiny rise.
+  function prepareFadeHidden(el: HTMLElement) {
+    el.style.transition = 'none';
+    el.style.opacity = '0';
+    el.style.transform = 'translateY(2px)';
+  }
+
+  function triggerFade(el: HTMLElement, duration: number, delay: number) {
+    el.style.transition = `opacity ${duration}ms ease-out ${delay}ms, transform ${duration}ms ease-out ${delay}ms`;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        el.style.opacity = '1';
+        el.style.transform = 'translateY(0)';
+      });
+    });
+  }
+
+  function resetFadeUnit(el: HTMLElement) {
     el.style.opacity = '';
+    el.style.transform = '';
     el.style.transition = '';
+  }
+
+  function prepareUnderlineHidden(el: HTMLElement) {
+    el.style.setProperty('--cta-underline', '0%');
+  }
+
+  function triggerUnderline(el: HTMLElement, duration: number, delay: number) {
+    el.style.setProperty('transition', `${el.style.transition ? el.style.transition + ', ' : ''}--cta-underline ${duration}ms ${EASE} ${delay}ms`);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        el.style.setProperty('--cta-underline', '100%');
+      });
+    });
+  }
+
+  function resetUnderline(el: HTMLElement) {
+    el.style.removeProperty('--cta-underline');
   }
 
   // Wraps each word in a span, measures its rendered line via offsetTop,
@@ -228,109 +600,410 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     });
   }
 
-  // Reveals lines sequentially top-to-bottom (with a slight overlap so it
-  // doesn't feel mechanical) within the given total duration budget.
+  // Reveals lines top-to-bottom as one continuous gesture: each line's
+  // share of the total duration is weighted by its actual rendered width
+  // (not char count), and the next line begins before the previous one
+  // has fully settled (LINE_OVERLAP_MS) so the multi-line block reads as
+  // a single unbroken stroke rather than independent chunks loading in.
+  const LINE_OVERLAP_MS = 210;
+  const MIN_LINE_DURATION_MS = 550;
+
   function revealLines(lines: HTMLElement[], totalDuration: number, seedBase: number) {
     const n = lines.length;
     if (n === 0) return 0;
-    const overlap = 0.35;
-    const perLine = totalDuration / Math.max(n - (n - 1) * overlap, 1);
-    lines.forEach((line, i) => {
-      const delay = i * perLine * (1 - overlap);
-      triggerReveal(line, perLine, delay, seedBase + i);
-    });
-    return (n - 1) * perLine * (1 - overlap) + perLine;
-  }
-
-  async function initInkReveal() {
-    const cover = document.querySelector<HTMLElement>('.cover');
-    const nameEl = cover?.querySelector<HTMLElement>('[data-animation="guest-name"]');
-    const dedicationEl = cover?.querySelector<HTMLElement>('[data-animation="dedication"]');
-    const fatimaEl = cover?.querySelector<HTMLElement>('[data-animation="name-fatima"]');
-    const ampEl = cover?.querySelector<HTMLElement>('[data-animation="name-separator"]');
-    const andresEl = cover?.querySelector<HTMLElement>('[data-animation="name-andres"]');
-
-    if (!cover || !nameEl || !dedicationEl || !fatimaEl || !ampEl || !andresEl) return;
-
-    const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    if (reduceMotion) {
-      cover.classList.add('is-animation-complete');
-      return;
+    if (n === 1) {
+      triggerInkReveal(lines[0], totalDuration, 0, seedBase);
+      return totalDuration;
     }
 
-    await Promise.all([document.fonts?.ready ?? Promise.resolve(), waitForImages(cover)]);
-    fitAll();
-    await nextFrame();
+    const widths = lines.map((line) => Math.max(line.scrollWidth, 1));
+    const totalWidth = widths.reduce((a, b) => a + b, 0);
+    const overlapBudget = LINE_OVERLAP_MS * (n - 1);
+    const durationBudget = Math.max(totalDuration - overlapBudget, totalDuration * 0.6);
 
-    const nameLen = (nameEl.textContent ?? '').trim().length;
-    const dedicationLen = (dedicationEl.textContent ?? '').trim().length;
-    const nameDuration = clamp(500 + nameLen * 30, 900, 1200);
-    const dedicationDuration = clamp(700 + dedicationLen * 20, 1600, 2300);
+    let durations = widths.map((w) => Math.max(MIN_LINE_DURATION_MS, durationBudget * (w / totalWidth)));
+    const sum = durations.reduce((a, b) => a + b, 0);
+    const scale = sum > 0 ? durationBudget / sum : 1;
+    durations = durations.map((d) => d * scale);
 
-    const originalName = nameEl.textContent ?? '';
-    const originalDedication = dedicationEl.textContent ?? '';
-    const nameLines = splitIntoLines(nameEl);
-    const dedicationLines = splitIntoLines(dedicationEl);
+    let cursor = 0;
+    lines.forEach((line, i) => {
+      triggerInkReveal(line, durations[i], cursor, seedBase + i);
+      if (i < n - 1) cursor += durations[i] - LINE_OVERLAP_MS;
+    });
+    return cursor + durations[n - 1];
+  }
 
-    // Hide every unit up front, in the same tick, so the first thing ever
-    // painted is the hidden state -- not a flash of plain visible text.
-    nameLines.forEach((line, i) => prepareHidden(line, i));
-    dedicationLines.forEach((line, i) => prepareHidden(line, 10 + i));
-    prepareHidden(fatimaEl, 20);
-    prepareHidden(ampEl, 21);
-    prepareHidden(andresEl, 22);
-    cover.classList.add('is-preparing-animation');
-    await nextFrame();
-
-    await sleep(350);
-
-    cover.classList.add('is-animating');
-    revealLines(nameLines, nameDuration, 0);
-    await sleep(nameDuration + 120);
-
-    revealLines(dedicationLines, dedicationDuration, 10);
-    await sleep(dedicationDuration + 250);
-
-    triggerReveal(fatimaEl, 750, 0, 20);
-    await sleep(750);
-    triggerReveal(ampEl, 230, 0, 21);
-    await sleep(230);
-    triggerReveal(andresEl, 800, 0, 22);
-    await sleep(800);
-
-    nameEl.textContent = originalName;
-    dedicationEl.textContent = originalDedication;
-    [fatimaEl, ampEl, andresEl].forEach(resetUnit);
-
+  // Reveals everything immediately, with no timers and no hidden state --
+  // used for reduced-motion, missing elements, the error fallback, and
+  // the 8s safety timeout. Always lifts the FOUC boot guard too, so
+  // nothing ever depends on the timed sequence having run for the cover
+  // to become fully, finally visible.
+  function showEverythingNow(cover: HTMLElement) {
+    bootCompleted = true;
+    cover.removeAttribute('data-cover-boot');
     cover.classList.remove('is-preparing-animation', 'is-animating');
     cover.classList.add('is-animation-complete');
   }
 
-  initInkReveal();
+  // True whenever <html> carries is-landscape-locked -- set by the inline
+  // script above only for phones/tablets (coarse pointer or touch
+  // points, short side <= 1024px) currently in landscape. Laptops/desktops
+  // never set it, so this is always false for them.
+  function isLandscapeGate(): boolean {
+    return document.documentElement.classList.contains('is-landscape-locked');
+  }
+
+  // animationStarted / waitingForPortrait / animationRunToken / bootCompleted:
+  // the whole start-once, restart-safe state machine lives in these four.
+  // animationRunToken is bumped on every real (re)start attempt so any
+  // `await` still in flight from a superseded attempt (device rotated
+  // back to landscape mid-load, or the 8s safety fired) can tell it's
+  // stale and stop touching the DOM.
+  let animationStarted = false;
+  let waitingForPortrait = false;
+  let animationRunToken = 0;
+  let bootCompleted = false;
+
+  // Section 3 / step 6 of the landscape-return sequence: wait for fonts,
+  // critical images, two more animation frames, then report whether the
+  // device is still in an allowed (non-landscape-gated) state. Never
+  // mutates anything -- callers decide what to do with the result.
+  async function waitForReadyState(token: number, cover: HTMLElement): Promise<boolean> {
+    await Promise.all([waitForSignatureFonts(), waitForImages(cover)]);
+    if (token !== animationRunToken) return false;
+    fitAll();
+    await nextFrame();
+    if (token !== animationRunToken) return false;
+    return !isLandscapeGate();
+  }
+
+  async function startAnimationOnce(token: number, cover: HTMLElement) {
+    const nameEl = cover.querySelector<HTMLElement>('[data-animation="guest-name"]');
+    const dedicationEl = cover.querySelector<HTMLElement>('[data-animation="dedication"]');
+    const namesEl = cover.querySelector<HTMLElement>('.cover__names');
+    const locationEl = cover.querySelector<HTMLElement>('[data-animation="location"]');
+    const ctaEl = cover.querySelector<HTMLElement>('[data-animation="cta"]');
+
+    if (!nameEl || !dedicationEl || !namesEl || !locationEl || !ctaEl) {
+      showEverythingNow(cover);
+      return;
+    }
+
+    const originalName = nameEl.textContent ?? '';
+    const originalDedication = dedicationEl.textContent ?? '';
+
+    try {
+      const ready = await waitForReadyState(token, cover);
+      if (token !== animationRunToken) return;
+      if (!ready) {
+        // Rotated back to landscape while fonts/images were still
+        // loading -- go back to the waiting state; the orientation
+        // checker below calls startAnimationOnce again, from scratch,
+        // once is-landscape-locked clears for real.
+        animationStarted = false;
+        waitingForPortrait = true;
+        return;
+      }
+
+      const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      if (reduceMotion) {
+        // Straight from the protected initial state to the final one --
+        // no timers, no masks, no intermediate frame with incomplete
+        // styles.
+        showEverythingNow(cover);
+        return;
+      }
+
+      const nameLen = originalName.trim().length;
+      const dedicationLen = originalDedication.trim().length;
+      // Calibrated so "Estefi y Matías" (~15 chars) lands near 3.1s and its
+      // dedication (~67 chars) near 7.2s, per the approved choreography.
+      const nameDuration = clamp(2400 + nameLen * 47, 2400, 3900);
+      const dedicationDuration = clamp(3500 + dedicationLen * 55, 5600, 8600);
+      const signatureDuration = 5000;
+      const locationDuration = 1200;
+      const ctaDuration = 1200;
+      const ctaStagger = 370;
+      const underlineDuration = 1100;
+
+      const nameLines = splitIntoLines(nameEl);
+      const dedicationLines = splitIntoLines(dedicationEl);
+
+      // Hide everything up front, in the same tick, so the first thing
+      // ever painted is the hidden state -- not a flash of visible text.
+      nameLines.forEach((line, i) => prepareInkHidden(line, i));
+      dedicationLines.forEach((line, i) => prepareInkHidden(line, 100 + i));
+      prepareSignatureHidden(namesEl);
+      prepareFadeHidden(locationEl);
+      prepareFadeHidden(ctaEl);
+      prepareUnderlineHidden(ctaEl);
+      cover.classList.add('is-preparing-animation');
+      await nextFrame();
+      if (token !== animationRunToken) return;
+
+      // The finer-grained per-element hidden state above (clip-path/mask/
+      // opacity) is now in place and painted, so lifting the coarse FOUC
+      // guard here causes no visible change -- both states already look
+      // fully hidden.
+      bootCompleted = true;
+      cover.removeAttribute('data-cover-boot');
+
+      await sleep(1300); // silence: scene visible, nothing written yet
+      if (token !== animationRunToken) return;
+
+      cover.classList.add('is-animating');
+
+      revealLines(nameLines, nameDuration, 0);
+      await sleep(Math.max(nameDuration - 250, 0));
+      if (token !== animationRunToken) return;
+
+      revealLines(dedicationLines, dedicationDuration, 100);
+      await sleep(Math.max(dedicationDuration - 250, 0));
+      if (token !== animationRunToken) return;
+
+      triggerSignatureReveal(namesEl, signatureDuration, 0);
+      await sleep(Math.max(signatureDuration - 150, 0));
+      if (token !== animationRunToken) return;
+
+      triggerFade(locationEl, locationDuration, 0);
+      triggerFade(ctaEl, ctaDuration, ctaStagger);
+      triggerUnderline(ctaEl, underlineDuration, ctaStagger + ctaDuration * 0.6);
+
+      const metaSpan = Math.max(
+        locationDuration,
+        ctaStagger + ctaDuration,
+        ctaStagger + ctaDuration * 0.6 + underlineDuration
+      );
+      await sleep(metaSpan);
+      if (token !== animationRunToken) return;
+
+      await sleep(1300); // final settle: nothing else moves
+      if (token !== animationRunToken) return;
+
+      nameEl.textContent = originalName;
+      dedicationEl.textContent = originalDedication;
+      resetSignatureUnit(namesEl);
+      [locationEl, ctaEl].forEach(resetFadeUnit);
+      resetUnderline(ctaEl);
+
+      showEverythingNow(cover);
+    } catch (err) {
+      // Never leave the cover partially hidden if something goes wrong.
+      nameEl.textContent = originalName;
+      dedicationEl.textContent = originalDedication;
+      resetSignatureUnit(namesEl);
+      [locationEl, ctaEl].forEach(resetFadeUnit);
+      resetUnderline(ctaEl);
+      showEverythingNow(cover);
+    }
+  }
+
+  // The single entry point, matching the spec's central condition
+  // exactly: starts once, restarts after a landscape round-trip only if
+  // it never truly started, and never restarts once it has.
+  function maybeStartAnimation() {
+    if (animationStarted) return;
+    const cover = document.querySelector<HTMLElement>('.cover');
+    if (!cover) return;
+
+    if (isLandscapeGate()) {
+      waitingForPortrait = true;
+      return;
+    }
+
+    waitingForPortrait = false;
+    animationStarted = true;
+    const token = ++animationRunToken;
+    startAnimationOnce(token, cover);
+  }
+
+  // Re-checks after every event that could flip is-landscape-locked.
+  // Double rAF so this always runs *after* the inline script's own
+  // (single-rAF-scheduled) class update for the same event -- otherwise
+  // this could read a stale class on the very frame orientation changes.
+  function scheduleAnimationCheck() {
+    requestAnimationFrame(() => requestAnimationFrame(maybeStartAnimation));
+  }
+
+  maybeStartAnimation();
+  window.addEventListener('resize', scheduleAnimationCheck);
+  window.addEventListener('orientationchange', scheduleAnimationCheck);
+  window.visualViewport?.addEventListener('resize', scheduleAnimationCheck);
+
+  // Pure safety net, never part of the normal flow: a stuck load (a JS
+  // error nothing caught, a font/image that never resolves, a device
+  // stuck reporting landscape) must never hide the invitation forever.
+  window.setTimeout(() => {
+    if (bootCompleted) return;
+    animationRunToken += 1; // invalidate any run still in flight
+    animationStarted = true;
+    const cover = document.querySelector<HTMLElement>('.cover');
+    if (cover) showEverythingNow(cover);
+  }, 8000);
 </script>
 
+
 <style>
+  /*
+    Registers --reveal as a typed <percentage> custom property. Not load
+    -bearing for the reveal animation anymore (triggerInkReveal above
+    drives --reveal itself, frame by frame, so it never depends on this
+    being honored) but kept so calc() involving it parses as arithmetic
+    on a percentage everywhere, and any browser that *does* support typed
+    custom properties gets a real fallback transition for free. As a
+    selector-less at-rule it can't be (and isn't) scoped by Astro, so it's
+    safe living in the same block as the rest of the component's styles --
+    keeping it in one <style> tag also avoids any risk of a second,
+    accidentally-malformed <style>...<style> block silently dropping the
+    rule that follows it.
+  */
+  @property --reveal {
+    syntax: '<percentage>';
+    inherits: true;
+    initial-value: 0%;
+  }
+
+  /*
+    Applied to <html> and <body> only while the mobile-portrait fill mode
+    or the landscape rotate-device notice is active (both toggled by the
+    inline script above) -- laptops/desktops never get this class, so
+    their document is completely untouched. Removes any outer margin and
+    blocks page-level scroll/bounce so the cover is the only thing the
+    visible viewport can ever show.
+  */
+  :global(html.is-viewport-locked),
+  :global(body.is-viewport-locked) {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  /*
+    Fixed logical canvas: the cover is a fixed artistic composition
+    designed at exactly 390x844 -- it no longer redistributes internally
+    per device. .cover-frame fills the real viewport and centers
+    .cover-canvas, a constant 390x844 box holding the untouched 390x844
+    composition below, uniformly scaled via --cover-scale (computed in the
+    inline script above, before first paint) to fit any screen without
+    cropping, deforming, or scrolling. Leftover space is letterboxed with
+    the same paper texture as the canvas itself (background-image set
+    inline above), scaled with the same object-position/size the canvas
+    texture uses, so the exterior reads as more paper -- not a flat-color
+    frame around it. --color-bg stays as the fallback while it loads.
+  */
+  .cover-frame {
+    width: 100%;
+    height: 100svh;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--color-bg);
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-position: 60% top;
+  }
+
+  /* @supports keeps this from being minified away as a "duplicate" of the
+     100svh fallback above -- browsers without dvh support correctly keep
+     using svh instead of losing the height declaration entirely. */
+  @supports (height: 100dvh) {
+    .cover-frame {
+      height: 100dvh;
+    }
+  }
+
+  /*
+    Portrait phones/tablets under 1200px only: the frame is pinned to the
+    exact visible viewport box measured by the inline script
+    (--cover-viewport-width/height, from visualViewport) instead of the
+    svh/dvh percentage above, and taken out of document flow entirely so
+    no ancestor's layout can reintroduce a scrollbar or outer margin.
+    Laptops/desktops (no is-fill-viewport class) never match this rule.
+  */
+  :global(html.is-fill-viewport) .cover-frame {
+    position: fixed;
+    inset: 0;
+    width: var(--cover-viewport-width, 100%);
+    height: var(--cover-viewport-height, 100svh);
+  }
+
+  .cover-canvas {
+    width: 390px;
+    height: 844px;
+    flex-shrink: 0;
+    transform-origin: center center;
+    /* Falls back to scale(1) with no JS: still fully visible and
+       centered, just not scale-corrected (cropped by .cover-frame's
+       overflow:hidden on very small screens instead of blank). */
+    transform: scale(var(--cover-scale, 1));
+  }
+
+  /*
+    Same portrait/phone-tablet path: the 390x844 canvas is stretched
+    non-uniformly, independently on each axis, to exactly fill the
+    measured viewport -- no Math.min, no aspect ratio preserved, no
+    clamping. .cover-frame no longer centers it via flexbox (position:
+    fixed above takes it out of flow), so centering is redone here with
+    the standard translate(-50%,-50%) trick against the frame's own
+    top/left 50%.
+  */
+  :global(html.is-fill-viewport) .cover-canvas {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(var(--cover-scale-x, 1), var(--cover-scale-y, 1));
+  }
+
+  /*
+    Below this point the composition is frozen at its approved 390x844
+    pixel values (merged from the old base + "mobile portrait" rules,
+    which is what actually rendered at 390 width). Per-device breakpoints
+    that used to individually reposition/resize text, signature, duck,
+    elephant, meta or CTA are gone -- adapting to the real device is now
+    handled entirely by scaling the canvas above, uniformly.
+  */
   .cover {
     position: relative;
     overflow: hidden;
-    min-height: 100svh;
+    width: 100%;
+    height: 100%;
     isolation: isolate;
   }
 
+  /*
+    FOUC guard: data-cover-boot="pending" is rendered server-side, right
+    in the markup, so it is already present on the very first paint --
+    nothing here waits on JS timing. While it is set, exactly the five
+    pieces the reveal sequence writes (name, dedication, signature,
+    location, CTA) are hidden via opacity+visibility, which keeps their
+    layout space -- no reflow when they later appear, and no display:none.
+    Everything else (background, texture, duck, elephant, the orientation
+    notice) is untouched and visible from the first frame. The attribute
+    is removed by the script above the instant the reveal's own per
+    -element hidden state (clip-path/mask) is already in place, so the
+    handoff causes no visible change -- never a frame with the full,
+    final content flashed.
+  */
+  .cover[data-cover-boot='pending'] [data-animation='guest-name'],
+  .cover[data-cover-boot='pending'] [data-animation='dedication'],
+  .cover[data-cover-boot='pending'] .cover__names,
+  .cover[data-cover-boot='pending'] [data-animation='location'],
+  .cover[data-cover-boot='pending'] [data-animation='cta'] {
+    opacity: 0;
+    visibility: hidden;
+  }
+
   .cover__texture {
-    position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
-    max-width: none;
-    object-fit: cover;
-    object-position: 45% top;
-    z-index: -1;
-    pointer-events: none;
+    display: none;
   }
 
   .cover__texture-v2 {
-    display: none;
+    display: block;
     position: absolute;
     inset: 0;
     width: 100%;
@@ -344,21 +1017,6 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
   .cover__foam-abstract {
     display: none;
-    position: absolute;
-    z-index: -1;
-    right: 0;
-    bottom: 0;
-    width: 50vw;
-    height: 22svh;
-    pointer-events: none;
-  }
-
-  .cover__foam-shape {
-    opacity: 0.55;
-  }
-
-  .cover__foam-flecks {
-    opacity: 0.5;
   }
 
   .cover__elephant,
@@ -371,16 +1029,16 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   }
 
   .cover__elephant {
-    width: 60vw;
-    left: -3vw;
+    width: 234px;
+    left: -11.7px;
     bottom: 0;
     transform: scaleX(-1);
   }
 
   .cover__duck {
-    width: clamp(250px, 68vw, 320px);
-    right: -6vw;
-    top: -4svh;
+    width: 265.2px;
+    right: -23.4px;
+    top: -33.76px;
     transform: scaleX(-1);
     filter: brightness(0.45) contrast(1.5);
     opacity: 1;
@@ -389,8 +1047,8 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   .cover__intro {
     position: absolute;
     z-index: 1;
-    left: 7vw;
-    top: 6svh;
+    left: 27.3px;
+    top: 50.64px;
     display: flex;
     flex-direction: column;
     align-items: flex-start;
@@ -401,18 +1059,27 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     position: absolute;
     z-index: 1;
     left: 50%;
-    top: 51svh;
+    top: 430.44px;
     transform: translate(-50%, -50%);
-    width: 90vw;
+    width: 351px;
     text-align: center;
   }
 
   .cover__meta {
     position: absolute;
     z-index: 1;
-    right: 6vw;
-    bottom: 6svh;
+    right: 23.4px;
+    bottom: 95.372px;
     text-align: right;
+  }
+
+  .cover__meta::before {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    inset: -14px -22px;
+    background: radial-gradient(ellipse at center, rgba(255, 254, 248, 1), rgba(255, 254, 248, 0) 80%);
+    pointer-events: none;
   }
 
   .cover__location {
@@ -420,30 +1087,46 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     text-transform: uppercase;
     letter-spacing: 0.14em;
     font-size: 0.75rem;
-    color: var(--color-muted);
-    margin: 0 0 1rem;
+    color: #756b60;
+    margin: 0 0 0.3rem;
   }
 
   .cover__kicker {
-    max-width: 42vw;
+    opacity: 0.82;
+    max-width: 179.4px;
     text-wrap: balance;
     font-family: 'Homemade Apple', cursive;
     font-weight: 400;
-    font-size: 2.8rem;
+    font-size: 2.05rem;
     line-height: 1.3;
-    color: var(--color-ink);
+    color: #7e5e49;
     margin: 0;
   }
 
   .cover__lede {
-    max-width: 42vw;
+    opacity: 0.84;
+    max-width: 187.2px;
     font-family: 'Homemade Apple', cursive;
     font-weight: 400;
-    font-size: 1.9rem;
-    line-height: 1.4;
-    color: var(--color-ink);
+    font-size: 1.05rem;
+    line-height: 1.5;
+    color: #5c5047;
     margin: 0;
     margin-top: 17px;
+  }
+
+  .cover__intro[data-length='short'] .cover__lede {
+    font-size: 1.4rem;
+    line-height: 1.6;
+    max-width: 179.4px;
+    margin-top: 21px;
+  }
+
+  .cover__intro[data-length='long'] .cover__lede {
+    font-size: 1rem;
+    line-height: 1.4;
+    max-width: 187.2px;
+    margin-top: 13px;
   }
 
   .cover__title {
@@ -451,17 +1134,42 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     flex-direction: row;
     align-items: baseline;
     justify-content: center;
-    gap: 0.35em;
+    gap: 0.3em;
     font-family: 'Homemade Apple', cursive;
     font-weight: 400;
-    font-size: clamp(3.4rem, 16vw, 4.4rem);
+    font-size: 34.7px;
     line-height: 1.05;
     letter-spacing: 0;
+    color: #211c18;
     margin: 0;
   }
 
   .cover__amp {
     margin: 0;
+  }
+
+  /*
+    These three spans exist only to keep "Fátima", "&" and "Andrés"
+    individually positioned within .cover__title -- the reveal itself is a
+    single clip-path animated on their shared ancestor, .cover__names (see
+    the script above), not on these spans. No mask, clip-path or overflow
+    of their own.
+  */
+  .signature-fatima {
+    position: relative;
+    top: -12px;
+  }
+
+  .signature-amp {
+    position: relative;
+    top: 10px;
+    left: 6px;
+  }
+
+  .signature-andres {
+    position: relative;
+    top: 36px;
+    left: 13px;
   }
 
   .cover__cta {
@@ -470,11 +1178,20 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     gap: 0.5rem;
     font-family: var(--font-sans);
     font-size: 0.8rem;
-    letter-spacing: 0.08em;
+    letter-spacing: 0.1em;
     text-transform: uppercase;
-    color: var(--color-ink);
+    color: #6b6055;
     text-decoration: none;
-    border-bottom: 1px solid var(--color-accent);
+    /*
+      Same 1.4px #a77a46 line as before, but as a background so its width
+      can be revealed left-to-right during the intro (background-size).
+      At rest (no JS, or after the animation finishes) --cta-underline is
+      unset and defaults to 100% -- pixel-identical to a plain border.
+    */
+    background-image: linear-gradient(#a77a46, #a77a46);
+    background-repeat: no-repeat;
+    background-position: left bottom;
+    background-size: var(--cta-underline, 100%) 1.4px;
     padding-bottom: 0.35rem;
     width: fit-content;
     white-space: nowrap;
@@ -486,275 +1203,12 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
   @media (prefers-reduced-motion: no-preference) {
     .cover__cta {
-      transition: color 0.2s ease, border-color 0.2s ease;
+      transition: color 0.2s ease;
     }
 
     .cover__cta:hover,
     .cover__cta:focus-visible {
       color: var(--color-accent);
-    }
-  }
-
-  /* Phone landscape (844x390) */
-  @media (orientation: landscape) and (max-height: 500px) {
-    .cover__elephant {
-      width: 30vw;
-      left: -2vw;
-      bottom: -32svh;
-    }
-
-    .cover__duck {
-      width: 26vw;
-      right: 0;
-      top: -1svh;
-    }
-
-    .cover__intro {
-      top: 6svh;
-      left: 33vw;
-    }
-
-    .cover__kicker,
-    .cover__lede {
-      max-width: 45vw;
-    }
-
-    .cover__kicker {
-      font-size: 1.6rem;
-    }
-
-    .cover__lede {
-      font-size: 0.95rem;
-      line-height: 1.35;
-      margin-top: 12px;
-    }
-
-    .cover__names {
-      left: 63%;
-      top: 60svh;
-      max-width: 34vw;
-    }
-
-    .cover__title {
-      flex-direction: row;
-      gap: 0.4em;
-      font-size: clamp(1.7rem, 6vw, 2.3rem);
-      margin-bottom: 0.7rem;
-    }
-
-    .cover__amp {
-      margin: 0;
-    }
-
-    .cover__location {
-      margin-bottom: 1rem;
-    }
-  }
-
-  /* Tablet portrait / large vertical (1600x2560) */
-  @media (orientation: portrait) and (min-width: 1200px) {
-    .cover__elephant {
-      width: 42vw;
-      left: -4vw;
-      bottom: -5svh;
-    }
-
-    .cover__duck {
-      width: 30vw;
-      right: 1vw;
-      top: 3svh;
-    }
-
-    .cover__intro {
-      top: 7svh;
-      left: 7vw;
-    }
-
-    .cover__kicker,
-    .cover__lede {
-      max-width: 52vw;
-    }
-
-    .cover__kicker {
-      font-size: 2.2rem;
-    }
-
-    .cover__lede {
-      font-size: 2.4rem;
-      margin-top: 24px;
-    }
-
-    .cover__names {
-      left: 68%;
-      top: 76svh;
-      max-width: 34vw;
-    }
-
-    .cover__title {
-      font-size: clamp(4.2rem, 6vw, 5.4rem);
-      margin-bottom: 1.6rem;
-    }
-
-    .cover__location {
-      font-size: 1.05rem;
-      margin-bottom: 2.4rem;
-    }
-
-    .cover__cta {
-      font-size: 1.05rem;
-    }
-  }
-
-  /* Tablet landscape / laptop (2560x1600) */
-  @media (orientation: landscape) and (min-width: 1200px) {
-    .cover__elephant {
-      width: 26vw;
-      left: -3vw;
-      bottom: -12svh;
-    }
-
-    .cover__duck {
-      width: 18vw;
-      right: 2vw;
-      top: 4svh;
-    }
-
-    .cover__intro {
-      top: 8svh;
-      left: 8vw;
-    }
-
-    .cover__kicker,
-    .cover__lede {
-      max-width: 34vw;
-    }
-
-    .cover__kicker {
-      font-size: 1.8rem;
-    }
-
-    .cover__lede {
-      font-size: 2rem;
-      margin-top: 20px;
-    }
-
-    .cover__names {
-      left: 55%;
-      top: 80svh;
-      max-width: 30vw;
-    }
-
-    .cover__title {
-      flex-direction: row;
-      gap: 0.45em;
-      font-size: clamp(3rem, 4vw, 4rem);
-      margin-bottom: 1.2rem;
-    }
-
-    .cover__amp {
-      margin: 0;
-    }
-
-    .cover__location {
-      font-size: 0.95rem;
-      margin-bottom: 1.8rem;
-    }
-
-    .cover__cta {
-      font-size: 0.95rem;
-    }
-  }
-
-  /* Mobile portrait refinement pass (390x844 only) */
-  @media (orientation: portrait) and (max-width: 1199px) {
-    .cover__texture {
-      display: none;
-    }
-
-    .cover__texture-v2 {
-      display: block;
-    }
-
-    .cover__foam-abstract {
-      display: none;
-    }
-
-    .cover__kicker {
-      opacity: 0.82;
-      color: #7e5e49;
-      font-size: 2.05rem;
-      max-width: 46vw;
-    }
-
-    .cover__lede {
-      opacity: 0.84;
-      color: #5c5047;
-      font-size: 1.05rem;
-      line-height: 1.5;
-      max-width: 48vw;
-      margin-top: 17px;
-    }
-
-    .cover__intro[data-length='short'] .cover__lede {
-      font-size: 1.4rem;
-      line-height: 1.6;
-      max-width: 46vw;
-      margin-top: 21px;
-    }
-
-    .cover__intro[data-length='long'] .cover__lede {
-      font-size: 1rem;
-      line-height: 1.4;
-      max-width: 48vw;
-      margin-top: 13px;
-    }
-
-    .cover__title {
-      gap: 0.3em;
-      font-size: 34.7px;
-      color: #211c18;
-    }
-
-    .signature-fatima {
-      position: relative;
-      top: -12px;
-    }
-
-    .signature-amp {
-      position: relative;
-      top: 10px;
-      left: 6px;
-    }
-
-    .signature-andres {
-      position: relative;
-      top: 36px;
-      left: 13px;
-    }
-
-    .cover__meta {
-      bottom: 11.3svh;
-    }
-
-    .cover__meta::before {
-      content: '';
-      position: absolute;
-      z-index: -1;
-      inset: -14px -22px;
-      background: radial-gradient(ellipse at center, rgba(255, 254, 248, 1), rgba(255, 254, 248, 0) 80%);
-      pointer-events: none;
-    }
-
-    .cover__location {
-      margin-bottom: 0.3rem;
-      color: #756b60;
-    }
-
-    .cover__cta {
-      color: #6b6055;
-      letter-spacing: 0.1em;
-      border-bottom-color: #a77a46;
-      border-bottom-width: 1.4px;
     }
   }
 
@@ -770,5 +1224,53 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
   .ink-word {
     display: inline;
+  }
+
+  /*
+    Rotate-device notice: covers the entire visible viewport, hidden
+    unless <html> carries is-landscape-locked (set by the inline script
+    above only for phones/tablets whose short side is under 1200px while
+    in landscape). Never shown on laptops/desktops. Reuses the same paper
+    texture as .cover-frame, set inline the same way, so it reads as part
+    of the same object rather than a generic error screen.
+  */
+  .orientation-lock {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--color-bg);
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-position: 60% top;
+    overflow: hidden;
+  }
+
+  :global(html.is-landscape-locked) .orientation-lock {
+    display: flex;
+  }
+
+  .orientation-lock__content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 24px;
+    text-align: center;
+  }
+
+  .orientation-lock__icon {
+    color: #7e5e49;
+  }
+
+  .orientation-lock__text {
+    margin: 0;
+    font-family: 'Homemade Apple', cursive;
+    font-weight: 400;
+    font-size: 1.6rem;
+    line-height: 1.4;
+    color: #211c18;
   }
 </style>

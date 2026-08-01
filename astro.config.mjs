@@ -4,5 +4,5 @@ import { defineConfig } from 'astro/config';
 // https://afcolmenaresb.github.io/Invitacion-boda/
 export default defineConfig({
   site: 'https://afcolmenaresb.github.io',
-  base: '/Invitacion-boda',
+  base: process.env.VERCEL === '1' ? '/' : '/Invitacion-boda/',
 });
