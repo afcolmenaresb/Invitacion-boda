@@ -249,12 +249,13 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   document.fonts?.ready.then(fitAll);
   window.addEventListener('resize', fitAll);
 
-  // --- Slow handwritten-ink intro (name, dedication, signature, location, CTA) ---
+  // --- Slow handwritten-ink intro (elephant, duck, name, dedication, signature, location, CTA) ---
   //
   // Whole sequence targets ~18-23s (default guest ~20.5-21s): a long,
   // intimate, continuous "ink on paper" reveal, not a fast UI transition.
-  // Duck, elephant, texture and background are never touched here -- they
-  // are visible from the very first frame.
+  // Elephant and duck draw in first (same ink technique as the text below),
+  // then the text sequence runs. Texture and background are never touched
+  // here -- they are visible from the very first frame.
   const EASE = 'cubic-bezier(0.22, 0.61, 0.36, 1)';
 
   function clamp(value: number, min: number, max: number) {
@@ -330,16 +331,22 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
   // Slightly irregular vertical boundary, sampled top-to-bottom, so the ink
   // front reads as an uneven hand-drawn stroke rather than a ruled line.
-  function jaggedClipPath(percent: number, seed: number) {
+  // fromRight anchors the fixed edge at 100% instead of 0% and mirrors the
+  // moving edge (100 - x) -- needed for elements that are themselves
+  // scaleX(-1)'d (elephant/duck), so the reveal still reads left-to-right
+  // or right-to-left on screen as intended, not backwards after the mirror.
+  function jaggedClipPath(percent: number, seed: number, fromRight = false) {
     const steps = 7;
-    const points = ['0% 0%'];
+    const anchor = fromRight ? '100%' : '0%';
+    const points = [`${anchor} 0%`];
     for (let i = 0; i <= steps; i++) {
       const t = i / steps;
       const jitter = Math.sin((t * 6 + seed) * 3.7) * 2.2;
-      const x = clamp(percent + jitter, 0, 100);
+      let x = clamp(percent + jitter, 0, 100);
+      if (fromRight) x = 100 - x;
       points.push(`${x.toFixed(2)}% ${(t * 100).toFixed(2)}%`);
     }
-    points.push('0% 100%');
+    points.push(`${anchor} 100%`);
     return `polygon(${points.join(', ')})`;
   }
 
@@ -357,6 +364,15 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     '#000 calc(var(--reveal) - 60%), #000 calc(var(--reveal) - 7%), ' +
     'rgba(0,0,0,.6) calc(var(--reveal) - 3%), rgba(0,0,0,.18) var(--reveal), ' +
     'transparent calc(var(--reveal) + 4%), transparent calc(var(--reveal) + 60%))';
+  // Same ramp, mirrored (270deg instead of 90deg) -- used for elements whose
+  // clip boundary moves right-to-left in local space (fromRight below), so
+  // the soft "wet ink" band stays aligned with the jagged clip edge instead
+  // of drifting to the wrong side once the element's own scaleX(-1) flips it.
+  const INK_MASK_REVERSED =
+    'linear-gradient(270deg, ' +
+    '#000 calc(var(--reveal) - 60%), #000 calc(var(--reveal) - 7%), ' +
+    'rgba(0,0,0,.6) calc(var(--reveal) - 3%), rgba(0,0,0,.18) var(--reveal), ' +
+    'transparent calc(var(--reveal) + 4%), transparent calc(var(--reveal) + 60%))';
   const REVEAL_HIDDEN_NUM = -12;
   const REVEAL_SHOWN_NUM = 110;
   const REVEAL_HIDDEN = `${REVEAL_HIDDEN_NUM}%`;
@@ -364,12 +380,13 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
   // Sets the fully-hidden state instantly (no transition), so this is what
   // gets painted on the very first frame -- never a flash of visible text.
-  function prepareInkHidden(el: HTMLElement, seed: number) {
+  function prepareInkHidden(el: HTMLElement, seed: number, fromRight = false) {
+    const mask = fromRight ? INK_MASK_REVERSED : INK_MASK;
     el.style.transition = 'none';
-    el.style.clipPath = jaggedClipPath(-10, seed);
+    el.style.clipPath = jaggedClipPath(-10, seed, fromRight);
     el.style.setProperty('--reveal', REVEAL_HIDDEN);
-    el.style.setProperty('mask-image', INK_MASK);
-    el.style.setProperty('-webkit-mask-image', INK_MASK);
+    el.style.setProperty('mask-image', mask);
+    el.style.setProperty('-webkit-mask-image', mask);
   }
 
   // Whether this engine actually tweens a *typed* custom property. Checked
@@ -406,12 +423,12 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   // straight to "fully revealed" only when resetInkUnit later clears the
   // mask (the "pop"). CSS transition is kept as a harmless no-op fallback
   // for engines that do support it, since both land on the same values.
-  function triggerInkReveal(el: HTMLElement, duration: number, delay: number, seed: number) {
+  function triggerInkReveal(el: HTMLElement, duration: number, delay: number, seed: number, fromRight = false) {
     verifyRevealInterpolates(el);
     el.style.transition = `clip-path ${duration}ms ${EASE} ${delay}ms`;
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        el.style.clipPath = jaggedClipPath(112, seed);
+        el.style.clipPath = jaggedClipPath(112, seed, fromRight);
       });
     });
 
@@ -684,8 +701,10 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     const namesEl = cover.querySelector<HTMLElement>('.cover__names');
     const locationEl = cover.querySelector<HTMLElement>('[data-animation="location"]');
     const ctaEl = cover.querySelector<HTMLElement>('[data-animation="cta"]');
+    const elephantEl = cover.querySelector<HTMLElement>('[data-animation="elephant"]');
+    const duckEl = cover.querySelector<HTMLElement>('[data-animation="duck"]');
 
-    if (!nameEl || !dedicationEl || !namesEl || !locationEl || !ctaEl) {
+    if (!nameEl || !dedicationEl || !namesEl || !locationEl || !ctaEl || !elephantEl || !duckEl) {
       showEverythingNow(cover);
       return;
     }
@@ -734,6 +753,12 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
       // ever painted is the hidden state -- not a flash of visible text.
       nameLines.forEach((line, i) => prepareInkHidden(line, i));
       dedicationLines.forEach((line, i) => prepareInkHidden(line, 100 + i));
+      // fromRight=true on the elephant compensates for its own scaleX(-1)
+      // so the reveal still reads as "entering from the left" on screen
+      // (see jaggedClipPath); the duck's default direction already reads
+      // right-to-left toward the center once its own scaleX(-1) is applied.
+      prepareInkHidden(elephantEl, 200, true);
+      prepareInkHidden(duckEl, 201, false);
       prepareSignatureHidden(namesEl);
       prepareFadeHidden(locationEl);
       prepareFadeHidden(ctaEl);
@@ -749,7 +774,20 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
       bootCompleted = true;
       cover.removeAttribute('data-cover-boot');
 
-      await sleep(1300); // silence: scene visible, nothing written yet
+      // Animals draw in first, before any text starts. Elephant leads
+      // (delay 0), duck follows with a small stagger (delay 250ms); both
+      // run 1500ms. The old silent pause (1300ms) is extended only as much
+      // as needed so the duck's reveal has finished (and the elephant is
+      // long done) before the name/dedication block begins.
+      const elephantRevealDelay = 0;
+      const elephantRevealDuration = 1500;
+      const duckRevealDelay = 250;
+      const duckRevealDuration = 1500;
+      triggerInkReveal(elephantEl, elephantRevealDuration, elephantRevealDelay, 200, true);
+      triggerInkReveal(duckEl, duckRevealDuration, duckRevealDelay, 201, false);
+
+      const animalsRevealSpan = Math.max(1300, duckRevealDelay + duckRevealDuration);
+      await sleep(animalsRevealSpan);
       if (token !== animationRunToken) return;
 
       cover.classList.add('is-animating');
@@ -784,6 +822,8 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
       nameEl.textContent = originalName;
       dedicationEl.textContent = originalDedication;
       resetSignatureUnit(namesEl);
+      resetInkUnit(elephantEl);
+      resetInkUnit(duckEl);
       [locationEl, ctaEl].forEach(resetFadeUnit);
       resetUnderline(ctaEl);
 
@@ -793,6 +833,8 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
       nameEl.textContent = originalName;
       dedicationEl.textContent = originalDedication;
       resetSignatureUnit(namesEl);
+      resetInkUnit(elephantEl);
+      resetInkUnit(duckEl);
       [locationEl, ctaEl].forEach(resetFadeUnit);
       resetUnderline(ctaEl);
       showEverythingNow(cover);
@@ -978,22 +1020,24 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   /*
     FOUC guard: data-cover-boot="pending" is rendered server-side, right
     in the markup, so it is already present on the very first paint --
-    nothing here waits on JS timing. While it is set, exactly the five
-    pieces the reveal sequence writes (name, dedication, signature,
-    location, CTA) are hidden via opacity+visibility, which keeps their
+    nothing here waits on JS timing. While it is set, the pieces the
+    reveal sequence writes (name, dedication, signature, location, CTA,
+    elephant, duck) are hidden via opacity+visibility, which keeps their
     layout space -- no reflow when they later appear, and no display:none.
-    Everything else (background, texture, duck, elephant, the orientation
-    notice) is untouched and visible from the first frame. The attribute
-    is removed by the script above the instant the reveal's own per
-    -element hidden state (clip-path/mask) is already in place, so the
-    handoff causes no visible change -- never a frame with the full,
-    final content flashed.
+    Everything else (background, texture, the orientation notice) is
+    untouched and visible from the first frame. The attribute is removed
+    by the script above the instant the reveal's own per-element hidden
+    state (clip-path/mask for elephant/duck; clip-path/mask/opacity for
+    the rest) is already in place, so the handoff causes no visible
+    change -- never a frame with the full, final content flashed.
   */
   .cover[data-cover-boot='pending'] [data-animation='guest-name'],
   .cover[data-cover-boot='pending'] [data-animation='dedication'],
   .cover[data-cover-boot='pending'] .cover__names,
   .cover[data-cover-boot='pending'] [data-animation='location'],
-  .cover[data-cover-boot='pending'] [data-animation='cta'] {
+  .cover[data-cover-boot='pending'] [data-animation='cta'],
+  .cover[data-cover-boot='pending'] [data-animation='elephant'],
+  .cover[data-cover-boot='pending'] [data-animation='duck'] {
     opacity: 0;
     visibility: hidden;
   }
