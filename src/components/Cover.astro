@@ -18,19 +18,115 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 ---
 
 <script is:inline>
-  // Runs synchronously, before the fixed-canvas markup below is painted,
-  // so --cover-scale is already correct on first paint (no flash from a
-  // generic fallback value). Re-applied on resize/orientation change.
+  // Runs synchronously, before the fixed-canvas markup below is painted, so
+  // every --cover-scale* variable is already correct on first paint (no
+  // flash from a generic fallback value, no temporary margins). One single
+  // recalculation function handles both device paths so there is exactly
+  // one set of listeners:
+  //
+  // - viewportWidth >= 1200 (laptops/desktops): untouched from before --
+  //   a single uniform --cover-scale = Math.min(innerWidth/390,
+  //   innerHeight/844), read verbatim by .cover-canvas's existing rule.
+  // - portrait AND viewportWidth < 1200 (phones/tablets upright): the
+  //   fixed 390x844 canvas is stretched, non-uniformly, to exactly fill
+  //   the visible viewport -- --cover-scale-x/--cover-scale-y -- via the
+  //   `is-fill-viewport` class on <html>, which also removes any outer
+  //   margin/scroll (see the global styles below).
+  // - landscape AND short side < 1200 (phones/tablets on their side): the
+  //   invitation itself never shows -- `is-landscape-locked` on <html>
+  //   reveals the full-viewport rotate-device notice instead.
   (function () {
-    function applyCoverScale() {
-      var scale = Math.min(window.innerWidth / 390, window.innerHeight / 844);
-      document.documentElement.style.setProperty('--cover-scale', String(scale));
+    var MOBILE_BREAKPOINT = 1200;
+    var CANVAS_WIDTH = 390;
+    var CANVAS_HEIGHT = 844;
+    var root = document.documentElement;
+    var scheduled = false;
+
+    // Section 3's exact formula: visualViewport first (it tracks mobile
+    // toolbars, the on-screen keyboard and pinch-zoom correctly), falling
+    // back to the documentElement's client box.
+    function getViewportWidth() {
+      return (window.visualViewport && window.visualViewport.width) || document.documentElement.clientWidth;
     }
-    applyCoverScale();
-    window.addEventListener('resize', applyCoverScale);
-    window.addEventListener('orientationchange', applyCoverScale);
+    function getViewportHeight() {
+      return (window.visualViewport && window.visualViewport.height) || document.documentElement.clientHeight;
+    }
+
+    function update() {
+      scheduled = false;
+
+      var viewportWidth = getViewportWidth();
+      var viewportHeight = getViewportHeight();
+      var isPortrait = window.matchMedia('(orientation: portrait)').matches;
+      var shortSide = Math.min(viewportWidth, viewportHeight);
+
+      var isFillViewport = isPortrait && viewportWidth < MOBILE_BREAKPOINT;
+      var isLandscapeLocked = !isPortrait && shortSide < MOBILE_BREAKPOINT;
+
+      root.classList.toggle('is-fill-viewport', isFillViewport);
+      root.classList.toggle('is-landscape-locked', isLandscapeLocked);
+      var locked = isFillViewport || isLandscapeLocked;
+      root.classList.toggle('is-viewport-locked', locked);
+      if (document.body) {
+        document.body.classList.toggle('is-viewport-locked', locked);
+      }
+
+      if (isFillViewport) {
+        root.style.setProperty('--cover-scale-x', String(viewportWidth / CANVAS_WIDTH));
+        root.style.setProperty('--cover-scale-y', String(viewportHeight / CANVAS_HEIGHT));
+        root.style.setProperty('--cover-viewport-width', viewportWidth + 'px');
+        root.style.setProperty('--cover-viewport-height', viewportHeight + 'px');
+      } else if (!isLandscapeLocked) {
+        // Desktop/laptop path -- untouched: window.innerWidth/innerHeight,
+        // Math.min, the same single uniform --cover-scale as before.
+        var scale = Math.min(window.innerWidth / CANVAS_WIDTH, window.innerHeight / CANVAS_HEIGHT);
+        root.style.setProperty('--cover-scale', String(scale));
+      }
+    }
+
+    function scheduleUpdate() {
+      if (scheduled) return;
+      scheduled = true;
+      requestAnimationFrame(update);
+    }
+
+    update();
+    window.addEventListener('resize', scheduleUpdate);
+    window.addEventListener('orientationchange', scheduleUpdate);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', scheduleUpdate);
+      // Mobile browsers shrink/grow the visual viewport (address bar,
+      // on-screen keyboard) by scrolling it, not just resizing it.
+      window.visualViewport.addEventListener('scroll', scheduleUpdate);
+    }
+
+    // Best-effort only -- orientation can't be forced; the rotate-device
+    // overlay above is the real, always-working fallback.
+    if (screen.orientation && screen.orientation.lock) {
+      screen.orientation.lock('portrait').catch(function () {});
+    }
   })();
 </script>
+
+<div
+  class="orientation-lock"
+  style={`background-image: url('${base}/images/textura_vertical_2.png')`}
+>
+  <div class="orientation-lock__content">
+    <svg
+      class="orientation-lock__icon"
+      viewBox="0 0 48 80"
+      width="48"
+      height="80"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <rect x="4" y="4" width="40" height="72" rx="8" fill="none" stroke="currentColor" stroke-width="3" />
+      <line x1="18" y1="70" x2="30" y2="70" stroke="currentColor" stroke-width="3" stroke-linecap="round" />
+    </svg>
+    <p class="orientation-lock__text">Para vivir esta experiencia,<br />gira tu dispositivo.</p>
+  </div>
+</div>
 
 <div class="cover-frame" style={`background-image: url('${base}/images/textura_vertical_2.png')`}>
   <div class="cover-canvas">
@@ -514,6 +610,33 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     cover.classList.add('is-animation-complete');
   }
 
+  // While the device is landscape with a short side under 1200px, the
+  // inline script (above) keeps `is-landscape-locked` on <html> and shows
+  // the full-viewport rotate-device notice over everything. Nothing here
+  // should start hiding or timing the reveal until that clears, so a
+  // load that begins in landscape starts the whole sequence from scratch
+  // the moment the device is turned upright -- never a partial start.
+  function isLandscapeLocked() {
+    return document.documentElement.classList.contains('is-landscape-locked');
+  }
+
+  function waitWhilePortraitLocked(): Promise<void> {
+    if (!isLandscapeLocked()) return Promise.resolve();
+    return new Promise((resolve) => {
+      function check() {
+        if (!isLandscapeLocked()) {
+          window.removeEventListener('resize', check);
+          window.removeEventListener('orientationchange', check);
+          window.visualViewport?.removeEventListener('resize', check);
+          resolve();
+        }
+      }
+      window.addEventListener('resize', check);
+      window.addEventListener('orientationchange', check);
+      window.visualViewport?.addEventListener('resize', check);
+    });
+  }
+
   async function initInkReveal() {
     const cover = document.querySelector<HTMLElement>('.cover');
     if (!cover) return;
@@ -538,6 +661,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     const originalDedication = dedicationEl.textContent ?? '';
 
     try {
+      await waitWhilePortraitLocked();
       await Promise.all([document.fonts?.ready ?? Promise.resolve(), waitForImages(cover)]);
       fitAll();
       await nextFrame();
@@ -548,7 +672,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
       // dedication (~67 chars) near 7.2s, per the approved choreography.
       const nameDuration = clamp(2400 + nameLen * 47, 2400, 3900);
       const dedicationDuration = clamp(3500 + dedicationLen * 55, 5600, 8600);
-      const signatureDuration = 6500;
+      const signatureDuration = 5000;
       const locationDuration = 1200;
       const ctaDuration = 1200;
       const ctaStagger = 370;
@@ -637,6 +761,24 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   }
 
   /*
+    Applied to <html> and <body> only while the mobile-portrait fill mode
+    or the landscape rotate-device notice is active (both toggled by the
+    inline script above) -- laptops/desktops never get this class, so
+    their document is completely untouched. Removes any outer margin and
+    blocks page-level scroll/bounce so the cover is the only thing the
+    visible viewport can ever show.
+  */
+  :global(html.is-viewport-locked),
+  :global(body.is-viewport-locked) {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  /*
     Fixed logical canvas: the cover is a fixed artistic composition
     designed at exactly 390x844 -- it no longer redistributes internally
     per device. .cover-frame fills the real viewport and centers
@@ -671,6 +813,21 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     }
   }
 
+  /*
+    Portrait phones/tablets under 1200px only: the frame is pinned to the
+    exact visible viewport box measured by the inline script
+    (--cover-viewport-width/height, from visualViewport) instead of the
+    svh/dvh percentage above, and taken out of document flow entirely so
+    no ancestor's layout can reintroduce a scrollbar or outer margin.
+    Laptops/desktops (no is-fill-viewport class) never match this rule.
+  */
+  :global(html.is-fill-viewport) .cover-frame {
+    position: fixed;
+    inset: 0;
+    width: var(--cover-viewport-width, 100%);
+    height: var(--cover-viewport-height, 100svh);
+  }
+
   .cover-canvas {
     width: 390px;
     height: 844px;
@@ -680,6 +837,22 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
        centered, just not scale-corrected (cropped by .cover-frame's
        overflow:hidden on very small screens instead of blank). */
     transform: scale(var(--cover-scale, 1));
+  }
+
+  /*
+    Same portrait/phone-tablet path: the 390x844 canvas is stretched
+    non-uniformly, independently on each axis, to exactly fill the
+    measured viewport -- no Math.min, no aspect ratio preserved, no
+    clamping. .cover-frame no longer centers it via flexbox (position:
+    fixed above takes it out of flow), so centering is redone here with
+    the standard translate(-50%,-50%) trick against the frame's own
+    top/left 50%.
+  */
+  :global(html.is-fill-viewport) .cover-canvas {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(var(--cover-scale-x, 1), var(--cover-scale-y, 1));
   }
 
   /*
@@ -924,5 +1097,53 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
   .ink-word {
     display: inline;
+  }
+
+  /*
+    Rotate-device notice: covers the entire visible viewport, hidden
+    unless <html> carries is-landscape-locked (set by the inline script
+    above only for phones/tablets whose short side is under 1200px while
+    in landscape). Never shown on laptops/desktops. Reuses the same paper
+    texture as .cover-frame, set inline the same way, so it reads as part
+    of the same object rather than a generic error screen.
+  */
+  .orientation-lock {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--color-bg);
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-position: 60% top;
+    overflow: hidden;
+  }
+
+  :global(html.is-landscape-locked) .orientation-lock {
+    display: flex;
+  }
+
+  .orientation-lock__content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    padding: 24px;
+    text-align: center;
+  }
+
+  .orientation-lock__icon {
+    color: #7e5e49;
+  }
+
+  .orientation-lock__text {
+    margin: 0;
+    font-family: 'Homemade Apple', cursive;
+    font-weight: 400;
+    font-size: 1.6rem;
+    line-height: 1.4;
+    color: #211c18;
   }
 </style>
