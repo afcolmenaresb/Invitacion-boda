@@ -774,20 +774,18 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
       bootCompleted = true;
       cover.removeAttribute('data-cover-boot');
 
-      // Animals draw in first, before any text starts. Elephant leads
-      // (delay 0), duck follows with a small stagger (delay 250ms); both
-      // run 1500ms. The old silent pause (1300ms) is extended only as much
-      // as needed so the duck's reveal has finished (and the elephant is
-      // long done) before the name/dedication block begins.
+      // Animals draw in slowly, overlapping the text sequence rather than
+      // blocking it. Elephant leads (delay 0), duck follows with a small
+      // stagger (delay 250ms); both run 6000ms, well past the point the
+      // text sequence starts below.
       const elephantRevealDelay = 0;
-      const elephantRevealDuration = 1500;
+      const elephantRevealDuration = 6000;
       const duckRevealDelay = 250;
-      const duckRevealDuration = 1500;
+      const duckRevealDuration = 6000;
       triggerInkReveal(elephantEl, elephantRevealDuration, elephantRevealDelay, 200, true);
       triggerInkReveal(duckEl, duckRevealDuration, duckRevealDelay, 201, false);
 
-      const animalsRevealSpan = Math.max(1300, duckRevealDelay + duckRevealDuration);
-      await sleep(animalsRevealSpan);
+      await sleep(1300); // silence: scene visible, nothing written yet
       if (token !== animationRunToken) return;
 
       cover.classList.add('is-animating');
