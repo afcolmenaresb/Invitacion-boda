@@ -503,7 +503,17 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     }
   }
 
+  // While the ink-reveal has already split the guest name/dedication into
+  // per-line spans (.ink-line), their clip-path is a percentage of each
+  // line's own box -- refitting font-size/line-height here (e.g. from a
+  // 'resize' fired mid-animation by a mobile browser's address bar
+  // settling) would change that box's geometry out from under the
+  // in-progress reveal with no transition, popping/cropping whatever
+  // fraction was already revealed. Skip the refit entirely while any
+  // .ink-line exists; it always runs again once the sequence resets the
+  // text back to its plain, unsplit form.
   function fitAll() {
+    if (document.querySelector('.ink-line')) return;
     document.querySelectorAll<HTMLElement>('[data-autofit]').forEach(fitText);
     fitDedicationHeight();
     checkDedicationOverflow();
@@ -1135,12 +1145,20 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
       cover.classList.add('is-animating');
 
-      revealLines(nameLines, nameDuration, 0);
-      await sleep(Math.max(nameDuration - 250, 0));
+      // revealLines returns the *actual* elapsed time its staggered,
+      // overlapping lines take to settle -- shorter than the nominal
+      // nameDuration/dedicationDuration by 2 * LINE_OVERLAP_MS per extra
+      // line, since each line starts before the previous one fully
+      // finishes. Sleeping against the nominal duration instead (as
+      // before) left a dead gap after the text had already finished
+      // writing and before the next phase began -- most noticeable
+      // between the dedication and the signature on multi-line dedications.
+      const nameActualDuration = revealLines(nameLines, nameDuration, 0);
+      await sleep(Math.max(nameActualDuration - 250, 0));
       if (token !== animationRunToken) return;
 
-      revealLines(dedicationLines, dedicationDuration, 100);
-      await sleep(Math.max(dedicationDuration - 250, 0));
+      const dedicationActualDuration = revealLines(dedicationLines, dedicationDuration, 100);
+      await sleep(Math.max(dedicationActualDuration - 250, 0));
       if (token !== animationRunToken) return;
 
       triggerSignatureReveal(namesEl, signatureDuration, 0);
