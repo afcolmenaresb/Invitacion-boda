@@ -515,17 +515,30 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     }
   }
 
-  // While the ink-reveal has already split the guest name/dedication into
-  // per-line spans (.ink-line), their clip-path is a percentage of each
-  // line's own box -- refitting font-size/line-height here (e.g. from a
-  // 'resize' fired mid-animation by a mobile browser's address bar
-  // settling) would change that box's geometry out from under the
-  // in-progress reveal with no transition, popping/cropping whatever
-  // fraction was already revealed. Skip the refit entirely while any
-  // .ink-line exists; it always runs again once the sequence resets the
-  // text back to its plain, unsplit form.
+  // While the ink-reveal has split the guest name/dedication into per-line
+  // spans (.ink-line), their clip-path is a percentage of each line's own
+  // box -- refitting font-size/line-height here (e.g. from a 'resize'
+  // fired mid-animation by a mobile browser's address bar settling) would
+  // change that box's geometry out from under the in-progress reveal with
+  // no transition, popping/cropping whatever fraction was already
+  // revealed. Skip the refit while the animation is actually running.
+  //
+  // This used to key off .ink-line's mere presence in the DOM, which was
+  // correct back when the sequence tore the spans down and rebuilt plain
+  // text at the end -- .ink-line existing *was* "mid-animation". Now the
+  // spans are the permanent, final markup (see showEverythingNow), so
+  // that check would block every future fitAll() call for the rest of
+  // the page's life, including legitimate ones from a later real resize
+  // (address bar, orientation change) long after the reveal settled.
+  // is-preparing-animation/is-animating (added right before splitIntoLines
+  // creates the first .ink-line, removed once is-animation-complete is
+  // set -- see startAnimationOnce/showEverythingNow) track the animation
+  // itself, not the spans' lifetime, so refitting is blocked only for the
+  // few seconds the reveal is actually in flight and freely allowed
+  // before it starts and forever after it completes.
   function fitAll() {
-    if (document.querySelector('.ink-line')) return;
+    const cover = document.querySelector('.cover');
+    if (cover?.classList.contains('is-preparing-animation') || cover?.classList.contains('is-animating')) return;
     document.querySelectorAll<HTMLElement>('[data-autofit]').forEach(fitText);
     fitDedicationHeight();
     checkDedicationOverflow();
@@ -1137,6 +1150,14 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
       const ctaStagger = 370;
       const underlineDuration = 1100;
 
+      // Marks the cover as "animation in progress" before splitIntoLines
+      // creates the first .ink-line -- fitAll() reads this class (not
+      // .ink-line's mere presence, which now outlives the animation) to
+      // know whether it's safe to refit. Covering the window from here,
+      // not from nextFrame() below, means there's no gap where .ink-line
+      // exists but the class hasn't caught up yet.
+      cover.classList.add('is-preparing-animation');
+
       const nameLines = splitIntoLines(nameEl);
       const dedicationLines = splitIntoLines(dedicationEl);
 
@@ -1154,7 +1175,6 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
       prepareFadeHidden(locationEl);
       prepareFadeHidden(ctaEl);
       prepareUnderlineHidden(ctaEl);
-      cover.classList.add('is-preparing-animation');
       await nextFrame();
       if (token !== animationRunToken) return;
 
@@ -1267,6 +1287,20 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   // Pure safety net, never part of the normal flow: a stuck load (a JS
   // error nothing caught, a font/image that never resolves, a device
   // stuck reporting landscape) must never hide the invitation forever.
+  //
+  // This is a *boot* watchdog, not a whole-sequence one, and can't become
+  // one by accident: it starts counting from script evaluation (page
+  // load), but its only guard is bootCompleted -- a one-way latch flipped
+  // near the very start of startAnimationOnce, right after fonts/images
+  // resolve and the first hidden frame is painted, well before the
+  // ~18-23s reveal (elephant/duck/name/dedication/signature/location/CTA)
+  // even begins. Once true it never flips back, so by the time this timer
+  // could fire against a run that's actually progressing, bootCompleted
+  // is already true and it no-ops -- it can only ever fire while still
+  // waiting on fonts/images/orientation, i.e. before the visible sequence
+  // has started at all. There is nothing to size against the sequence's
+  // own computed duration here: that duration is irrelevant to what this
+  // timer guards.
   window.setTimeout(() => {
     if (bootCompleted) return;
     animationRunToken += 1; // invalidate any run still in flight
