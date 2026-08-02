@@ -934,24 +934,16 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     }
     if (splitIndex < 1 || splitIndex >= text.length) return [span];
 
-    // secondSpan is, by construction, always the first thing on the line it
-    // wraps to (it's exactly the overflow of the word that didn't fit on
-    // the line above -- nothing else can land before it there). It needs
-    // the same left paint-space as any other line-opening span (see
-    // .ink-line's own padding-left/margin-left), one nesting level deeper:
-    // .ink-line's padding widens *that* box, but a wrapped word's own
-    // left-overshooting stroke is clipped against its *own* box first as
-    // an inline child, so it needs its own matching slack too. firstSpan
-    // gets the same treatment for the rarer case where the split word was
-    // itself the first word on its (earlier) line. Applying it
-    // unconditionally is harmless when a span isn't line-opening -- the
-    // negative margin cancels the padding in the surrounding inline flow
-    // either way, so no word's position shifts.
+    // Plain .ink-word spans, same as any other word -- no clip-path, mask
+    // or padding of their own. The only thing that ever clips or masks
+    // ink is .ink-line, once, on the shared line box both halves end up
+    // in; these just need to never restrict their own content, which
+    // display:inline + the default overflow:visible already guarantees.
     const firstSpan = document.createElement('span');
-    firstSpan.className = 'ink-word ink-word--split';
+    firstSpan.className = 'ink-word';
     firstSpan.textContent = text.slice(0, splitIndex);
     const secondSpan = document.createElement('span');
-    secondSpan.className = 'ink-word ink-word--split';
+    secondSpan.className = 'ink-word';
     secondSpan.textContent = text.slice(splitIndex);
     span.replaceWith(firstSpan, secondSpan);
     return [firstSpan, secondSpan];
@@ -1026,16 +1018,35 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     return cursor + durations[n - 1];
   }
 
-  // Reveals everything immediately, with no timers and no hidden state --
-  // used for reduced-motion, missing elements, the error fallback, and
-  // the 8s safety timeout. Always lifts the FOUC boot guard too, so
-  // nothing ever depends on the timed sequence having run for the cover
-  // to become fully, finally visible.
+  // The single place every exit path converges on: normal completion,
+  // the error fallback, reduced motion, and the 8s safety timeout. It
+  // never rebuilds anything -- the guest name and dedication keep the
+  // exact per-line/per-word spans splitIntoLines produced (if it ever
+  // ran at all); this only strips whatever ink-reveal styling is
+  // currently on them, however far the reveal got. Clearing clip-path/
+  // mask-image/transition off an element already sitting at its fully
+  // -revealed value is visually a no-op (no clip == the same "everything
+  // visible" result), so the frame right before and right after this
+  // runs are pixel-identical -- there is no separate "final" layout to
+  // fall back to, and so no chance for one to disagree with the other.
   function showEverythingNow(cover: HTMLElement) {
     bootCompleted = true;
     cover.removeAttribute('data-cover-boot');
     cover.classList.remove('is-preparing-animation', 'is-animating');
     cover.classList.add('is-animation-complete');
+
+    cover.querySelectorAll<HTMLElement>('.ink-line').forEach(resetInkUnit);
+    const elephantEl = cover.querySelector<HTMLElement>('[data-animation="elephant"]');
+    const duckEl = cover.querySelector<HTMLElement>('[data-animation="duck"]');
+    const namesEl = cover.querySelector<HTMLElement>('.cover__names');
+    const locationEl = cover.querySelector<HTMLElement>('[data-animation="location"]');
+    const ctaEl = cover.querySelector<HTMLElement>('[data-animation="cta"]');
+    if (elephantEl) resetInkUnit(elephantEl);
+    if (duckEl) resetInkUnit(duckEl);
+    if (namesEl) resetSignatureUnit(namesEl);
+    if (locationEl) resetFadeUnit(locationEl);
+    if (ctaEl) resetFadeUnit(ctaEl);
+    if (ctaEl) resetUnderline(ctaEl);
   }
 
   // True whenever <html> carries is-landscape-locked -- set by the inline
@@ -1205,24 +1216,18 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
       await sleep(1300); // final settle: nothing else moves
       if (token !== animationRunToken) return;
 
-      nameEl.textContent = originalName;
-      dedicationEl.textContent = originalDedication;
-      resetSignatureUnit(namesEl);
-      resetInkUnit(elephantEl);
-      resetInkUnit(duckEl);
-      [locationEl, ctaEl].forEach(resetFadeUnit);
-      resetUnderline(ctaEl);
-
+      // No textContent/innerHTML swap here: the .ink-line/.ink-word spans
+      // splitIntoLines produced *are* the final markup. showEverythingNow
+      // below strips their ink-reveal styling in place, so the line
+      // breaks, word wrapping and hyphens that were on screen for the
+      // whole reveal are exactly what's left standing afterward -- never
+      // a second, independently-computed "final" layout to disagree with
+      // the animated one.
       showEverythingNow(cover);
     } catch (err) {
       // Never leave the cover partially hidden if something goes wrong.
-      nameEl.textContent = originalName;
-      dedicationEl.textContent = originalDedication;
-      resetSignatureUnit(namesEl);
-      resetInkUnit(elephantEl);
-      resetInkUnit(duckEl);
-      [locationEl, ctaEl].forEach(resetFadeUnit);
-      resetUnderline(ctaEl);
+      // Same reasoning as above: whatever markup exists (split or still
+      // plain, depending on how early this failed) is left as-is.
       showEverythingNow(cover);
     }
   }
@@ -1674,46 +1679,39 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     tinta (nombre, dedicatoria). display:block/inline preserva exactamente
     el mismo salto de línea ya calculado antes de dividir el texto, así que
     no altera la composición en reposo ni cuando JS está deshabilitado.
+    Este es el único DOM que existe: nunca se reconstruye ni se vuelve a
+    texto plano (ver showEverythingNow), así que no hay una versión
+    "animada" y otra "final" que puedan desacordar entre sí.
   */
   /*
-    The handwritten font's strokes can extend left of a glyph's own logical
-    box (cursive entry swashes, initial flourishes). The ink-reveal's
-    clip-path/mask anchor their hidden edge at the line's own 0% -- exactly
-    that logical box edge -- so any such overshoot was being clipped for
-    the whole animation and only appeared the instant the plain-text swap
-    at the end removed the clip-path, reading as a sudden pop/jump.
-    padding-left carves out extra room inside the box (so 0% sits further
-    left, ahead of the overshoot) and the equal negative margin-left cancels
-    it back out in the surrounding layout -- the line's actual on-screen
-    start doesn't move, only how much slack the clip has to its left.
-    em-based so it scales with both the kicker's and the dedication's own
-    font-size.
+    .ink-line is the *only* element in the whole name/dedication subtree
+    that ever carries a clip-path or mask-image -- .ink-word (plain or
+    split by splitWrappedWordSpan) never does, so there is exactly one
+    reveal mask per line, and its inline children just paint through
+    (overflow: visible, the default, kept explicit below).
+    The handwritten font's strokes can extend past a glyph's own logical
+    box on either side (a cursive entry swash to the left of the first
+    letter, a trailing flourish or connecting tail to the right of the
+    last) -- clip-path/mask-image are percentages of the line's own
+    border box, so without slack past 0%/100% those strokes would be cut
+    for the entire reveal, only exposed once the clip is removed. Equal
+    padding + negative margin on both sides carves out that slack inside
+    the box (0% sits left of the first letter, 100% sits right of the
+    last) while cancelling back out in the surrounding layout, so the
+    line's actual on-screen start/end never moves. em-based so it scales
+    with both the kicker's and the dedication's own font-size.
   */
   .ink-line {
     display: block;
     padding-left: 0.4em;
+    padding-right: 0.4em;
     margin-left: -0.4em;
+    margin-right: -0.4em;
   }
 
   .ink-word {
     display: inline;
-  }
-
-  /*
-    Applied to both halves of a word split by splitWrappedWordSpan (a word
-    whose soft hyphen made the browser wrap it mid-span). The second half
-    is always the first thing on the line it wraps to, so its own
-    left-overshooting stroke is clipped against the .ink-word's own inline
-    box a level below .ink-line's already-widened one; this gives it the
-    same slack, one level deeper. Applied to the first half too for the
-    rarer case where the split word opened its own (earlier) line.
-    Harmless on a half that isn't line-opening -- the negative margin
-    cancels the padding in the surrounding inline flow, so this never
-    shifts any word's position.
-  */
-  .ink-word--split {
-    padding-left: 0.4em;
-    margin-left: -0.4em;
+    overflow: visible;
   }
 
   /*
