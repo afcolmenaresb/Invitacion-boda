@@ -26,20 +26,19 @@ const {
 // (see fitDedicationHeight).
 //
 // The max was lowered from 1.4rem (~20.16px visual on the reference
-// device) to 1.1rem (~17.6px visual). Measured directly against the fixed
-// 140px zone: at 1.4rem the default guest dedication ("Hay viajes que no
+// device) to 1.125rem (18px). Measured directly against the fixed 140px
+// zone: at 1.4rem the default guest dedication ("Hay viajes que no
 // tendrían el mismo sentido sin ciertas personas.") wraps into 7 ragged
 // lines with "mismo" isolated alone; the wrap pattern flips to a full
 // 5-line reading -- "Hay viajes que / no tendrían el / mismo sentido /
-// sin ciertas / personas." -- at exactly 18px (1.125rem) and stays there
-// down to ~15.5px, so 1.1rem sits comfortably inside that stable range
-// rather than right on the flip point. Only the ceiling changed, so this
-// only affects dedications short enough to sit at or near the ramp's
-// start; medium/long dedications (which already sit below this ceiling)
-// keep their existing sizes.
+// sin ciertas / personas." -- at exactly 18px and stays there down to
+// ~15.5px. Only the ceiling changed, so this only affects dedications
+// short enough to sit at or near the ramp's start; medium/long
+// dedications (which already sit below this ceiling) keep their
+// existing sizes.
 const DEDICATION_SCALE_START_LEN = 55;
 const DEDICATION_SCALE_END_LEN = 160;
-const DEDICATION_FONT_SIZE_MAX_REM = 1.1;
+const DEDICATION_FONT_SIZE_MAX_REM = 1.125;
 const DEDICATION_FONT_SIZE_MIN_REM = 0.85;
 const DEDICATION_LINE_HEIGHT_MAX = 1.6;
 const DEDICATION_LINE_HEIGHT_MIN = 1.3;
@@ -429,7 +428,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     // so a long dedication can still end up larger than its own SSR
     // baseline guess, but never past what a short one is allowed.
     const rootFontSizePx = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-    const DEDICATION_FONT_SIZE_MAX_REM_PX = 1.1 * rootFontSizePx;
+    const DEDICATION_FONT_SIZE_MAX_REM_PX = 1.125 * rootFontSizePx;
 
     if (applySize(DEDICATION_FONT_SIZE_MAX_REM_PX) <= maxHeight) {
       // Fits at the full typographic ceiling -- use it outright.
@@ -935,11 +934,24 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     }
     if (splitIndex < 1 || splitIndex >= text.length) return [span];
 
+    // secondSpan is, by construction, always the first thing on the line it
+    // wraps to (it's exactly the overflow of the word that didn't fit on
+    // the line above -- nothing else can land before it there). It needs
+    // the same left paint-space as any other line-opening span (see
+    // .ink-line's own padding-left/margin-left), one nesting level deeper:
+    // .ink-line's padding widens *that* box, but a wrapped word's own
+    // left-overshooting stroke is clipped against its *own* box first as
+    // an inline child, so it needs its own matching slack too. firstSpan
+    // gets the same treatment for the rarer case where the split word was
+    // itself the first word on its (earlier) line. Applying it
+    // unconditionally is harmless when a span isn't line-opening -- the
+    // negative margin cancels the padding in the surrounding inline flow
+    // either way, so no word's position shifts.
     const firstSpan = document.createElement('span');
-    firstSpan.className = 'ink-word';
+    firstSpan.className = 'ink-word ink-word--split';
     firstSpan.textContent = text.slice(0, splitIndex);
     const secondSpan = document.createElement('span');
-    secondSpan.className = 'ink-word';
+    secondSpan.className = 'ink-word ink-word--split';
     secondSpan.textContent = text.slice(splitIndex);
     span.replaceWith(firstSpan, secondSpan);
     return [firstSpan, secondSpan];
@@ -1685,6 +1697,23 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
   .ink-word {
     display: inline;
+  }
+
+  /*
+    Applied to both halves of a word split by splitWrappedWordSpan (a word
+    whose soft hyphen made the browser wrap it mid-span). The second half
+    is always the first thing on the line it wraps to, so its own
+    left-overshooting stroke is clipped against the .ink-word's own inline
+    box a level below .ink-line's already-widened one; this gives it the
+    same slack, one level deeper. Applied to the first half too for the
+    rarer case where the split word opened its own (earlier) line.
+    Harmless on a half that isn't line-opening -- the negative margin
+    cancels the padding in the surrounding inline flow, so this never
+    shifts any word's position.
+  */
+  .ink-word--split {
+    padding-left: 0.4em;
+    margin-left: -0.4em;
   }
 
   /*
