@@ -17,16 +17,29 @@ const {
 // Continuous size ramp for the dedication (replaces the old 3-bucket
 // short/medium/long system): font-size and line-height shrink smoothly as
 // the character count grows, instead of jumping between fixed steps. Below
-// DEDICATION_SCALE_START_LEN the size is clamped at its max (keeps today's
-// short dedications visually unchanged); at/after DEDICATION_SCALE_END_LEN
-// (the absolute 160-char cap enforced in guests.ts) it's clamped at its
-// legible minimum. This is the *first* pass, computed server-side from
-// character count alone; the client script below adds a second, height
-// -based pass that shrinks further only if the rendered block still runs
-// into .cover__names' safe margin (see fitDedicationHeight).
+// DEDICATION_SCALE_START_LEN the size is clamped at its max; at/after
+// DEDICATION_SCALE_END_LEN (the absolute 160-char cap enforced in
+// guests.ts) it's clamped at its legible minimum. This is the *first*
+// pass, computed server-side from character count alone; the client
+// script below adds a second, height-based pass that shrinks further
+// only if the rendered block still runs into .cover__names' safe margin
+// (see fitDedicationHeight).
+//
+// The max was lowered from 1.4rem (~20.16px visual on the reference
+// device) to 1.1rem (~17.6px visual). Measured directly against the fixed
+// 140px zone: at 1.4rem the default guest dedication ("Hay viajes que no
+// tendrían el mismo sentido sin ciertas personas.") wraps into 7 ragged
+// lines with "mismo" isolated alone; the wrap pattern flips to a full
+// 5-line reading -- "Hay viajes que / no tendrían el / mismo sentido /
+// sin ciertas / personas." -- at exactly 18px (1.125rem) and stays there
+// down to ~15.5px, so 1.1rem sits comfortably inside that stable range
+// rather than right on the flip point. Only the ceiling changed, so this
+// only affects dedications short enough to sit at or near the ramp's
+// start; medium/long dedications (which already sit below this ceiling)
+// keep their existing sizes.
 const DEDICATION_SCALE_START_LEN = 55;
 const DEDICATION_SCALE_END_LEN = 160;
-const DEDICATION_FONT_SIZE_MAX_REM = 1.4;
+const DEDICATION_FONT_SIZE_MAX_REM = 1.1;
 const DEDICATION_FONT_SIZE_MIN_REM = 0.85;
 const DEDICATION_LINE_HEIGHT_MAX = 1.6;
 const DEDICATION_LINE_HEIGHT_MIN = 1.3;
@@ -416,7 +429,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     // so a long dedication can still end up larger than its own SSR
     // baseline guess, but never past what a short one is allowed.
     const rootFontSizePx = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
-    const DEDICATION_FONT_SIZE_MAX_REM_PX = 1.4 * rootFontSizePx;
+    const DEDICATION_FONT_SIZE_MAX_REM_PX = 1.1 * rootFontSizePx;
 
     if (applySize(DEDICATION_FONT_SIZE_MAX_REM_PX) <= maxHeight) {
       // Fits at the full typographic ceiling -- use it outright.
@@ -1650,8 +1663,24 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     el mismo salto de línea ya calculado antes de dividir el texto, así que
     no altera la composición en reposo ni cuando JS está deshabilitado.
   */
+  /*
+    The handwritten font's strokes can extend left of a glyph's own logical
+    box (cursive entry swashes, initial flourishes). The ink-reveal's
+    clip-path/mask anchor their hidden edge at the line's own 0% -- exactly
+    that logical box edge -- so any such overshoot was being clipped for
+    the whole animation and only appeared the instant the plain-text swap
+    at the end removed the clip-path, reading as a sudden pop/jump.
+    padding-left carves out extra room inside the box (so 0% sits further
+    left, ahead of the overshoot) and the equal negative margin-left cancels
+    it back out in the surrounding layout -- the line's actual on-screen
+    start doesn't move, only how much slack the clip has to its left.
+    em-based so it scales with both the kicker's and the dedication's own
+    font-size.
+  */
   .ink-line {
     display: block;
+    padding-left: 0.4em;
+    margin-left: -0.4em;
   }
 
   .ink-word {
