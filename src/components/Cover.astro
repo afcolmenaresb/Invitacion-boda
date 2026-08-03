@@ -848,6 +848,20 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     el.style.clipPath = lineClipPath(-10, seed);
   }
 
+  // Leaving the completed clip-path in place permanently (rather than
+  // clearing it) turned out to trade a subpixel antialiasing difference
+  // for a worse, real bug: on long, many-line dedications some line's
+  // "100%" polygon didn't actually cover every pixel of its own ink, and
+  // with nothing ever clearing it, that gap stayed cut off forever
+  // instead of being masked by the later cleanup. A permanent clip is
+  // never safe to rely on, no matter how carefully the polygon is
+  // built -- so each line now clears its own clip-path right after its
+  // own transition ends (not just once, globally, at the very end of
+  // the whole sequence): transitionend fires once the box is already
+  // sitting at the fully-revealed 100% frame, and clearing one frame
+  // later removes the clip while every pixel of ink is already exactly
+  // where it belongs, closing whatever gap the polygon itself might
+  // have left, line by line, well before showEverythingNow ever runs.
   function triggerLineReveal(el: HTMLElement, duration: number, delay: number, seed: number) {
     el.style.transition = `clip-path ${duration}ms ${EASE} ${delay}ms`;
     requestAnimationFrame(() => {
@@ -855,22 +869,28 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
         el.style.clipPath = lineClipPath(112, seed);
       });
     });
+
+    el.addEventListener(
+      'transitionend',
+      (ev) => {
+        if (ev.propertyName !== 'clip-path') return;
+        requestAnimationFrame(() => {
+          el.style.clipPath = '';
+          el.style.transition = '';
+        });
+      },
+      { once: true }
+    );
   }
 
-  // Leaving the completed clip-path in place vs. clearing it must be
-  // visually identical, since the completed polygon already shows every
-  // pixel of ink (see lineClipPath above) -- clip-path doesn't
-  // participate in layout, so nothing downstream (fitAll included)
-  // needs it gone. Only the transition is cleared, so no further style
-  // write could ever animate again; clip-path itself is deliberately
-  // left exactly as triggerLineReveal set it, because clearing it turned
-  // out not to be a no-op in practice -- removing an active clip-path
-  // nudges the browser's own text rasterization by a subpixel (measured:
-  // a handful of edge pixels differ even though the geometry is
-  // byte-identical), and the spec here is an exact, provable 0-pixel
-  // diff between the last animated frame and the final one, not just a
-  // visual match.
+  // Emergency/fallback cleanup: whatever state a line's clip-path is
+  // still in -- fully settled and already self-cleared above, mid-reveal
+  // (a superseded run, the 8s safety timeout, an error abandoning the
+  // sequence early) -- clearing it here always lands on the same normal,
+  // fully-visible resting state. Never left in place; see
+  // triggerLineReveal above for why a permanent clip isn't trustworthy.
   function resetLineUnit(el: HTMLElement) {
+    el.style.clipPath = '';
     el.style.transition = '';
   }
 
