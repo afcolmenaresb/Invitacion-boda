@@ -1,0 +1,179 @@
+---
+import { memoryScene } from '../data/sceneMemory';
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+---
+
+<section class="memory" data-scene-panel-content aria-label={memoryScene.eyebrow}>
+  <div class="memory__texture" style={`background-image: url('${base}/images/textura_vertical_2.png')`}></div>
+
+  <button type="button" class="memory__back" data-action="back-to-cover" aria-label={memoryScene.backLabel}>
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
+      <path d="M15 5 L8 12 L15 19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
+    <span>Portada</span>
+  </button>
+
+  <div class="memory__content">
+    <p class="memory__eyebrow">{memoryScene.eyebrow}</p>
+    <h2 class="memory__title" data-scene-heading tabindex="-1">{memoryScene.title}</h2>
+    <div class="memory__body">
+      {memoryScene.body.map((line) => (
+        <p>{line}</p>
+      ))}
+    </div>
+    <div class="memory__closing">
+      {memoryScene.closing.map((line) => (
+        <p>{line}</p>
+      ))}
+    </div>
+    <p class="memory__cta">{memoryScene.cta}</p>
+  </div>
+</section>
+
+<style>
+  .memory {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    isolation: isolate;
+    overflow: hidden;
+  }
+
+  .memory__texture {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background-color: var(--color-bg);
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-position: 40% top;
+  }
+
+  .memory__back {
+    position: absolute;
+    top: max(18px, env(safe-area-inset-top));
+    left: max(18px, env(safe-area-inset-left));
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: none;
+    border: none;
+    padding: 0.4rem 0.2rem;
+    cursor: pointer;
+    font-family: var(--font-sans);
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #6b6055;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .memory__back {
+      transition: color 0.2s ease, transform 0.2s ease;
+    }
+
+    .memory__back:hover,
+    .memory__back:focus-visible {
+      color: var(--color-accent);
+      transform: translateX(-2px);
+    }
+  }
+
+  .memory__content {
+    margin: auto;
+    width: 100%;
+    max-width: min(92vw, 620px);
+    display: flex;
+    flex-direction: column;
+    gap: clamp(14px, 2.6vh, 26px);
+    padding: max(64px, env(safe-area-inset-top))
+      max(28px, env(safe-area-inset-right))
+      max(28px, env(safe-area-inset-bottom))
+      max(28px, env(safe-area-inset-left));
+  }
+
+  .memory__eyebrow {
+    margin: 0;
+    font-family: var(--font-sans);
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    font-size: 0.68rem;
+    color: #8c7f6a;
+  }
+
+  .memory__title {
+    margin: 0;
+    font-family: 'Homemade Apple', cursive;
+    font-weight: 400;
+    color: #211c18;
+    font-size: clamp(1.7rem, min(7vw, 8vh), 2.6rem);
+    line-height: 1.25;
+  }
+
+  .memory__body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15em;
+  }
+
+  .memory__body p,
+  .memory__closing p {
+    margin: 0;
+    font-family: var(--font-serif);
+    color: #5c5047;
+    font-size: clamp(0.92rem, min(3vw, 3.4vh), 1.1rem);
+    line-height: 1.5;
+  }
+
+  .memory__closing {
+    display: flex;
+    flex-direction: column;
+    gap: 0.15em;
+    margin-top: clamp(4px, 1vh, 10px);
+    font-style: italic;
+  }
+
+  .memory__cta {
+    margin: clamp(8px, 1.6vh, 18px) 0 0;
+    font-family: var(--font-sans);
+    font-size: 0.78rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #6b6055;
+  }
+
+  .memory__cta::after {
+    content: ' →';
+  }
+
+  /* Landscape (rotated phones, tablets, laptops): redistribute into two
+     columns instead of just re-flowing the same vertical stack sideways. */
+  @media (orientation: landscape) and (min-width: 560px) {
+    .memory__content {
+      max-width: min(88vw, 980px);
+      display: grid;
+      grid-template-columns: 1.05fr 1.3fr;
+      column-gap: clamp(28px, 5vw, 72px);
+      align-items: center;
+      padding-top: max(28px, env(safe-area-inset-top));
+    }
+
+    .memory__eyebrow,
+    .memory__title {
+      grid-column: 1;
+    }
+
+    .memory__body,
+    .memory__closing,
+    .memory__cta {
+      grid-column: 2;
+    }
+
+    .memory__title {
+      margin-top: 0.4em;
+    }
+  }
+</style>

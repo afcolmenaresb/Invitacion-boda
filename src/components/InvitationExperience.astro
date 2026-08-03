@@ -1,0 +1,373 @@
+---
+import Cover from './Cover.astro';
+import MemoryScene from './MemoryScene.astro';
+
+interface Props {
+  displayName?: string;
+  dedication?: string;
+}
+
+const { displayName, dedication } = Astro.props;
+---
+
+<div class="experience" id="invitation-experience" data-scene="cover" data-transition-direction="forward">
+  <section class="experience__scene experience__scene--cover" data-scene-panel="cover">
+    <Cover displayName={displayName} dedication={dedication} />
+  </section>
+
+  <section class="experience__scene experience__scene--memory" data-scene-panel="memory" inert>
+    <MemoryScene />
+  </section>
+
+  <svg
+    class="experience__ink"
+    viewBox="0 0 100 100"
+    preserveAspectRatio="none"
+    aria-hidden="true"
+    focusable="false"
+  >
+    <!--
+      Both strokes start at a point visually aligned with the duck/elephant
+      illustrations (see the fixed 390x844 canvas positions in Cover.astro:
+      duck sits top-right, elephant bottom-left) and end as decorative
+      shapes for the memory scene: a curve framing the title (duck) and a
+      gesture guiding the eye toward the CTA (elephant). One continuous
+      path per animal -- never a separate "birth" shape plus a separate
+      "final" shape -- so drawing it via stroke-dashoffset alone produces
+      the "ink continuing to draw the story" illusion without any morph.
+    -->
+    <path
+      class="experience__ink-stroke experience__ink-stroke--duck"
+      d="M 68 7 C 79 4 88 8 93 14 C 86 11 74 9 60 10 C 44 11 30 13 18 18 C 12 20.5 9 22 9 25"
+    />
+    <path
+      class="experience__ink-stroke experience__ink-stroke--elephant"
+      d="M 22 86 C 30 90 42 92 55 90 C 66 88.5 74 92 79 88 C 82 85.5 84 82 88 80"
+    />
+  </svg>
+</div>
+
+<script>
+  // --- Scene architecture: Cover <-> MemoryScene, hash-routed, no vertical scroll ---
+  //
+  // Two absolutely-positioned full-screen panels inside a fixed container;
+  // exactly one is interactive/visible at a time. Cover.astro's own
+  // approved intro animation is never touched -- this only listens for
+  // clicks on its existing .cover__cta (event delegation, no changes to
+  // Cover's internal script) and toggles CSS classes/attributes on this
+  // wrapper. All durations are declared here AND mirrored in this
+  // component's <style> block (transition-delay/duration values) -- keep
+  // both in sync by hand when adjusting the choreography, same convention
+  // Cover.astro itself uses for its own timing constants.
+  const root = document.getElementById('invitation-experience');
+  if (root) {
+    const coverPanel = root.querySelector<HTMLElement>('[data-scene-panel="cover"]');
+    const memoryPanel = root.querySelector<HTMLElement>('[data-scene-panel="memory"]');
+    const strokes = Array.from(root.querySelectorAll<SVGPathElement>('.experience__ink-stroke'));
+
+    // Forward (cover -> memory) sequence total, matching the CSS phases
+    // below: content exit (0-420ms) -> ink birth + animal fade (450-
+    // 1450ms) -> horizontal travel + panel crossfade (1450-2750ms) ->
+    // new composition settles (2750-3300ms). ~3.3s, inside the requested
+    // 2.5-3.5s window.
+    const FORWARD_DURATION = 3300;
+    // Return trip is a simpler, faster crossfade -- not the detailed
+    // multi-phase spec, which only describes the forward journey.
+    const BACKWARD_DURATION = 950;
+    const REDUCED_MOTION_DURATION = 280;
+
+    let isTransitioning = false;
+    let currentScene: 'cover' | 'memory' = 'cover';
+
+    function prefersReducedMotion() {
+      return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    }
+
+    function initStrokes() {
+      strokes.forEach((path) => {
+        let length = 1000;
+        try {
+          length = path.getTotalLength();
+        } catch {
+          // getTotalLength unsupported/failing -- fall back to a generic
+          // length; the stroke still animates, just with a less exact
+          // dash unit.
+        }
+        path.style.setProperty('--stroke-len', String(length));
+        path.style.strokeDasharray = 'var(--stroke-len)';
+      });
+    }
+
+    function setSceneAccessibility(scene: 'cover' | 'memory') {
+      const showingMemory = scene === 'memory';
+      if (memoryPanel) {
+        memoryPanel.toggleAttribute('inert', !showingMemory);
+      }
+      if (coverPanel) {
+        coverPanel.toggleAttribute('inert', showingMemory);
+      }
+    }
+
+    function focusSceneHeading(scene: 'cover' | 'memory') {
+      const target =
+        scene === 'memory'
+          ? memoryPanel?.querySelector<HTMLElement>('[data-scene-heading]')
+          : coverPanel?.querySelector<HTMLElement>('.cover__cta');
+      target?.focus({ preventScroll: true });
+    }
+
+    function applySceneInstantly(scene: 'cover' | 'memory') {
+      root!.classList.add('is-instant');
+      root!.dataset.scene = scene;
+      setSceneAccessibility(scene);
+      // Force layout so the "no transition" state is committed before the
+      // class is removed on the next frame -- otherwise the browser may
+      // still animate once is-instant lifts.
+      void root!.offsetWidth;
+      requestAnimationFrame(() => {
+        root?.classList.remove('is-instant');
+      });
+      currentScene = scene;
+    }
+
+    function goToScene(scene: 'cover' | 'memory', options: { pushHistory?: boolean } = {}) {
+      const { pushHistory = true } = options;
+      if (isTransitioning || scene === currentScene || !coverPanel || !memoryPanel) return;
+
+      isTransitioning = true;
+      root!.classList.add('is-transitioning');
+      root!.dataset.transitionDirection = scene === 'memory' ? 'forward' : 'back';
+
+      const reduced = prefersReducedMotion();
+      root!.classList.toggle('is-reduced-motion', reduced);
+
+      root!.dataset.scene = scene;
+      setSceneAccessibility(scene);
+
+      if (pushHistory) {
+        const hash = scene === 'memory' ? '#recuerdo' : '#portada';
+        if (window.location.hash !== hash) {
+          history.pushState({ scene }, '', hash);
+        }
+      }
+
+      const duration = reduced
+        ? REDUCED_MOTION_DURATION
+        : scene === 'memory'
+          ? FORWARD_DURATION
+          : BACKWARD_DURATION;
+
+      // Fixed-timeout orchestration (not transitionend) so a dropped
+      // frame, a failed animation, or an unsupported property never
+      // leaves the experience stuck mid-transition: whatever happens
+      // visually, this always reaches a safe final state.
+      window.setTimeout(() => {
+        currentScene = scene;
+        isTransitioning = false;
+        root!.classList.remove('is-transitioning');
+        focusSceneHeading(scene);
+      }, duration);
+    }
+
+    document.addEventListener('click', (event) => {
+      const target = event.target as HTMLElement;
+      const forwardTrigger = target.closest<HTMLElement>('.cover__cta');
+      const backTrigger = target.closest<HTMLElement>('[data-action="back-to-cover"]');
+
+      if (forwardTrigger && root!.contains(forwardTrigger)) {
+        event.preventDefault();
+        goToScene('memory');
+      } else if (backTrigger && root!.contains(backTrigger)) {
+        event.preventDefault();
+        goToScene('cover');
+      }
+    });
+
+    window.addEventListener('popstate', () => {
+      const scene = window.location.hash === '#recuerdo' ? 'memory' : 'cover';
+      goToScene(scene, { pushHistory: false });
+    });
+
+    initStrokes();
+
+    // Initial state from the URL: a direct link to #recuerdo shows the
+    // memory scene immediately (no replayed animation -- the spec only
+    // asks for the transition on user action), otherwise default to
+    // #portada and make that canonical in the URL.
+    const initialScene = window.location.hash === '#recuerdo' ? 'memory' : 'cover';
+    applySceneInstantly(initialScene);
+    if (window.location.hash !== '#recuerdo' && window.location.hash !== '#portada') {
+      history.replaceState({ scene: initialScene }, '', '#portada');
+    }
+  }
+</script>
+
+<style>
+  .experience {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100svh;
+    overflow: hidden;
+    background: var(--color-bg);
+  }
+
+  @supports (height: 100dvh) {
+    .experience {
+      height: 100dvh;
+    }
+  }
+
+  .experience__scene {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  .experience__scene--cover {
+    z-index: 2;
+  }
+
+  .experience__scene--memory {
+    z-index: 1;
+    opacity: 0;
+    transform: translateX(18%);
+    pointer-events: none;
+  }
+
+  .experience[data-scene='memory'] .experience__scene--memory {
+    pointer-events: auto;
+  }
+
+  .experience[data-scene='memory'] .experience__scene--cover {
+    pointer-events: none;
+  }
+
+  .experience[data-scene='memory']:not(.is-transitioning) .experience__scene--cover {
+    visibility: hidden;
+  }
+
+  /* Disable both CTAs while a transition is in flight -- the isTransitioning
+     JS guard is the real lock; this is the visible/interactive half of it. */
+  .experience.is-transitioning :global(.cover__cta),
+  .experience.is-transitioning :global([data-action='back-to-cover']) {
+    pointer-events: none;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .experience:not(.is-instant) .experience__scene--cover,
+    .experience:not(.is-instant) .experience__scene--memory {
+      transition: opacity 1300ms ease, transform 1300ms ease;
+      transition-delay: 1450ms;
+    }
+
+    .experience[data-scene='memory'] .experience__scene--cover {
+      opacity: 0;
+      transform: translateX(-6%);
+    }
+
+    .experience[data-scene='memory'] .experience__scene--memory {
+      opacity: 1;
+      transform: translateX(0);
+    }
+
+    .experience[data-transition-direction='back'].is-transitioning .experience__scene--cover,
+    .experience[data-transition-direction='back'].is-transitioning .experience__scene--memory {
+      transition-duration: 900ms;
+      transition-delay: 0ms;
+    }
+
+    /* Phase 1 (0-420ms): guest name, dedication, signature, location and
+       CTA fade out with a small leftward shift. The duck and elephant
+       stay fully visible through this phase. */
+    .experience.is-transitioning[data-transition-direction='forward'] :global(.cover__intro),
+    .experience.is-transitioning[data-transition-direction='forward'] :global(.cover__names),
+    .experience.is-transitioning[data-transition-direction='forward'] :global(.cover__meta) {
+      transition: opacity 420ms ease, transform 420ms ease;
+      opacity: 0;
+      transform: translateX(-12px);
+    }
+
+    /* Phase 2 (450-950ms): the animals partially fade as the ink strokes
+       start drawing away from them. */
+    .experience.is-transitioning[data-transition-direction='forward'] :global(.cover__elephant),
+    .experience.is-transitioning[data-transition-direction='forward'] :global(.cover__duck) {
+      transition: opacity 500ms ease 450ms;
+      opacity: 0.32;
+    }
+  }
+
+  .experience.is-reduced-motion .experience__scene--cover,
+  .experience.is-reduced-motion .experience__scene--memory {
+    transition: opacity 260ms ease !important;
+    transform: none !important;
+  }
+
+  .experience.is-reduced-motion[data-scene='memory'] .experience__scene--cover {
+    opacity: 0;
+  }
+
+  .experience.is-reduced-motion[data-scene='memory'] .experience__scene--memory {
+    opacity: 1;
+  }
+
+  .experience.is-instant .experience__scene--cover,
+  .experience.is-instant .experience__scene--memory,
+  .experience.is-instant :global(.cover__intro),
+  .experience.is-instant :global(.cover__names),
+  .experience.is-instant :global(.cover__meta),
+  .experience.is-instant :global(.cover__elephant),
+  .experience.is-instant :global(.cover__duck) {
+    transition: none !important;
+  }
+
+  /* --- Ink strokes: the protagonist of the transition --- */
+  .experience__ink {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 3;
+    pointer-events: none;
+  }
+
+  .experience__ink-stroke {
+    fill: none;
+    stroke: var(--color-ink, #2a241d);
+    stroke-width: 0.55;
+    stroke-linecap: round;
+    vector-effect: non-scaling-stroke;
+    opacity: 0;
+    stroke-dashoffset: var(--stroke-len, 1000);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .experience:not(.is-instant) .experience__ink-stroke {
+      transition: stroke-dashoffset 2100ms cubic-bezier(0.22, 0.61, 0.36, 1) 500ms, opacity 900ms ease 450ms;
+    }
+
+    .experience[data-transition-direction='back'].is-transitioning .experience__ink-stroke {
+      transition-duration: 700ms;
+      transition-delay: 0ms;
+    }
+  }
+
+  .experience[data-scene='memory'] .experience__ink-stroke {
+    stroke-dashoffset: 0;
+    opacity: 0.55;
+  }
+
+  .experience.is-reduced-motion .experience__ink-stroke {
+    transition: opacity 260ms ease !important;
+  }
+
+  .experience.is-reduced-motion[data-scene='memory'] .experience__ink-stroke {
+    stroke-dashoffset: 0;
+    opacity: 0.55;
+  }
+
+  .experience.is-instant .experience__ink-stroke {
+    transition: none !important;
+  }
+</style>
