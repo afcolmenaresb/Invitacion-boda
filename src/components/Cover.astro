@@ -1,7 +1,8 @@
 ---
 import '@fontsource/sacramento/400.css';
 import '@fontsource/homemade-apple/400.css';
-import { getDedicationLength } from '../data/guests';
+import { getVisibleDedicationLength } from '../data/guests';
+import { hyphenateSpanishText } from '../lib/spanishHyphenation';
 
 interface Props {
   displayName?: string;
@@ -13,7 +14,68 @@ const {
   dedication = 'Hay viajes que no tendrían el mismo sentido sin ciertas personas.',
 } = Astro.props;
 
-const dedicationLength = getDedicationLength(dedication);
+// Continuous size ramp for the dedication (replaces the old 3-bucket
+// short/medium/long system): font-size and line-height shrink smoothly as
+// the character count grows, instead of jumping between fixed steps. Below
+// DEDICATION_SCALE_START_LEN the size is clamped at its max; at/after
+// DEDICATION_SCALE_END_LEN (the absolute 160-char cap enforced in
+// guests.ts) it's clamped at its legible minimum. This is the *first*
+// pass, computed server-side from character count alone; the client
+// script below adds a second, height-based pass that shrinks further
+// only if the rendered block still runs into .cover__names' safe margin
+// (see fitDedicationHeight).
+//
+// The max was lowered from 1.4rem (~20.16px visual on the reference
+// device) to 1.125rem (18px). Measured directly against the fixed 140px
+// zone: at 1.4rem the default guest dedication ("Hay viajes que no
+// tendrían el mismo sentido sin ciertas personas.") wraps into 7 ragged
+// lines with "mismo" isolated alone; the wrap pattern flips to a full
+// 5-line reading -- "Hay viajes que / no tendrían el / mismo sentido /
+// sin ciertas / personas." -- at exactly 18px and stays there down to
+// ~15.5px. Only the ceiling changed, so this only affects dedications
+// short enough to sit at or near the ramp's start; medium/long
+// dedications (which already sit below this ceiling) keep their
+// existing sizes.
+const DEDICATION_SCALE_START_LEN = 55;
+const DEDICATION_SCALE_END_LEN = 160;
+const DEDICATION_FONT_SIZE_MAX_REM = 1.125;
+const DEDICATION_FONT_SIZE_MIN_REM = 0.85;
+const DEDICATION_LINE_HEIGHT_MAX = 1.6;
+const DEDICATION_LINE_HEIGHT_MIN = 1.3;
+
+function clampNumber(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
+}
+
+function computeDedicationTypography(length: number) {
+  const t = clampNumber(
+    (length - DEDICATION_SCALE_START_LEN) / (DEDICATION_SCALE_END_LEN - DEDICATION_SCALE_START_LEN),
+    0,
+    1
+  );
+  const fontSize = DEDICATION_FONT_SIZE_MAX_REM - (DEDICATION_FONT_SIZE_MAX_REM - DEDICATION_FONT_SIZE_MIN_REM) * t;
+  const lineHeight = DEDICATION_LINE_HEIGHT_MAX - (DEDICATION_LINE_HEIGHT_MAX - DEDICATION_LINE_HEIGHT_MIN) * t;
+  return { fontSize, lineHeight };
+}
+
+// Soft hyphens (U+00AD, see guests.ts) are invisible unless the browser
+// actually breaks a word there -- they must never inflate the character
+// count that drives sizing/timing, or an editor adding one for better
+// wrapping would unfairly lose real, visible characters off their budget.
+const dedicationLength = getVisibleDedicationLength(dedication);
+const { fontSize: dedicationFontSize, lineHeight: dedicationLineHeight } =
+  computeDedicationTypography(dedicationLength);
+
+// Editorial rule: a word may only ever break across lines at an explicit,
+// visible hyphen -- never a blind cut. Rather than requiring every guest
+// dedication to be hand-annotated with \u00AD, this runs deterministic
+// Spanish syllabification (see spanishHyphenation.ts) once, at build time,
+// over the *unmodified* `dedication` prop, and only the resulting display
+// string (with soft hyphens inserted at safe syllable boundaries) is
+// rendered. Any \u00AD an editor already typed by hand is honored verbatim
+// as an override, never re-processed. `dedication` itself -- used above for
+// length/duration, and again below for aria-label -- is never touched.
+const dedicationDisplay = hyphenateSpanishText(dedication);
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 ---
 
@@ -207,9 +269,16 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     loading="eager"
   />
 
-  <div class="cover__intro" data-length={dedicationLength}>
+  <div class="cover__intro">
     <p class="cover__kicker" data-autofit="width" data-animation="guest-name">{displayName}</p>
-    <p class="cover__lede" data-autofit="width" data-animation="dedication">{dedication}</p>
+    <p
+      class="cover__lede"
+      lang="es"
+      aria-label={dedication}
+      data-autofit="width"
+      data-animation="dedication"
+      style={`--dedication-font-size: ${dedicationFontSize.toFixed(3)}rem; --dedication-line-height: ${dedicationLineHeight.toFixed(3)};`}
+    >{dedicationDisplay}</p>
   </div>
 
   <div class="cover__names">
@@ -241,8 +310,238 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     }
   }
 
+  // Second, height-based pass for the dedication -- on top of the
+  // character-count ramp computed server-side (see computeDedicationTypography
+  // in the frontmatter). Character count alone can't guarantee a safe fit:
+  // the same length wraps into a different number of lines depending on word
+  // lengths, so this defines an explicit max-height budget for the protected
+  // zone (.cover__lede) -- namesTop minus a fixed safe margin, minus however
+  // much room the kicker (guest name) already took above it -- and shrinks
+  // font-size/line-height in small steps only if the block's actual rendered
+  // height still exceeds that budget. Never hides or truncates text and
+  // never moves .cover__names, the kicker, or any other element -- if the
+  // hard floor is reached and it still doesn't fit, it simply stops there
+  // and accepts the reduced (but still present) margin.
+  const DEDICATION_SAFE_MARGIN_PX = 24;
+  // Real visual floor -- never render the dedication smaller than this,
+  // full stop. Below it the text stops being comfortably legible, so an
+  // unfittable combination is reported (see reportDedicationTooTight) as an
+  // editorial problem to fix (shorten the dedication/name) rather than
+  // silently squeezed further.
+  const DEDICATION_FONT_HARD_MIN_PX = 13;
+
+  // Best-effort "which guest is this" for the error message below -- the
+  // page's own path is exactly the slug (see src/pages/[slug].astro), and
+  // there's no need to thread the slug through as a separate prop just for
+  // this diagnostic.
+  function currentGuestSlugForDiagnostics(): string {
+    const segments = location.pathname.split('/').filter(Boolean);
+    return segments[segments.length - 1] || '(desconocido)';
+  }
+
+  function reportDedicationTooTight(ledeEl: HTMLElement, maxHeight: number) {
+    const kickerEl = document.querySelector<HTMLElement>('[data-animation="guest-name"]');
+    const nameLength = kickerEl?.textContent?.trim().length ?? 0;
+    const dedicationVisibleLength = (ledeEl.textContent ?? '').replace(/\u00AD/g, '').length;
+    console.error(
+      '[dedication] La combinación de nombre + dedicatoria no cabe con un ' +
+        `tamaño legible (mínimo ${DEDICATION_FONT_HARD_MIN_PX}px) por encima de la firma. ` +
+        `Invitado: "${currentGuestSlugForDiagnostics()}" -- nombre: ${nameLength} caracteres, ` +
+        `dedicatoria: ${dedicationVisibleLength} caracteres visibles, ` +
+        `espacio vertical disponible: ${maxHeight.toFixed(1)}px. ` +
+        'El texto se muestra completo (nunca se oculta ni se recorta), pero excede ' +
+        'ese espacio. Solución editorial: acortar la dedicatoria (o el nombre del invitado).'
+    );
+  }
+
+  // The composition is a fixed 390x844 logical canvas, uniformly (desktop)
+  // or non-uniformly (mobile fill-viewport, see the inline script above)
+  // *scaled* to fit the real viewport -- a paint-time transform, not a
+  // layout change. getBoundingClientRect() reports post-scale pixels, so a
+  // vertical measurement taken that way must be divided by the vertical
+  // scale factor to compare against a value defined in logical px.
+  function getVerticalCoverScale(): number {
+    const root = document.documentElement;
+    const raw = root.classList.contains('is-fill-viewport')
+      ? getComputedStyle(root).getPropertyValue('--cover-scale-y')
+      : getComputedStyle(root).getPropertyValue('--cover-scale');
+    const value = parseFloat(raw);
+    return Number.isFinite(value) && value > 0 ? value : 1;
+  }
+
+  function fitDedicationHeight() {
+    const ledeEl = document.querySelector<HTMLElement>('[data-animation="dedication"]');
+    const namesEl = document.querySelector<HTMLElement>('.cover__names');
+    if (!ledeEl || !namesEl) return;
+
+    // Always start from the SSR-computed baseline (--dedication-font-size/
+    // --dedication-line-height) so this never compounds shrinkage across
+    // repeated calls (resize, font load, etc.).
+    ledeEl.style.removeProperty('font-size');
+    ledeEl.style.removeProperty('line-height');
+    ledeEl.style.removeProperty('max-height');
+
+    const scale = getVerticalCoverScale();
+    // The zone's own top only depends on the kicker (guest name) above it,
+    // never on the dedication's own length -- so this budget is constant
+    // for a given guest, exactly matching the "constant zone" requirement.
+    const zoneTop = ledeEl.getBoundingClientRect().top / scale;
+    const namesTop = namesEl.getBoundingClientRect().top / scale;
+    const maxHeight = Math.max(0, namesTop - DEDICATION_SAFE_MARGIN_PX - zoneTop);
+    // Applied as a real CSS constraint (with overflow left at its default
+    // "visible" -- never "hidden", which would clip manuscript strokes), so
+    // the zone itself provably cannot grow past this budget. It alone
+    // doesn't shrink the text though: with overflow:visible, content past
+    // max-height simply paints outside the box rather than being clamped,
+    // so the loop below still has to measure the *actual* rendered content
+    // (via Range, which reports the true glyph extent regardless of the
+    // container's own capped box height -- unlike scrollHeight, which is
+    // unreliable on an overflow:visible element) and shrink until it fits.
+    ledeEl.style.maxHeight = `${maxHeight}px`;
+
+    function measureContentHeight() {
+      const range = document.createRange();
+      range.selectNodeContents(ledeEl);
+      return range.getBoundingClientRect().height / scale;
+    }
+
+    const baselineSize = parseFloat(getComputedStyle(ledeEl).fontSize);
+    const baselineLineHeight = parseFloat(getComputedStyle(ledeEl).lineHeight);
+    const ratio = baselineLineHeight / baselineSize;
+
+    function applySize(size: number) {
+      ledeEl!.style.fontSize = `${size}px`;
+      ledeEl!.style.lineHeight = `${size * ratio}px`;
+      return measureContentHeight();
+    }
+
+    // Real Spanish hyphenation (see spanishHyphenation.ts) plus the wider,
+    // fixed 140px zone both mean the text often wraps into noticeably fewer
+    // lines than the character-count ramp's baseline assumed -- so rather
+    // than only ever shrinking down from that baseline (which would leave
+    // unused vertical space on the table whenever the real wrapping turned
+    // out more efficient than the ramp's rough guess), this searches the
+    // *entire* approved typographic range for the largest size that still
+    // fits the zone's max-height budget. DEDICATION_FONT_SIZE_MAX_REM_PX
+    // mirrors DEDICATION_FONT_SIZE_MAX_REM from the frontmatter ramp (kept
+    // in sync manually -- separate script, separate scope) as the ceiling,
+    // so a long dedication can still end up larger than its own SSR
+    // baseline guess, but never past what a short one is allowed.
+    const rootFontSizePx = parseFloat(getComputedStyle(document.documentElement).fontSize) || 16;
+    const DEDICATION_FONT_SIZE_MAX_REM_PX = 1.125 * rootFontSizePx;
+
+    if (applySize(DEDICATION_FONT_SIZE_MAX_REM_PX) <= maxHeight) {
+      // Fits at the full typographic ceiling -- use it outright.
+      return;
+    }
+
+    if (applySize(DEDICATION_FONT_HARD_MIN_PX) > maxHeight) {
+      // Doesn't fit even at the hard visual floor. This jointly reflects
+      // (a) the kicker/guest-name's own rendered height (baked into
+      // zoneTop above), (b) the dedication's own rendered height (just
+      // measured), and (c) the safe margin to the signature (baked into
+      // maxHeight) -- so this is the combined "no valid layout exists at a
+      // legible size" case. Never hides, crops, or truncates the text: it
+      // still renders in full at the hard floor (already applied by the
+      // applySize call above), simply extending past the safe margin. The
+      // real fix is editorial (shorten the dedication or the guest name),
+      // so this is reported loudly rather than silently accepted.
+      reportDedicationTooTight(ledeEl, maxHeight);
+      return;
+    }
+
+    // Binary search for the *largest* font-size that fits the budget,
+    // across the whole [hard floor, typographic ceiling] range. 20
+    // iterations over a ~1rem range is well under 0.01px precision --
+    // plenty tighter than any visible difference.
+    let lo = DEDICATION_FONT_HARD_MIN_PX;
+    let hi = DEDICATION_FONT_SIZE_MAX_REM_PX;
+    for (let i = 0; i < 20; i++) {
+      const mid = (lo + hi) / 2;
+      if (applySize(mid) <= maxHeight) {
+        lo = mid;
+      } else {
+        hi = mid;
+      }
+    }
+    applySize(lo);
+  }
+
+  // Editorial rule: a word may only ever break across lines at an explicit
+  // soft hyphen (U+00AD) -- never a blind, unmarked cut. .cover__lede no
+  // longer sets overflow-wrap: break-word (see the CSS), so the browser's
+  // default word-breaking already refuses to cut a word with no eligible
+  // break point; it lets it overflow the zone's width instead. This runs
+  // *after* fitDedicationHeight has already tried shrinking font-size all
+  // the way to its hard floor (per the editorial spec: autofit first, down
+  // to the approved typographic minimum), and only reports words that still
+  // don't fit at that final, settled size -- via console.warn, so it's a
+  // visible, discoverable authoring problem (add a soft hyphen, shorten the
+  // word) instead of ever silently degrading into an ugly unmarked cut.
+  function checkDedicationOverflow() {
+    const ledeEl = document.querySelector<HTMLElement>('[data-animation="dedication"]');
+    if (!ledeEl) return;
+
+    const zoneWidth = ledeEl.clientWidth;
+    const text = ledeEl.textContent ?? '';
+    const words = text.split(/\s+/).filter(Boolean);
+    if (words.length === 0 || zoneWidth <= 0) return;
+
+    const cs = getComputedStyle(ledeEl);
+    const probe = document.createElement('span');
+    probe.style.position = 'absolute';
+    probe.style.visibility = 'hidden';
+    probe.style.whiteSpace = 'nowrap';
+    probe.style.fontFamily = cs.fontFamily;
+    probe.style.fontSize = cs.fontSize;
+    probe.style.fontWeight = cs.fontWeight;
+    document.body.appendChild(probe);
+
+    const offenders: string[] = [];
+    for (const word of words) {
+      if (word.indexOf('\u00AD') !== -1) continue; // has an eligible break point
+      probe.textContent = word;
+      if (probe.offsetWidth > zoneWidth) offenders.push(word);
+    }
+    probe.remove();
+
+    if (offenders.length > 0) {
+      console.warn(
+        '[dedication] Palabra(s) sin soft hyphen que no caben en la zona ' +
+          'ni al tamaño tipográfico mínimo -- revisar el contenido o añadir ' +
+          '\\u00AD en un punto de sílaba: ' +
+          offenders.map((w) => JSON.stringify(w)).join(', ')
+      );
+    }
+  }
+
+  // While the ink-reveal has split the guest name/dedication into per-line
+  // spans (.ink-line), their clip-path is a percentage of each line's own
+  // box -- refitting font-size/line-height here (e.g. from a 'resize'
+  // fired mid-animation by a mobile browser's address bar settling) would
+  // change that box's geometry out from under the in-progress reveal with
+  // no transition, popping/cropping whatever fraction was already
+  // revealed. Skip the refit while the animation is actually running.
+  //
+  // This used to key off .ink-line's mere presence in the DOM, which was
+  // correct back when the sequence tore the spans down and rebuilt plain
+  // text at the end -- .ink-line existing *was* "mid-animation". Now the
+  // spans are the permanent, final markup (see showEverythingNow), so
+  // that check would block every future fitAll() call for the rest of
+  // the page's life, including legitimate ones from a later real resize
+  // (address bar, orientation change) long after the reveal settled.
+  // is-preparing-animation/is-animating (added right before splitIntoLines
+  // creates the first .ink-line, removed once is-animation-complete is
+  // set -- see startAnimationOnce/showEverythingNow) track the animation
+  // itself, not the spans' lifetime, so refitting is blocked only for the
+  // few seconds the reveal is actually in flight and freely allowed
+  // before it starts and forever after it completes.
   function fitAll() {
+    const cover = document.querySelector('.cover');
+    if (cover?.classList.contains('is-preparing-animation') || cover?.classList.contains('is-animating')) return;
     document.querySelectorAll<HTMLElement>('[data-autofit]').forEach(fitText);
+    fitDedicationHeight();
+    checkDedicationOverflow();
   }
 
   fitAll();
@@ -260,6 +559,35 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
   function clamp(value: number, min: number, max: number) {
     return Math.min(max, Math.max(min, value));
+  }
+
+  // Dedication writing duration: unchanged below DEDICATION_DURATION_BREAK_LEN
+  // chars (same base/slope/floor as before -- "Estefi y Matías"'s ~67-char
+  // dedication still lands at ~7.2s, per the approved choreography). Past
+  // that point it used to flatline at a fixed 8600ms ceiling; it now keeps
+  // growing, on a second, shallower linear ramp anchored so a 160-char
+  // dedication (the absolute cap enforced in guests.ts) lands at ~11000ms.
+  // The two segments share their boundary value exactly (computed, not
+  // hardcoded), so there's no jump at the breakpoint.
+  const DEDICATION_DURATION_BASE = 3500;
+  const DEDICATION_DURATION_SLOPE1 = 55;
+  const DEDICATION_DURATION_MIN = 5600;
+  const DEDICATION_DURATION_BREAK_LEN = 93;
+  const DEDICATION_DURATION_MAX = 11000;
+  const DEDICATION_DURATION_MAX_LEN = 160;
+
+  function dedicationDurationFor(length: number) {
+    const breakDuration = DEDICATION_DURATION_BASE + DEDICATION_DURATION_BREAK_LEN * DEDICATION_DURATION_SLOPE1;
+    if (length <= DEDICATION_DURATION_BREAK_LEN) {
+      return clamp(DEDICATION_DURATION_BASE + length * DEDICATION_DURATION_SLOPE1, DEDICATION_DURATION_MIN, breakDuration);
+    }
+    const slope2 =
+      (DEDICATION_DURATION_MAX - breakDuration) / (DEDICATION_DURATION_MAX_LEN - DEDICATION_DURATION_BREAK_LEN);
+    return clamp(
+      breakDuration + (length - DEDICATION_DURATION_BREAK_LEN) * slope2,
+      breakDuration,
+      DEDICATION_DURATION_MAX
+    );
   }
 
   // Evaluates the same curve as EASE, so --reveal can be driven manually
@@ -458,6 +786,114 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     el.style.removeProperty('-webkit-mask-image');
   }
 
+  // --- Guest name / dedication line reveal: clip-path only, no mask ---
+  //
+  // The elephant/duck reveal above pairs clip-path with the INK_MASK
+  // gradient (driven by --reveal) for a soft "wet ink" leading edge. The
+  // name/dedication lines used to share that exact mechanism, but a
+  // controlled A/B test (freezing clip-path and --reveal at an identical
+  // mid-reveal value, then toggling only mask-image) showed the mask
+  // suppressing ink that the clip-path alone already permitted -- a real
+  // mismatch between the two, not a timing illusion, and exactly the
+  // "fixed transparent band at the left edge" being reported. Lines get
+  // their own single-mechanism reveal instead: clip-path alone, natively
+  // animatable and not dependent on any custom-property/calc() interplay
+  // for its interpolation, so there is nothing left for a second
+  // mechanism to disagree with.
+  // Horizontal bleed lives in .ink-line's own box (padding-left/right +
+  // an equal negative margin-left/right, see the CSS below), not in this
+  // polygon -- a fixed negative/over-100% x-coordinate here would put
+  // that bleed strip permanently inside the clipped-in region, at every
+  // percent including the hidden one, leaking whatever ink sits in it
+  // (a cursive entry stroke) before the line ever starts revealing. With
+  // the bleed folded into the box instead, 0%/100% are the box's own
+  // (widened, but visually unmoved -- see the CSS) edges, so a plain 0%
+  // -to-100% sweep already covers the full bleed once it completes,
+  // with nothing exposed early.
+  const LINE_BLEED_EM = 0.5;
+
+  // The left edge is always a flat 0% -- never negative, never animated.
+  // Top/bottom get a constant vertical bleed (ascenders/descenders/
+  // accents past the line box's own height): unlike a horizontal bleed,
+  // a vertical one can't leak anything early, since at percent<=0 the
+  // polygon's left and right edges coincide at 0% -- zero width, so zero
+  // area, regardless of how tall it is. Only the right edge moves,
+  // sweeping from 0% up to 100% of the (bleed-widened) box; the
+  // irregular jitter rides only that moving edge, same as
+  // jaggedClipPath above. At the fully-revealed call (percent >= 100),
+  // every jittered point clamps to the same 100%, so the resting right
+  // edge -- like the fixed left one -- is a plain straight line already
+  // at the box's true edge: the last frame with clip-path still applied
+  // shows the exact same ink as removing it entirely.
+  function lineClipPath(percent: number, seed: number): string {
+    const steps = 7;
+    const verticalBleed = `${LINE_BLEED_EM}em`;
+    const left = '0%';
+    const top = `-${verticalBleed}`;
+    const bottom = `calc(100% + ${verticalBleed})`;
+
+    const points = [`${left} ${top}`];
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const jitter = Math.sin((t * 6 + seed) * 3.7) * 2.2;
+      const x = clamp(percent + jitter, 0, 100);
+      points.push(`${x.toFixed(2)}% ${(t * 100).toFixed(2)}%`);
+    }
+    points.push(`${left} ${bottom}`);
+    return `polygon(${points.join(', ')})`;
+  }
+
+  function prepareLineHidden(el: HTMLElement, seed: number) {
+    el.style.transition = 'none';
+    el.style.clipPath = lineClipPath(-10, seed);
+  }
+
+  // Leaving the completed clip-path in place permanently (rather than
+  // clearing it) turned out to trade a subpixel antialiasing difference
+  // for a worse, real bug: on long, many-line dedications some line's
+  // "100%" polygon didn't actually cover every pixel of its own ink, and
+  // with nothing ever clearing it, that gap stayed cut off forever
+  // instead of being masked by the later cleanup. A permanent clip is
+  // never safe to rely on, no matter how carefully the polygon is
+  // built -- so each line now clears its own clip-path right after its
+  // own transition ends (not just once, globally, at the very end of
+  // the whole sequence): transitionend fires once the box is already
+  // sitting at the fully-revealed 100% frame, and clearing one frame
+  // later removes the clip while every pixel of ink is already exactly
+  // where it belongs, closing whatever gap the polygon itself might
+  // have left, line by line, well before showEverythingNow ever runs.
+  function triggerLineReveal(el: HTMLElement, duration: number, delay: number, seed: number) {
+    el.style.transition = `clip-path ${duration}ms ${EASE} ${delay}ms`;
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        el.style.clipPath = lineClipPath(112, seed);
+      });
+    });
+
+    el.addEventListener(
+      'transitionend',
+      (ev) => {
+        if (ev.propertyName !== 'clip-path') return;
+        requestAnimationFrame(() => {
+          el.style.clipPath = '';
+          el.style.transition = '';
+        });
+      },
+      { once: true }
+    );
+  }
+
+  // Emergency/fallback cleanup: whatever state a line's clip-path is
+  // still in -- fully settled and already self-cleared above, mid-reveal
+  // (a superseded run, the 8s safety timeout, an error abandoning the
+  // sequence early) -- clearing it here always lands on the same normal,
+  // fully-visible resting state. Never left in place; see
+  // triggerLineReveal above for why a permanent clip isn't trustworthy.
+  function resetLineUnit(el: HTMLElement) {
+    el.style.clipPath = '';
+    el.style.transition = '';
+  }
+
   // --- Signature reveal: one rectangular clip over the whole signature ---
   //
   // "Fátima & Andrés" reveals as a single unit -- one clip-path: inset(...)
@@ -586,18 +1022,70 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   // Wraps each word in a span, measures its rendered line via offsetTop,
   // then regroups the words into per-line wrappers. Works for any text
   // length/line count without hard-coding a number of lines.
+  // A word containing a soft hyphen (U+00AD, see guests.ts) is one token
+  // here -- \S matches it, it's not whitespace -- but if the browser
+  // actually breaks the word there, that one <span> now visually spans two
+  // rendered lines. offsetTop alone (used below) would then attribute the
+  // *whole* word, including the part that visually overflows onto the next
+  // line, to only the first line's ink-reveal wrapper. This walks the
+  // span's own text character-by-character (via Range, cheap for a single
+  // word) to find exactly where the render breaks, and splits the DOM
+  // there into two fresh spans -- one per visual line -- so each is grouped
+  // correctly below. A no-op (returns the original span) for the vast
+  // majority of words that only ever render on one line.
+  function splitWrappedWordSpan(span: HTMLElement): HTMLElement[] {
+    const text = span.textContent ?? '';
+    const textNode = span.firstChild;
+    if (!textNode || text.length < 2) return [span];
+
+    const range = document.createRange();
+    const firstTop = span.getClientRects()[0]?.top;
+    if (firstTop === undefined) return [span];
+
+    let splitIndex = -1;
+    for (let i = 1; i < text.length; i++) {
+      range.setStart(textNode, 0);
+      range.setEnd(textNode, i);
+      const rects = range.getClientRects();
+      const lastRect = rects[rects.length - 1];
+      if (lastRect && Math.abs(lastRect.top - firstTop) > 1) {
+        splitIndex = i - 1;
+        break;
+      }
+    }
+    if (splitIndex < 1 || splitIndex >= text.length) return [span];
+
+    // Plain .ink-word spans, same as any other word -- no clip-path, mask
+    // or padding of their own. The only thing that ever clips or masks
+    // ink is .ink-line, once, on the shared line box both halves end up
+    // in; these just need to never restrict their own content, which
+    // display:inline + the default overflow:visible already guarantees.
+    const firstSpan = document.createElement('span');
+    firstSpan.className = 'ink-word';
+    firstSpan.textContent = text.slice(0, splitIndex);
+    const secondSpan = document.createElement('span');
+    secondSpan.className = 'ink-word';
+    secondSpan.textContent = text.slice(splitIndex);
+    span.replaceWith(firstSpan, secondSpan);
+    return [firstSpan, secondSpan];
+  }
+
   function splitIntoLines(el: HTMLElement): HTMLElement[] {
     const original = el.textContent ?? '';
     const tokens = original.match(/\S+\s*/g) ?? [original];
 
     el.textContent = '';
-    const wordEls = tokens.map((token) => {
+    let wordEls = tokens.map((token) => {
       const span = document.createElement('span');
       span.className = 'ink-word';
       span.textContent = token;
       el.appendChild(span);
       return span;
     });
+
+    wordEls = wordEls.flatMap((span) =>
+      span.getClientRects().length > 1 ? splitWrappedWordSpan(span) : [span]
+    );
 
     const lineMap = new Map<number, HTMLElement[]>();
     wordEls.forEach((span) => {
@@ -629,7 +1117,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     const n = lines.length;
     if (n === 0) return 0;
     if (n === 1) {
-      triggerInkReveal(lines[0], totalDuration, 0, seedBase);
+      triggerLineReveal(lines[0], totalDuration, 0, seedBase);
       return totalDuration;
     }
 
@@ -645,22 +1133,41 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
     let cursor = 0;
     lines.forEach((line, i) => {
-      triggerInkReveal(line, durations[i], cursor, seedBase + i);
+      triggerLineReveal(line, durations[i], cursor, seedBase + i);
       if (i < n - 1) cursor += durations[i] - LINE_OVERLAP_MS;
     });
     return cursor + durations[n - 1];
   }
 
-  // Reveals everything immediately, with no timers and no hidden state --
-  // used for reduced-motion, missing elements, the error fallback, and
-  // the 8s safety timeout. Always lifts the FOUC boot guard too, so
-  // nothing ever depends on the timed sequence having run for the cover
-  // to become fully, finally visible.
+  // The single place every exit path converges on: normal completion,
+  // the error fallback, reduced motion, and the 8s safety timeout. It
+  // never rebuilds anything -- the guest name and dedication keep the
+  // exact per-line/per-word spans splitIntoLines produced (if it ever
+  // ran at all); this only strips whatever ink-reveal styling is
+  // currently on them, however far the reveal got. Clearing clip-path/
+  // mask-image/transition off an element already sitting at its fully
+  // -revealed value is visually a no-op (no clip == the same "everything
+  // visible" result), so the frame right before and right after this
+  // runs are pixel-identical -- there is no separate "final" layout to
+  // fall back to, and so no chance for one to disagree with the other.
   function showEverythingNow(cover: HTMLElement) {
     bootCompleted = true;
     cover.removeAttribute('data-cover-boot');
     cover.classList.remove('is-preparing-animation', 'is-animating');
     cover.classList.add('is-animation-complete');
+
+    cover.querySelectorAll<HTMLElement>('.ink-line').forEach(resetLineUnit);
+    const elephantEl = cover.querySelector<HTMLElement>('[data-animation="elephant"]');
+    const duckEl = cover.querySelector<HTMLElement>('[data-animation="duck"]');
+    const namesEl = cover.querySelector<HTMLElement>('.cover__names');
+    const locationEl = cover.querySelector<HTMLElement>('[data-animation="location"]');
+    const ctaEl = cover.querySelector<HTMLElement>('[data-animation="cta"]');
+    if (elephantEl) resetInkUnit(elephantEl);
+    if (duckEl) resetInkUnit(duckEl);
+    if (namesEl) resetSignatureUnit(namesEl);
+    if (locationEl) resetFadeUnit(locationEl);
+    if (ctaEl) resetFadeUnit(ctaEl);
+    if (ctaEl) resetUnderline(ctaEl);
   }
 
   // True whenever <html> carries is-landscape-locked -- set by the inline
@@ -735,24 +1242,37 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
       }
 
       const nameLen = originalName.trim().length;
-      const dedicationLen = originalDedication.trim().length;
+      // Soft hyphens (U+00AD) are invisible unless actually broken across a
+      // line -- excluded here too, so they never inflate the writing
+      // duration (matches getVisibleDedicationLength in guests.ts).
+      const dedicationLen = originalDedication.trim().replace(/\u00AD/g, '').length;
       // Calibrated so "Estefi y Matías" (~15 chars) lands near 3.1s and its
       // dedication (~67 chars) near 7.2s, per the approved choreography.
+      // Longer dedications (up to the 160-char cap) keep growing past that
+      // via dedicationDurationFor -- see its definition above.
       const nameDuration = clamp(2400 + nameLen * 47, 2400, 3900);
-      const dedicationDuration = clamp(3500 + dedicationLen * 55, 5600, 8600);
+      const dedicationDuration = dedicationDurationFor(dedicationLen);
       const signatureDuration = 5000;
       const locationDuration = 1200;
       const ctaDuration = 1200;
       const ctaStagger = 370;
       const underlineDuration = 1100;
 
+      // Marks the cover as "animation in progress" before splitIntoLines
+      // creates the first .ink-line -- fitAll() reads this class (not
+      // .ink-line's mere presence, which now outlives the animation) to
+      // know whether it's safe to refit. Covering the window from here,
+      // not from nextFrame() below, means there's no gap where .ink-line
+      // exists but the class hasn't caught up yet.
+      cover.classList.add('is-preparing-animation');
+
       const nameLines = splitIntoLines(nameEl);
       const dedicationLines = splitIntoLines(dedicationEl);
 
       // Hide everything up front, in the same tick, so the first thing
       // ever painted is the hidden state -- not a flash of visible text.
-      nameLines.forEach((line, i) => prepareInkHidden(line, i));
-      dedicationLines.forEach((line, i) => prepareInkHidden(line, 100 + i));
+      nameLines.forEach((line, i) => prepareLineHidden(line, i));
+      dedicationLines.forEach((line, i) => prepareLineHidden(line, 100 + i));
       // fromRight=true on the elephant compensates for its own scaleX(-1)
       // so the reveal still reads as "entering from the left" on screen
       // (see jaggedClipPath); the duck's default direction already reads
@@ -763,7 +1283,6 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
       prepareFadeHidden(locationEl);
       prepareFadeHidden(ctaEl);
       prepareUnderlineHidden(ctaEl);
-      cover.classList.add('is-preparing-animation');
       await nextFrame();
       if (token !== animationRunToken) return;
 
@@ -776,7 +1295,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
       // Animals draw in slowly, overlapping the text sequence rather than
       // blocking it. Elephant leads (delay 0), duck follows with a small
-      // stagger (delay 250ms); both run 6000ms, well past the point the
+      // stagger (delay 250ms); both run 11000ms, well past the point the
       // text sequence starts below.
       const elephantRevealDelay = 0;
       const elephantRevealDuration = 11000;
@@ -790,12 +1309,20 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
       cover.classList.add('is-animating');
 
-      revealLines(nameLines, nameDuration, 0);
-      await sleep(Math.max(nameDuration - 250, 0));
+      // revealLines returns the *actual* elapsed time its staggered,
+      // overlapping lines take to settle -- shorter than the nominal
+      // nameDuration/dedicationDuration by 2 * LINE_OVERLAP_MS per extra
+      // line, since each line starts before the previous one fully
+      // finishes. Sleeping against the nominal duration instead (as
+      // before) left a dead gap after the text had already finished
+      // writing and before the next phase began -- most noticeable
+      // between the dedication and the signature on multi-line dedications.
+      const nameActualDuration = revealLines(nameLines, nameDuration, 0);
+      await sleep(Math.max(nameActualDuration - 250, 0));
       if (token !== animationRunToken) return;
 
-      revealLines(dedicationLines, dedicationDuration, 100);
-      await sleep(Math.max(dedicationDuration - 250, 0));
+      const dedicationActualDuration = revealLines(dedicationLines, dedicationDuration, 100);
+      await sleep(Math.max(dedicationActualDuration - 250, 0));
       if (token !== animationRunToken) return;
 
       triggerSignatureReveal(namesEl, signatureDuration, 0);
@@ -817,24 +1344,18 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
       await sleep(1300); // final settle: nothing else moves
       if (token !== animationRunToken) return;
 
-      nameEl.textContent = originalName;
-      dedicationEl.textContent = originalDedication;
-      resetSignatureUnit(namesEl);
-      resetInkUnit(elephantEl);
-      resetInkUnit(duckEl);
-      [locationEl, ctaEl].forEach(resetFadeUnit);
-      resetUnderline(ctaEl);
-
+      // No textContent/innerHTML swap here: the .ink-line/.ink-word spans
+      // splitIntoLines produced *are* the final markup. showEverythingNow
+      // below strips their ink-reveal styling in place, so the line
+      // breaks, word wrapping and hyphens that were on screen for the
+      // whole reveal are exactly what's left standing afterward -- never
+      // a second, independently-computed "final" layout to disagree with
+      // the animated one.
       showEverythingNow(cover);
     } catch (err) {
       // Never leave the cover partially hidden if something goes wrong.
-      nameEl.textContent = originalName;
-      dedicationEl.textContent = originalDedication;
-      resetSignatureUnit(namesEl);
-      resetInkUnit(elephantEl);
-      resetInkUnit(duckEl);
-      [locationEl, ctaEl].forEach(resetFadeUnit);
-      resetUnderline(ctaEl);
+      // Same reasoning as above: whatever markup exists (split or still
+      // plain, depending on how early this failed) is left as-is.
       showEverythingNow(cover);
     }
   }
@@ -874,6 +1395,20 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   // Pure safety net, never part of the normal flow: a stuck load (a JS
   // error nothing caught, a font/image that never resolves, a device
   // stuck reporting landscape) must never hide the invitation forever.
+  //
+  // This is a *boot* watchdog, not a whole-sequence one, and can't become
+  // one by accident: it starts counting from script evaluation (page
+  // load), but its only guard is bootCompleted -- a one-way latch flipped
+  // near the very start of startAnimationOnce, right after fonts/images
+  // resolve and the first hidden frame is painted, well before the
+  // ~18-23s reveal (elephant/duck/name/dedication/signature/location/CTA)
+  // even begins. Once true it never flips back, so by the time this timer
+  // could fire against a run that's actually progressing, bootCompleted
+  // is already true and it no-ops -- it can only ever fire while still
+  // waiting on fonts/images/orientation, i.e. before the visible sequence
+  // has started at all. There is nothing to size against the sequence's
+  // own computed duration here: that duration is irrelevant to what this
+  // timer guards.
   window.setTimeout(() => {
     if (bootCompleted) return;
     animationRunToken += 1; // invalidate any run still in flight
@@ -1145,30 +1680,57 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     margin: 0;
   }
 
+  /*
+    Protected, constant editorial zone for the dedication -- width and left
+    position (inherited from .cover__intro's own left: 27.3px, unchanged)
+    are fixed at 140px for every dedication, regardless of length: this is
+    a real `width`, not a `max-width`, so the box never grows sideways.
+    140px was set from a pixel-level measurement of the duck illustration
+    (not just its CSS bounding box, which is far more generous than its
+    actual visible ink): the duck's own leftmost visible stroke, within the
+    vertical band this zone can ever occupy, sits at logical x=179px --
+    140px width (left 27.3 + width 140 = right edge 167.3px) keeps a
+    ~11-12px hard gap from that worst-case point. `max-height` is set
+    inline per guest by fitDedicationHeight() below (namesTop minus a safe
+    margin, minus however tall the kicker/guest-name already is) --
+    deliberately NOT overflow:hidden, which would clip the manuscript
+    font's strokes; the zone's own height is instead kept within budget by
+    having fitDedicationHeight shrink font-size/line-height until the
+    actual rendered content fits, never by clipping or truncating it.
+    font-size/line-height come from --dedication-font-size/--dedication
+    -line-height, set inline per-guest from computeDedicationTypography()
+    above (continuous ramp by character count) as the first pass; the
+    var()'s fallback value only applies if that inline style is ever
+    missing.
+  */
+  /*
+    Editorial rule: a word may only break across lines at an explicit,
+    visible soft hyphen -- never a blind, unmarked cut. Every dedication is
+    run through hyphenateSpanishText() at build time (see the frontmatter
+    above and spanishHyphenation.ts), which inserts soft hyphens (U+00AD) at
+    safe, linguistically valid syllable boundaries -- that's now the
+    *primary* mechanism, not something an editor has to type by hand.
+    Leaving overflow-wrap at its default ("normal") means a word that still
+    has no eligible break point after that (an excluded proper noun/acronym
+    /URL, or one genuinely too long) is never sliced mid-glyph; it overflows
+    the zone's width instead, which checkDedicationOverflow() below detects
+    and reports for review, rather than silently degrading into an
+    unmarked cut. hyphens is also left at its default ("manual"), so a soft
+    hyphen -- automatic or hand-typed -- is the *only* thing that can ever
+    introduce a visible hyphen; no browser/dictionary-based auto
+    -hyphenation is ever involved, which is exactly why the outcome is
+    identical in every browser.
+  */
   .cover__lede {
     opacity: 0.84;
-    max-width: 187.2px;
+    width: 140px;
     font-family: 'Homemade Apple', cursive;
     font-weight: 400;
-    font-size: 1.05rem;
-    line-height: 1.5;
+    font-size: var(--dedication-font-size, 1.05rem);
+    line-height: var(--dedication-line-height, 1.5);
     color: #5c5047;
     margin: 0;
     margin-top: 17px;
-  }
-
-  .cover__intro[data-length='short'] .cover__lede {
-    font-size: 1.4rem;
-    line-height: 1.6;
-    max-width: 179.4px;
-    margin-top: 21px;
-  }
-
-  .cover__intro[data-length='long'] .cover__lede {
-    font-size: 1rem;
-    line-height: 1.4;
-    max-width: 187.2px;
-    margin-top: 13px;
   }
 
   .cover__title {
@@ -1259,13 +1821,41 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     tinta (nombre, dedicatoria). display:block/inline preserva exactamente
     el mismo salto de línea ya calculado antes de dividir el texto, así que
     no altera la composición en reposo ni cuando JS está deshabilitado.
+    Este es el único DOM que existe: nunca se reconstruye ni se vuelve a
+    texto plano (ver showEverythingNow), así que no hay una versión
+    "animada" y otra "final" que puedan desacordar entre sí.
+  */
+  /*
+    .ink-line is the *only* element in the whole name/dedication subtree
+    that ever carries a clip-path -- no mask-image (see lineClipPath in
+    the script above for why), and .ink-word (plain or split by
+    splitWrappedWordSpan) never carries either, so there is exactly one
+    reveal mechanism per line and its inline children just paint through
+    (overflow: visible, the default, kept explicit below).
+    Horizontal bleed for a cursive stroke that overshoots a glyph's own
+    logical box (an entry swash to the left of the first letter, a
+    trailing flourish to the right of the last) lives here, in the box
+    model, not in lineClipPath's polygon: padding-left/right widen the
+    box itself, and the equal negative margin-left/right cancel that
+    back out in the surrounding layout, so the line's actual on-screen
+    start/end and the wrapping computed before never move. This keeps
+    the polygon's own 0%/100% a plain, un-bled sweep across that
+    (visually unchanged) box -- a fixed negative/over-100% coordinate in
+    the polygon instead would sit inside the clipped-in region at every
+    percent, including the hidden one, leaking whatever ink is in the
+    bleed strip before the line ever starts revealing.
   */
   .ink-line {
     display: block;
+    padding-left: 0.5em;
+    padding-right: 0.5em;
+    margin-left: -0.5em;
+    margin-right: -0.5em;
   }
 
   .ink-word {
     display: inline;
+    overflow: visible;
   }
 
   /*
