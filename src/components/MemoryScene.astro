@@ -111,6 +111,22 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     color: #211c18;
     font-size: clamp(1.7rem, min(7vw, 8vh), 2.6rem);
     line-height: 1.25;
+    outline: none;
+  }
+
+  /*
+    tabindex="-1" means this heading is only ever reached via the
+    scripted focus() call in InvitationExperience.astro's
+    focusSceneHeading (never by a user tabbing through the page) -- its
+    purpose is purely to move a screen reader's attention to the new
+    scene, since sighted users already have the whole scene change as
+    their cue. The browser's default focus ring would otherwise box in
+    the handwritten heading, fighting the ink strokes' own framing, so it
+    stays suppressed (redundant with the outline:none above, kept
+    explicit here since :focus-visible would otherwise reintroduce it).
+  */
+  .memory__title:focus-visible {
+    outline: none;
   }
 
   .memory__body {
@@ -147,6 +163,73 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
   .memory__cta::after {
     content: ' →';
+  }
+
+  /*
+    Reveal choreography, phase 4 of the transition (see the timing
+    constants in InvitationExperience.astro's script): hidden by default
+    while the cover scene is active, fading up once the memory scene
+    becomes current. The title settles in as D1 (the top stroke) is
+    nearly in place, the body follows, and the closing lines + CTA settle
+    once E1 (the bottom stroke) finishes its own journey -- delays below
+    are chosen to match PHASE1+PHASE2+PHASE3 (~2300ms) from that file.
+  */
+  :global(.experience:not([data-scene='memory'])) .memory__eyebrow,
+  :global(.experience:not([data-scene='memory'])) .memory__title,
+  :global(.experience:not([data-scene='memory'])) .memory__body,
+  :global(.experience:not([data-scene='memory'])) .memory__closing,
+  :global(.experience:not([data-scene='memory'])) .memory__cta {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  :global(.experience[data-scene='memory']) .memory__eyebrow,
+  :global(.experience[data-scene='memory']) .memory__title,
+  :global(.experience[data-scene='memory']) .memory__body,
+  :global(.experience[data-scene='memory']) .memory__closing,
+  :global(.experience[data-scene='memory']) .memory__cta {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    :global(.experience.is-transitioning[data-transition-direction='forward']) .memory__eyebrow,
+    :global(.experience.is-transitioning[data-transition-direction='forward']) .memory__title {
+      transition: opacity 500ms ease, transform 500ms ease;
+      transition-delay: 2050ms;
+    }
+
+    :global(.experience.is-transitioning[data-transition-direction='forward']) .memory__body {
+      transition: opacity 500ms ease, transform 500ms ease;
+      transition-delay: 2300ms;
+    }
+
+    :global(.experience.is-transitioning[data-transition-direction='forward']) .memory__closing,
+    :global(.experience.is-transitioning[data-transition-direction='forward']) .memory__cta {
+      transition: opacity 500ms ease, transform 500ms ease;
+      transition-delay: 2450ms;
+    }
+
+    :global(.experience.is-transitioning[data-transition-direction='back']) .memory__eyebrow,
+    :global(.experience.is-transitioning[data-transition-direction='back']) .memory__title,
+    :global(.experience.is-transitioning[data-transition-direction='back']) .memory__body,
+    :global(.experience.is-transitioning[data-transition-direction='back']) .memory__closing,
+    :global(.experience.is-transitioning[data-transition-direction='back']) .memory__cta {
+      transition: opacity 400ms ease, transform 400ms ease;
+    }
+  }
+
+  :global(.experience.is-reduced-motion) .memory__eyebrow,
+  :global(.experience.is-reduced-motion) .memory__title,
+  :global(.experience.is-reduced-motion) .memory__body,
+  :global(.experience.is-reduced-motion) .memory__closing,
+  :global(.experience.is-reduced-motion) .memory__cta,
+  :global(.experience.is-instant) .memory__eyebrow,
+  :global(.experience.is-instant) .memory__title,
+  :global(.experience.is-instant) .memory__body,
+  :global(.experience.is-instant) .memory__closing,
+  :global(.experience.is-instant) .memory__cta {
+    transition: none !important;
   }
 
   /* Landscape (rotated phones, tablets, laptops): redistribute into two
