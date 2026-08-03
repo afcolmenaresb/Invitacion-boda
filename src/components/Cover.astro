@@ -800,33 +800,44 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   // animatable and not dependent on any custom-property/calc() interplay
   // for its interpolation, so there is nothing left for a second
   // mechanism to disagree with.
+  // Horizontal bleed lives in .ink-line's own box (padding-left/right +
+  // an equal negative margin-left/right, see the CSS below), not in this
+  // polygon -- a fixed negative/over-100% x-coordinate here would put
+  // that bleed strip permanently inside the clipped-in region, at every
+  // percent including the hidden one, leaking whatever ink sits in it
+  // (a cursive entry stroke) before the line ever starts revealing. With
+  // the bleed folded into the box instead, 0%/100% are the box's own
+  // (widened, but visually unmoved -- see the CSS) edges, so a plain 0%
+  // -to-100% sweep already covers the full bleed once it completes,
+  // with nothing exposed early.
   const LINE_BLEED_EM = 0.5;
 
-  // Left/top/bottom are a constant bleed -- literally outside the box,
-  // never animated -- so a cursive stroke that overshoots a glyph's own
-  // logical box on any of those three sides is never clipped, not even
-  // on the very first hidden frame. Only the right edge moves, sweeping
-  // from x=0 up to (and past) 100%; the irregular jitter rides only that
-  // moving edge, same as jaggedClipPath above. At the fully-revealed
-  // call (percent >= 100), every jittered point clamps to the same
-  // value, so the resting right edge -- like the fixed left one -- is a
-  // plain straight line, and the polygon already reaches
-  // calc(100% + bleed): the last frame with clip-path still applied
+  // The left edge is always a flat 0% -- never negative, never animated.
+  // Top/bottom get a constant vertical bleed (ascenders/descenders/
+  // accents past the line box's own height): unlike a horizontal bleed,
+  // a vertical one can't leak anything early, since at percent<=0 the
+  // polygon's left and right edges coincide at 0% -- zero width, so zero
+  // area, regardless of how tall it is. Only the right edge moves,
+  // sweeping from 0% up to 100% of the (bleed-widened) box; the
+  // irregular jitter rides only that moving edge, same as
+  // jaggedClipPath above. At the fully-revealed call (percent >= 100),
+  // every jittered point clamps to the same 100%, so the resting right
+  // edge -- like the fixed left one -- is a plain straight line already
+  // at the box's true edge: the last frame with clip-path still applied
   // shows the exact same ink as removing it entirely.
   function lineClipPath(percent: number, seed: number): string {
     const steps = 7;
-    const bleed = `${LINE_BLEED_EM}em`;
-    const left = `-${bleed}`;
-    const top = `-${bleed}`;
-    const bottom = `calc(100% + ${bleed})`;
-    const right = `calc(100% + ${bleed})`;
+    const verticalBleed = `${LINE_BLEED_EM}em`;
+    const left = '0%';
+    const top = `-${verticalBleed}`;
+    const bottom = `calc(100% + ${verticalBleed})`;
 
     const points = [`${left} ${top}`];
     for (let i = 0; i <= steps; i++) {
       const t = i / steps;
       const jitter = Math.sin((t * 6 + seed) * 3.7) * 2.2;
       const x = clamp(percent + jitter, 0, 100);
-      points.push(`${x >= 100 ? right : `${x.toFixed(2)}%`} ${(t * 100).toFixed(2)}%`);
+      points.push(`${x.toFixed(2)}% ${(t * 100).toFixed(2)}%`);
     }
     points.push(`${left} ${bottom}`);
     return `polygon(${points.join(', ')})`;
@@ -846,12 +857,20 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     });
   }
 
-  // Per rule: leaving the completed clip-path in place vs. clearing it
-  // must be visually identical, since the completed polygon already
-  // shows every pixel of ink (see lineClipPath above) -- this is a
-  // cleanup step, not something the reveal depends on to look finished.
+  // Leaving the completed clip-path in place vs. clearing it must be
+  // visually identical, since the completed polygon already shows every
+  // pixel of ink (see lineClipPath above) -- clip-path doesn't
+  // participate in layout, so nothing downstream (fitAll included)
+  // needs it gone. Only the transition is cleared, so no further style
+  // write could ever animate again; clip-path itself is deliberately
+  // left exactly as triggerLineReveal set it, because clearing it turned
+  // out not to be a no-op in practice -- removing an active clip-path
+  // nudges the browser's own text rasterization by a subpixel (measured:
+  // a handful of edge pixels differ even though the geometry is
+  // byte-identical), and the spec here is an exact, provable 0-pixel
+  // diff between the last animated frame and the final one, not just a
+  // visual match.
   function resetLineUnit(el: HTMLElement) {
-    el.style.clipPath = '';
     el.style.transition = '';
   }
 
@@ -1793,17 +1812,25 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     splitWrappedWordSpan) never carries either, so there is exactly one
     reveal mechanism per line and its inline children just paint through
     (overflow: visible, the default, kept explicit below).
-    The bleed that protects the handwritten font's strokes -- which can
-    extend past a glyph's own logical box on any side, a cursive entry
-    swash to the left of the first letter, a trailing flourish to the
-    right of the last, an accent or descender past the top/bottom -- now
-    lives entirely in lineClipPath's own polygon coordinates (fixed
-    values outside 0%-100%, in em), not in this box's model. No padding/
-    margin needed here to fake that slack, so the box stays exactly the
-    plain, unpadded block it lays out as at rest.
+    Horizontal bleed for a cursive stroke that overshoots a glyph's own
+    logical box (an entry swash to the left of the first letter, a
+    trailing flourish to the right of the last) lives here, in the box
+    model, not in lineClipPath's polygon: padding-left/right widen the
+    box itself, and the equal negative margin-left/right cancel that
+    back out in the surrounding layout, so the line's actual on-screen
+    start/end and the wrapping computed before never move. This keeps
+    the polygon's own 0%/100% a plain, un-bled sweep across that
+    (visually unchanged) box -- a fixed negative/over-100% coordinate in
+    the polygon instead would sit inside the clipped-in region at every
+    percent, including the hidden one, leaking whatever ink is in the
+    bleed strip before the line ever starts revealing.
   */
   .ink-line {
     display: block;
+    padding-left: 0.5em;
+    padding-right: 0.5em;
+    margin-left: -0.5em;
+    margin-right: -0.5em;
   }
 
   .ink-word {
