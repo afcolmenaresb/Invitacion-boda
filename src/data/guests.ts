@@ -70,47 +70,6 @@ export const guests: Guest[] = [
     displayName: 'María Fernanda y Juan Sebastián',
     dedication: 'Su presencia hará que este viaje tenga un sentido aún más especial para nosotros dos.',
   },
-
-  // ---------------------------------------------------------------------
-  // QA PREVIEW FIXTURES -- Vercel preview only, remove after visual sign
-  // -off on the dedication zone / Spanish auto-hyphenation work. Not real
-  // guests. Safe to delete this whole block (through the closing "END QA
-  // PREVIEW FIXTURES" marker) once approved -- nothing else references
-  // these slugs.
-  // ---------------------------------------------------------------------
-  {
-    // Case 1 -- short: same guest/dedication as the real 'estefi-y-matias'
-    // entry above, under its own slug so it doesn't collide with it.
-    slug: 'qa-cover-short',
-    displayName: 'Estefi y Matías',
-    dedication: 'Hay viajes que no tendrían el mismo sentido sin ciertas personas.',
-  },
-  {
-    // Case 2 -- medium: same guest/dedication as the real
-    // 'familia-gonzalez-benitez' entry above, under its own slug.
-    slug: 'qa-cover-medium',
-    displayName: 'Familia González Benítez',
-    dedication:
-      'Desde el primer encuentro supimos que esta familia sería parte esencial de la historia que hoy comenzamos a escribir juntos.',
-  },
-  {
-    // Case 3 -- long, ~160 visible chars, written plainly with no manual
-    // soft hyphens: exercises automatic Spanish syllabification alone.
-    slug: 'qa-cover-long',
-    displayName: 'QA Cover Long',
-    dedication:
-      'Agradecemos profundamente tu extraordinaria generosidad, acompañamiento incondicional y complicidad inquebrantable durante estos preparativos matrimoniales',
-  },
-  {
-    // Case 4 -- long, ~160 visible chars, includes a long name + surname
-    // ("Bartolomé Etchegoyen") that the proper-noun heuristic must leave
-    // whole, while the rest of the text still auto-hyphenates normally.
-    slug: 'qa-cover-protected-name',
-    displayName: 'QA Cover Protected Name',
-    dedication:
-      'Gracias Bartolomé Etchegoyen por acompañarnos incondicionalmente durante estos preparativos matrimoniales tan especiales y significativos para nosotros',
-  },
-  // --------------------- END QA PREVIEW FIXTURES ------------------------
 ];
 
 export function getGuestBySlug(slug: string): Guest | undefined {
