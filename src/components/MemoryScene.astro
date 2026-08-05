@@ -1,7 +1,20 @@
 ---
-import { memoryScene } from '../data/sceneMemory';
+import '@fontsource/sacramento/400.css';
+import { memoryScene, getMemorySceneFinalLine } from '../data/sceneMemory';
+import type { Guest } from '../data/guests';
+
+interface Props {
+  /** Drives the dynamic closing line ("Y tú, ahí." / "Y ustedes, ahí."). */
+  addressing?: Guest['addressing'];
+}
+
+// 'plural' is the safer neutral default if this were ever rendered without
+// a guest context -- in practice InvitationExperience always passes the
+// real guest.addressing through.
+const { addressing = 'plural' } = Astro.props;
 
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const finalLine = getMemorySceneFinalLine(addressing);
 ---
 
 <section class="memory" data-scene-panel-content aria-label={memoryScene.eyebrow}>
@@ -22,11 +35,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
         <p>{line}</p>
       ))}
     </div>
-    <div class="memory__closing">
-      {memoryScene.closing.map((line) => (
-        <p>{line}</p>
-      ))}
-    </div>
+    <p class="memory__final">{finalLine}</p>
     <p class="memory__cta">{memoryScene.cta}</p>
   </div>
 </section>
@@ -104,6 +113,11 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     color: #8c7f6a;
   }
 
+  /*
+    Title -- untouched from the approved composition: same handwritten
+    typeface, position, hierarchy and size as before. Nothing in this file
+    changes .memory__title.
+  */
   .memory__title {
     margin: 0;
     font-family: 'Homemade Apple', cursive;
@@ -132,24 +146,39 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   .memory__body {
     display: flex;
     flex-direction: column;
-    gap: 0.15em;
+    gap: 0.3em;
   }
 
+  /*
+    Secondary text -- "Opción A": an existing, already-installed
+    handwritten typeface (Sacramento -- imported above, was already a
+    project dependency but unused elsewhere), never a system serif/sans or
+    a second new font. Thinner and calmer than the title's Homemade Apple,
+    sized and spaced generously since script faces read smaller/tighter at
+    a given font-size than a normal serif -- this keeps it legible and
+    intimate rather than decorative or cramped.
+  */
   .memory__body p,
-  .memory__closing p {
+  .memory__final {
     margin: 0;
-    font-family: var(--font-serif);
-    color: #5c5047;
-    font-size: clamp(0.92rem, min(3vw, 3.4vh), 1.1rem);
-    line-height: 1.5;
+    font-family: 'Sacramento', cursive;
+    font-weight: 400;
+    letter-spacing: 0.01em;
+    color: #4a3f35;
+    font-size: clamp(1.15rem, min(4.2vw, 4.4vh), 1.5rem);
+    line-height: 1.55;
   }
 
-  .memory__closing {
-    display: flex;
-    flex-direction: column;
-    gap: 0.15em;
-    margin-top: clamp(4px, 1vh, 10px);
-    font-style: italic;
+  /*
+    The dynamic closing line ("Y tú, ahí." / "Y ustedes, ahí.") gets a
+    subtle emphasis -- slightly larger and in the accent ink -- but stays
+    the same typeface/weight as the four lines above it, well below the
+    title's presence.
+  */
+  .memory__final {
+    margin-top: clamp(6px, 1.2vh, 14px);
+    font-size: clamp(1.3rem, min(4.8vw, 5vh), 1.7rem);
+    color: var(--color-accent);
   }
 
   .memory__cta {
@@ -166,54 +195,66 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   }
 
   /*
-    Reveal choreography, phase 4 of the transition (see the timing
-    constants in InvitationExperience.astro's script): hidden by default
-    while the cover scene is active, fading up once the memory scene
-    becomes current. The title settles in as D1 (the top stroke) is
-    nearly in place, the body follows, and the closing lines + CTA settle
-    once E1 (the bottom stroke) finishes its own journey -- delays below
-    are chosen to match PHASE1+PHASE2+PHASE3 (~2300ms) from that file.
+    Reveal: hidden by default, visible either (a) once
+    InvitationExperience's script adds .is-revealing-memory to the shared
+    .experience root -- the real, video-timed moment during a forward
+    transition -- or (b) whenever the scene is already settled on 'memory'
+    outside of a transition (direct #recuerdo load, or once a transition
+    has fully finished). Decoupling from data-scene/is-transitioning
+    directly (unlike the old choreography, which was keyed to the SVG ink
+    strokes' own fixed timeline) is what lets this same markup work
+    whether the video played, failed over, or never ran at all
+    (reduced-motion).
   */
-  :global(.experience:not([data-scene='memory'])) .memory__eyebrow,
-  :global(.experience:not([data-scene='memory'])) .memory__title,
-  :global(.experience:not([data-scene='memory'])) .memory__body,
-  :global(.experience:not([data-scene='memory'])) .memory__closing,
-  :global(.experience:not([data-scene='memory'])) .memory__cta {
+  :global(.experience:not(.is-revealing-memory)) .memory__eyebrow,
+  :global(.experience:not(.is-revealing-memory)) .memory__title,
+  :global(.experience:not(.is-revealing-memory)) .memory__body,
+  :global(.experience:not(.is-revealing-memory)) .memory__final,
+  :global(.experience:not(.is-revealing-memory)) .memory__cta {
     opacity: 0;
     transform: translateY(8px);
   }
 
-  :global(.experience[data-scene='memory']) .memory__eyebrow,
-  :global(.experience[data-scene='memory']) .memory__title,
-  :global(.experience[data-scene='memory']) .memory__body,
-  :global(.experience[data-scene='memory']) .memory__closing,
-  :global(.experience[data-scene='memory']) .memory__cta {
+  :global(.experience.is-revealing-memory) .memory__eyebrow,
+  :global(.experience.is-revealing-memory) .memory__title,
+  :global(.experience.is-revealing-memory) .memory__body,
+  :global(.experience.is-revealing-memory) .memory__final,
+  :global(.experience.is-revealing-memory) .memory__cta {
     opacity: 1;
     transform: translateY(0);
   }
 
+  /*
+    Forward stagger, serene rather than "interface-like": title first,
+    then the body lines, then the final line + CTA -- opacity and a very
+    small translateY only, no manuscript ink-reveal. Delays are small and
+    relative to the moment .is-revealing-memory is added (i.e. right after
+    the video ends and its brief hold, or immediately for the
+    reduced-motion/fallback crossfade) -- never a large absolute delay
+    guessed against the video's own duration, since that duration varies
+    by device/network.
+  */
   @media (prefers-reduced-motion: no-preference) {
-    :global(.experience.is-transitioning[data-transition-direction='forward']) .memory__eyebrow,
-    :global(.experience.is-transitioning[data-transition-direction='forward']) .memory__title {
-      transition: opacity 500ms ease, transform 500ms ease;
-      transition-delay: 2050ms;
+    :global(.experience.is-transitioning.is-revealing-memory[data-transition-direction='forward']) .memory__eyebrow,
+    :global(.experience.is-transitioning.is-revealing-memory[data-transition-direction='forward']) .memory__title {
+      transition: opacity 380ms ease, transform 380ms ease;
     }
 
-    :global(.experience.is-transitioning[data-transition-direction='forward']) .memory__body {
-      transition: opacity 500ms ease, transform 500ms ease;
-      transition-delay: 2300ms;
+    :global(.experience.is-transitioning.is-revealing-memory[data-transition-direction='forward']) .memory__body {
+      transition: opacity 380ms ease, transform 380ms ease;
+      transition-delay: 280ms;
     }
 
-    :global(.experience.is-transitioning[data-transition-direction='forward']) .memory__closing,
-    :global(.experience.is-transitioning[data-transition-direction='forward']) .memory__cta {
-      transition: opacity 500ms ease, transform 500ms ease;
-      transition-delay: 2450ms;
+    :global(.experience.is-transitioning.is-revealing-memory[data-transition-direction='forward']) .memory__final,
+    :global(.experience.is-transitioning.is-revealing-memory[data-transition-direction='forward']) .memory__cta {
+      transition: opacity 420ms ease, transform 420ms ease;
+      transition-delay: 540ms;
     }
 
     :global(.experience.is-transitioning[data-transition-direction='back']) .memory__eyebrow,
     :global(.experience.is-transitioning[data-transition-direction='back']) .memory__title,
     :global(.experience.is-transitioning[data-transition-direction='back']) .memory__body,
-    :global(.experience.is-transitioning[data-transition-direction='back']) .memory__closing,
+    :global(.experience.is-transitioning[data-transition-direction='back']) .memory__final,
     :global(.experience.is-transitioning[data-transition-direction='back']) .memory__cta {
       transition: opacity 400ms ease, transform 400ms ease;
     }
@@ -222,12 +263,12 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   :global(.experience.is-reduced-motion) .memory__eyebrow,
   :global(.experience.is-reduced-motion) .memory__title,
   :global(.experience.is-reduced-motion) .memory__body,
-  :global(.experience.is-reduced-motion) .memory__closing,
+  :global(.experience.is-reduced-motion) .memory__final,
   :global(.experience.is-reduced-motion) .memory__cta,
   :global(.experience.is-instant) .memory__eyebrow,
   :global(.experience.is-instant) .memory__title,
   :global(.experience.is-instant) .memory__body,
-  :global(.experience.is-instant) .memory__closing,
+  :global(.experience.is-instant) .memory__final,
   :global(.experience.is-instant) .memory__cta {
     transition: none !important;
   }
@@ -250,7 +291,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     }
 
     .memory__body,
-    .memory__closing,
+    .memory__final,
     .memory__cta {
       grid-column: 2;
     }

@@ -4,6 +4,15 @@ export interface Guest {
   /** Guest name(s) as shown on the invitation. Recommended max 32 characters. */
   displayName: string;
   /**
+   * How MemoryScene's dynamic closing line addresses this guest --
+   * 'singular' ("Y tú, ahí.") for one person, 'plural' ("Y ustedes, ahí.")
+   * for a couple, family or group. This is the single explicit, typed
+   * source of truth for that choice -- never derive it by inspecting
+   * displayName for "y"/spaces/etc., and never hardcode a slug list
+   * anywhere else. Every guest below sets it explicitly.
+   */
+  addressing: 'singular' | 'plural';
+  /**
    * Personalized message. Recommended up to 120 visible characters, hard cap
    * MAX_DEDICATION_LENGTH (160 visible characters -- see getVisibleDedicationLength).
    *
@@ -52,22 +61,26 @@ export const guests: Guest[] = [
   {
     slug: 'ana',
     displayName: 'Ana',
+    addressing: 'singular',
     dedication: 'Gracias por acompañarnos en este nuevo comienzo.',
   },
   {
     slug: 'estefi-y-matias',
     displayName: 'Estefi y Matías',
+    addressing: 'plural',
     dedication: 'Hay viajes que no tendrían el mismo sentido sin ciertas personas.',
   },
   {
     slug: 'familia-gonzalez-benitez',
     displayName: 'Familia González Benítez',
+    addressing: 'plural',
     dedication:
       'Desde el primer encuentro supimos que esta familia sería parte esencial de la historia que hoy comenzamos a escribir juntos.',
   },
   {
     slug: 'maria-fernanda-y-juan-sebastian',
     displayName: 'María Fernanda y Juan Sebastián',
+    addressing: 'plural',
     dedication: 'Su presencia hará que este viaje tenga un sentido aún más especial para nosotros dos.',
   },
 ];

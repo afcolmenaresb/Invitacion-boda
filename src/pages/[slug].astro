@@ -15,6 +15,10 @@ const { guest } = Astro.props;
 
 <BaseLayout title={`Invitación para ${guest.displayName}`}>
   <main>
-    <InvitationExperience displayName={guest.displayName} dedication={guest.dedication} />
+    <InvitationExperience
+      displayName={guest.displayName}
+      dedication={guest.dedication}
+      addressing={guest.addressing}
+    />
   </main>
 </BaseLayout>

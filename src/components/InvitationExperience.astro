@@ -1,13 +1,17 @@
 ---
 import Cover from './Cover.astro';
 import MemoryScene from './MemoryScene.astro';
+import type { Guest } from '../data/guests';
 
 interface Props {
   displayName?: string;
   dedication?: string;
+  addressing?: Guest['addressing'];
 }
 
-const { displayName, dedication } = Astro.props;
+const { displayName, dedication, addressing } = Astro.props;
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const videoSrc = `${base}/videos/memory-transition.mp4`;
 ---
 
 <div class="experience" id="invitation-experience" data-scene="cover" data-transition-direction="forward">
@@ -16,45 +20,42 @@ const { displayName, dedication } = Astro.props;
   </section>
 
   <section class="experience__scene experience__scene--memory" data-scene-panel="memory" inert>
-    <MemoryScene />
+    <MemoryScene addressing={addressing} />
   </section>
 
   <!--
-    One shared ink layer, mounted with the exact same 390x844 logical
-    canvas and the same --cover-scale / --cover-scale-x/-y transform
-    Cover.astro's own .cover-canvas uses (see the matching CSS below) --
-    never a second, viewport-relative coordinate system. Each path's `d`
-    is a real traced line lifted from duck.png/elephant.png (verified
-    against the source art before commit, see the commit message for the
-    calibration method) -- at rest every path sits pixel-for-pixel over
-    its matching stroke on the animal. Nothing here is drawn on;
-    everything is a rigid transform (translate/rotate/scale) of that same
-    unchanged shape, driven by the per-path CSS custom properties set in
-    the script below.
+    Transition video stage: same fixed 390x844 logical canvas and same
+    --cover-scale / --cover-scale-x/-y transform Cover.astro's own
+    .cover-canvas uses (see the matching CSS below), so it sits in exactly
+    the same coordinate system as the cover and memory panels at any
+    viewport. .experience__video-frame carries the identical paper texture
+    Cover.astro letterboxes with, so on wide/desktop viewports -- where the
+    390x844 canvas is uniformly scaled down and centered, never
+    stretched -- the margins beside it read as more paper, never black
+    bars. The <video> itself uses object-fit: cover with a centered
+    object-position, which crops its wider source (16:9-ish) down to the
+    canvas's narrower 390:844 ratio symmetrically from both sides, never
+    top/bottom and never by deforming the footage.
   -->
-  <div class="ink-stage" aria-hidden="true">
-    <svg class="experience__ink" viewBox="0 0 390 844" focusable="false">
-      <path
-        class="experience__ink-stroke experience__ink-stroke--d1"
-        data-stroke="d1"
-        d="M 333.98 20.80 C 331.68 21.20 324.19 21.95 320.17 23.22 C 316.14 24.48 313.26 26.09 309.81 28.40 C 306.35 30.70 302.61 33.86 299.45 37.03 C 296.28 40.19 293.40 44.22 290.81 47.39 C 288.22 50.55 285.63 53.14 283.91 56.02 C 282.18 58.90 280.45 61.78 280.45 64.65 C 280.45 67.53 282.18 70.70 283.91 73.29 C 285.63 75.88 288.22 78.18 290.81 80.19 C 293.40 82.21 296.57 82.78 299.45 85.37 C 302.32 87.96 305.78 91.99 308.08 95.73 C 310.38 99.47 311.82 103.79 313.26 107.82 C 314.70 111.85 315.85 115.88 316.71 119.90 C 317.58 123.93 318.15 127.96 318.44 131.99 C 318.73 136.02 318.73 139.76 318.44 144.08 C 318.15 148.39 317.58 153.00 316.71 157.89 C 315.85 162.78 314.41 168.25 313.26 173.43 C 312.11 178.61 311.25 184.07 309.81 188.97 C 308.37 193.86 306.64 198.46 304.63 202.78 C 302.61 207.10 300.02 211.12 297.72 214.86 C 295.42 218.61 291.97 223.50 290.81 225.22"
-      />
-      <path
-        class="experience__ink-stroke experience__ink-stroke--d2"
-        data-stroke="d2"
-        d="M 295.99 206.23 C 294.55 209.40 290.53 219.18 287.36 225.22 C 284.20 231.27 280.74 236.73 277.00 242.49 C 273.26 248.25 269.23 254.58 264.92 259.76 C 260.60 264.94 256.28 269.54 251.10 273.57 C 245.92 277.60 239.02 281.05 233.84 283.93 C 228.66 286.81 223.94 289.11 220.03 290.83 C 216.11 292.56 211.97 293.71 210.36 294.29"
-      />
-      <path
-        class="experience__ink-stroke experience__ink-stroke--e1"
-        data-stroke="e1"
-        d="M 90.10 534.36 C 90.53 536.84 91.87 544.28 92.65 549.24 C 93.43 554.20 94.28 559.16 94.78 564.12 C 95.28 569.08 95.52 574.39 95.63 579.00 C 95.74 583.60 95.63 587.50 95.42 591.75 C 95.20 596.00 94.74 600.78 94.35 604.50 C 93.96 608.22 93.01 611.23 93.08 614.06 C 93.15 616.90 94.32 619.38 94.78 621.50 C 95.24 623.63 96.02 625.47 95.84 626.82 C 95.67 628.16 94.07 629.12 93.72 629.58"
-      />
-      <path
-        class="experience__ink-stroke experience__ink-stroke--e2"
-        data-stroke="e2"
-        d="M 200.62 493.56 C 197.15 492.57 186.81 488.60 179.79 487.61 C 172.78 486.61 165.27 486.37 158.54 487.61 C 151.81 488.85 145.08 492.49 139.41 495.04 C 133.74 497.60 129.14 500.25 124.53 502.91 C 119.93 505.57 115.68 508.40 111.78 510.98 C 107.89 513.57 104.34 516.12 101.16 518.42 C 97.97 520.73 95.31 522.92 92.65 524.80 C 90.00 526.68 87.16 528.34 85.22 529.69 C 83.27 531.03 81.67 532.34 80.96 532.88"
-      />
-    </svg>
+  <div class="experience__video-stage" aria-hidden="true">
+    <div
+      class="experience__video-frame"
+      style={`background-image: url('${base}/images/textura_vertical_2.png')`}
+    >
+      <div class="experience__video-crop">
+        <video
+          class="experience__video"
+          data-video-src={videoSrc}
+          muted
+          playsinline
+          preload="auto"
+          aria-hidden="true"
+          tabindex="-1"
+          disablepictureinpicture
+          disableremoteplayback
+        ></video>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -65,140 +66,119 @@ const { displayName, dedication } = Astro.props;
   // exactly one is interactive/visible at a time. Cover.astro's own
   // approved intro animation is never touched -- this only listens for
   // clicks on its existing .cover__cta (event delegation, no changes to
-  // Cover's internal script) and toggles CSS classes/custom properties on
-  // this wrapper and on the four ink strokes.
+  // Cover's internal script) and toggles CSS classes on this wrapper.
   //
-  // The four strokes are real lines traced from duck.png/elephant.png
-  // (see the calibration note on .ink-stage above). Each one is a single,
-  // unmodified <path> that starts perfectly aligned with its source
-  // stroke and is only ever moved with a rigid transform (translate +
-  // rotate + scale around its own traced center) -- never redrawn,
-  // dash-animated, or morphed into a different shape. STROKES below is
-  // the one place that choreography lives; the CSS only ever reads the
-  // per-path custom properties it sets.
-  interface StrokeConfig {
-    id: string;
-    originX: number;
-    originY: number;
-    liftX: number;
-    liftY: number;
-    liftRot: number;
-    finalX: number;
-    finalY: number;
-    finalRot: number;
-    finalScale: number;
-    staggerMs: number;
-  }
-
-  const STROKES: StrokeConfig[] = [
-    // D1 -- duck head/beak/neck: the protagonist top curve. Starts
-    // upright over the duck's face; lands as a wide, shallow arc across
-    // the top of the memory scene (rotated onto its side + enlarged).
-    { id: 'd1', originX: 307.2, originY: 123.0, liftX: -5, liftY: -6, liftRot: -4, finalX: -112, finalY: -30, finalRot: -88, finalScale: 1.22, staggerMs: 0 },
-    // D2 -- duck wing edge: short secondary gesture parked in the
-    // margin above-right of the title (between D1's landing spot and
-    // the title's own top edge) -- shrunk well below its traced size so
-    // it reads as a small accent, clear of both the title and the body
-    // copy at every canvas scale.
-    { id: 'd2', originX: 253.2, originY: 250.3, liftX: 6, liftY: -4, liftRot: 6, finalX: 87, finalY: -50, finalRot: 15, finalScale: 0.5, staggerMs: 150 },
-    // E1 -- elephant trunk edge: the protagonist bottom curve, rotated
-    // from its native near-vertical line into a sweep that guides the
-    // eye toward the CTA (never a straight underline).
-    { id: 'e1', originX: 93.0, originY: 582.0, liftX: -6, liftY: 5, liftRot: -5, finalX: 138, finalY: 116, finalRot: 68, finalScale: 1.35, staggerMs: 0 },
-    // E2 -- elephant ear curve: lateral counterweight, kept away from
-    // D1/E1's zones so it never competes with either protagonist.
-    { id: 'e2', originX: 140.8, originY: 510.2, liftX: 6, liftY: -5, liftRot: 5, finalX: -68, finalY: 268, finalRot: -16, finalScale: 1.08, staggerMs: 150 },
-  ];
+  // The forward transition plays a real <video> (see the markup above)
+  // instead of the old four-path SVG "ink stroke" prototype. Because the
+  // video's own duration/readiness/failure modes are real async events
+  // (not a fixed guessed timeline), the whole forward sequence is a single
+  // async function driven by those events, rather than a chain of
+  // setTimeout calls keyed to a hardcoded duration.
 
   const root = document.getElementById('invitation-experience');
   if (root) {
     const coverPanel = root.querySelector<HTMLElement>('[data-scene-panel="cover"]');
     const memoryPanel = root.querySelector<HTMLElement>('[data-scene-panel="memory"]');
-    const strokeEls = new Map<string, SVGPathElement>();
-    STROKES.forEach((cfg) => {
-      const el = root.querySelector<SVGPathElement>(`[data-stroke="${cfg.id}"]`);
-      if (el) {
-        strokeEls.set(cfg.id, el);
-        el.style.setProperty('--origin-x', `${cfg.originX}px`);
-        el.style.setProperty('--origin-y', `${cfg.originY}px`);
-      }
-    });
+    const videoEl = root.querySelector<HTMLVideoElement>('.experience__video');
 
-    // Forward (cover -> memory) phase timings -- mirrored in this file's
-    // <style> block as transition-duration/-delay; keep both in sync by
-    // hand when adjusting the choreography (same convention Cover.astro
-    // itself uses for its own timing constants).
-    const PHASE1_EXIT_MS = 420; // content fades, animals stay whole
-    const PHASE2_SEPARATE_MS = 550; // PNGs fade, strokes lift off
-    const PHASE3_TRAVEL_MS = 1300; // strokes travel to their final spot
-    const PHASE4_SETTLE_MS = 700; // memory scene text settles in
-    const FORWARD_DURATION = PHASE1_EXIT_MS + PHASE2_SEPARATE_MS + PHASE3_TRAVEL_MS + PHASE4_SETTLE_MS; // 2970ms
+    // Forward (cover -> memory) phase timings.
+    const PHASE_A_MS = 380; // cover's own text (name/dedication/signature/location/cta) fades out
+    const PHASE_B_CROSSFADE_MS = 320; // duck/elephant + cover recede while the video fades in
+    const VIDEO_READY_TIMEOUT_MS = 1200; // max wait for the video to become playable before falling back
+    const VIDEO_HARD_CAP_MS = 15000; // safety net against a video that never fires 'ended' or 'error'
+    const POST_VIDEO_HOLD_MS = 190; // hold the video's last frame before revealing MemoryScene
+    const PHASE_D_MS = 980; // MemoryScene's own title/body/final+cta stagger budget
     const BACKWARD_DURATION = 950;
     const REDUCED_MOTION_DURATION = 280;
 
     let isTransitioning = false;
     let currentScene: 'cover' | 'memory' = 'cover';
-    let pendingTimers: number[] = [];
+    let completionTimer: number | null = null;
 
-    function clearPendingTimers() {
-      pendingTimers.forEach((t) => window.clearTimeout(t));
-      pendingTimers = [];
+    function clearCompletionTimer() {
+      if (completionTimer !== null) {
+        window.clearTimeout(completionTimer);
+        completionTimer = null;
+      }
     }
 
     function prefersReducedMotion() {
       return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     }
 
-    function setStrokeVars(id: string, tx: number, ty: number, rot: number, scale: number) {
-      const el = strokeEls.get(id);
-      if (!el) return;
-      el.style.setProperty('--tx', `${tx}px`);
-      el.style.setProperty('--ty', `${ty}px`);
-      el.style.setProperty('--rot', `${rot}deg`);
-      el.style.setProperty('--scl', `${scale}`);
+    function sleep(ms: number) {
+      return new Promise<void>((resolve) => window.setTimeout(resolve, ms));
     }
 
-    function resetStrokesToOrigin() {
-      STROKES.forEach((cfg) => setStrokeVars(cfg.id, 0, 0, 0, 1));
+    // Begin loading the video from the cover itself (preload="auto" in the
+    // markup), but never for reduced-motion users -- per spec it must not
+    // be "loaded as an active part of the experience" for them. Assigning
+    // src only here (not in the SSR markup) is what makes that
+    // conditional: an unset src loads nothing, regardless of preload.
+    let videoSrcAssigned = false;
+    if (videoEl && !prefersReducedMotion()) {
+      const src = videoEl.dataset.videoSrc;
+      if (src) {
+        videoEl.src = src;
+        videoSrcAssigned = true;
+      }
     }
 
-    function setStrokesFinalInstant() {
-      STROKES.forEach((cfg) => setStrokeVars(cfg.id, cfg.finalX, cfg.finalY, cfg.finalRot, cfg.finalScale));
+    function resetVideo() {
+      if (!videoEl) return;
+      videoEl.pause();
+      try {
+        videoEl.currentTime = 0;
+      } catch {
+        // Some browsers throw if metadata isn't loaded yet -- harmless,
+        // the video hasn't played anything to rewind from anyway.
+      }
     }
 
-    // Phase 2: small liftoff, a few px, never a jump -- staggered per
-    // path (D1/E1 first, D2/E2 100-200ms later).
-    function runLiftoff() {
-      STROKES.forEach((cfg) => {
-        const el = strokeEls.get(cfg.id);
-        if (!el) return;
-        el.style.setProperty('--stroke-duration', `${PHASE2_SEPARATE_MS}ms`);
-        el.style.setProperty('--stroke-delay', `${cfg.staggerMs}ms`);
-        setStrokeVars(cfg.id, cfg.liftX, cfg.liftY, cfg.liftRot, 1.02);
+    // Waits until the video has enough data to play, or resolves false
+    // after a short, bounded wait -- "si está listo, reproduce
+    // inmediatamente; si todavía carga, espera solo un tiempo breve y
+    // razonable" (never blocks the transition indefinitely).
+    function waitForVideoReady(video: HTMLVideoElement, timeoutMs: number): Promise<boolean> {
+      if (video.readyState >= 2) return Promise.resolve(true); // HAVE_CURRENT_DATA or better
+      return new Promise((resolve) => {
+        let settled = false;
+        const finish = (ok: boolean) => {
+          if (settled) return;
+          settled = true;
+          video.removeEventListener('loadeddata', onReady);
+          video.removeEventListener('canplay', onReady);
+          video.removeEventListener('error', onError);
+          resolve(ok);
+        };
+        const onReady = () => finish(true);
+        const onError = () => finish(false);
+        video.addEventListener('loadeddata', onReady, { once: true });
+        video.addEventListener('canplay', onReady, { once: true });
+        video.addEventListener('error', onError, { once: true });
+        window.setTimeout(() => finish(false), timeoutMs);
       });
     }
 
-    // Phase 3: the real journey -- translate/rotate/scale the whole
-    // (unmodified) path from its lifted position to its final resting
-    // transform in the memory scene's composition.
-    function runTravel() {
-      STROKES.forEach((cfg) => {
-        const el = strokeEls.get(cfg.id);
-        if (!el) return;
-        el.style.setProperty('--stroke-duration', `${PHASE3_TRAVEL_MS}ms`);
-        el.style.setProperty('--stroke-delay', `${cfg.staggerMs}ms`);
-        setStrokeVars(cfg.id, cfg.finalX, cfg.finalY, cfg.finalRot, cfg.finalScale);
-      });
-    }
-
-    // Reverse: strokes return to sit exactly back over the animals.
-    function runReturn() {
-      STROKES.forEach((cfg) => {
-        const el = strokeEls.get(cfg.id);
-        if (!el) return;
-        el.style.setProperty('--stroke-duration', `${BACKWARD_DURATION}ms`);
-        el.style.setProperty('--stroke-delay', '0ms');
-        setStrokeVars(cfg.id, 0, 0, 0, 1);
+    // Races the video's own 'ended' event against 'error' and a generous
+    // hard cap -- so a stalled/broken playback can never freeze the
+    // transition on a dead screen; it always resolves and lets the caller
+    // fall through to the same clean crossfade into MemoryScene.
+    function waitForVideoOutcome(video: HTMLVideoElement, hardCapMs: number): Promise<boolean> {
+      return new Promise((resolve) => {
+        let settled = false;
+        const finish = (ok: boolean) => {
+          if (settled) return;
+          settled = true;
+          video.removeEventListener('ended', onEnded);
+          video.removeEventListener('error', onError);
+          resolve(ok);
+        };
+        const onEnded = () => finish(true);
+        const onError = () => finish(false);
+        video.addEventListener('ended', onEnded, { once: true });
+        video.addEventListener('error', onError, { once: true });
+        window.setTimeout(() => finish(false), hardCapMs);
       });
     }
 
@@ -220,11 +200,8 @@ const { displayName, dedication } = Astro.props;
       root!.classList.add('is-instant');
       root!.dataset.scene = scene;
       setSceneAccessibility(scene);
-      if (scene === 'memory') {
-        setStrokesFinalInstant();
-      } else {
-        resetStrokesToOrigin();
-      }
+      root!.classList.remove('is-video-active');
+      root!.classList.toggle('is-revealing-memory', scene === 'memory');
       void root!.offsetWidth;
       requestAnimationFrame(() => {
         root?.classList.remove('is-instant');
@@ -240,7 +217,7 @@ const { displayName, dedication } = Astro.props;
     // inline style always beating a stylesheet rule -- would otherwise
     // silently swallow this file's own opacity fade for those elements.
     // Clearing that inline state up front (never touching Cover.astro's
-    // file itself) means the separation-phase fade always runs on its own
+    // file itself) means the recede-phase fade always runs on its own
     // declared transition, at the cost of an instant, one-time "linework
     // completes" snap in that rare early-click case -- far less jarring
     // than the opacity itself popping with no transition at all.
@@ -256,13 +233,70 @@ const { displayName, dedication } = Astro.props;
         });
     }
 
+    // Fase B/C/D: crossfade into the video, hold it, then crossfade into
+    // MemoryScene. Runs entirely on real events (readiness, ended, error)
+    // instead of a guessed fixed duration -- see the individual helpers
+    // above. Always ends by revealing MemoryScene, whether the video
+    // played to completion, failed, or timed out: there is exactly one
+    // exit path, never a frozen screen.
+    async function runVideoAndReveal() {
+      releaseCoverInkReveal();
+      root!.classList.add('is-video-active');
+
+      let played = false;
+      if (videoEl && videoSrcAssigned) {
+        try {
+          videoEl.currentTime = 0;
+        } catch {
+          // ignore -- see resetVideo
+        }
+        const ready = await waitForVideoReady(videoEl, VIDEO_READY_TIMEOUT_MS);
+        if (ready) {
+          try {
+            await videoEl.play();
+            played = true;
+          } catch {
+            played = false;
+          }
+        }
+      }
+
+      if (played && videoEl) {
+        await sleep(PHASE_B_CROSSFADE_MS);
+        const finishedOk = await waitForVideoOutcome(videoEl, VIDEO_HARD_CAP_MS);
+        if (finishedOk) {
+          await sleep(POST_VIDEO_HOLD_MS);
+        }
+        // A mid-playback error/hard-timeout skips the hold (there's no
+        // good last frame to rest on) and falls straight through to the
+        // same reveal below -- "salta de forma limpia... sin dejar la
+        // pantalla congelada".
+      } else {
+        // play() rejected, or the video never became ready in time --
+        // same crossfade destination, just without ever having shown the
+        // video.
+        await sleep(PHASE_B_CROSSFADE_MS);
+      }
+
+      resetVideo();
+      root!.classList.remove('is-video-active');
+      root!.classList.add('is-revealing-memory');
+
+      completionTimer = window.setTimeout(() => {
+        completionTimer = null;
+        currentScene = 'memory';
+        isTransitioning = false;
+        root!.classList.remove('is-transitioning');
+        focusSceneHeading('memory');
+      }, PHASE_D_MS);
+    }
+
     function goToScene(scene: 'cover' | 'memory', options: { pushHistory?: boolean } = {}) {
       const { pushHistory = true } = options;
       if (isTransitioning || scene === currentScene || !coverPanel || !memoryPanel) return;
 
       isTransitioning = true;
-      clearPendingTimers();
-      if (scene === 'memory') releaseCoverInkReveal();
+      clearCompletionTimer();
       root!.classList.add('is-transitioning');
       root!.dataset.transitionDirection = scene === 'memory' ? 'forward' : 'back';
 
@@ -277,33 +311,44 @@ const { displayName, dedication } = Astro.props;
         if (window.location.hash !== hash) history.pushState({ scene }, '', hash);
       }
 
-      let duration: number;
-
-      if (reduced) {
-        duration = REDUCED_MOTION_DURATION;
-        if (scene === 'memory') setStrokesFinalInstant();
-        else resetStrokesToOrigin();
-      } else if (scene === 'memory') {
-        duration = FORWARD_DURATION;
-        // Fixed-timeout orchestration (not transitionend) so a dropped
-        // frame or an unsupported property never leaves the strokes
-        // stuck mid-journey -- whatever happens visually, this always
-        // reaches the safe final state within FORWARD_DURATION.
-        pendingTimers.push(window.setTimeout(runLiftoff, PHASE1_EXIT_MS));
-        pendingTimers.push(window.setTimeout(runTravel, PHASE1_EXIT_MS + PHASE2_SEPARATE_MS));
-      } else {
-        duration = BACKWARD_DURATION;
-        runReturn();
-      }
-
-      pendingTimers.push(
-        window.setTimeout(() => {
+      if (scene === 'cover') {
+        // Back: never plays the video in reverse -- just a short, elegant
+        // crossfade back to the cover, restoring its inert/focus/hash
+        // exactly as before.
+        root!.classList.remove('is-video-active', 'is-revealing-memory');
+        resetVideo();
+        const duration = reduced ? REDUCED_MOTION_DURATION : BACKWARD_DURATION;
+        completionTimer = window.setTimeout(() => {
+          completionTimer = null;
           currentScene = scene;
           isTransitioning = false;
           root!.classList.remove('is-transitioning');
           focusSceneHeading(scene);
-        }, duration)
-      );
+        }, duration);
+        return;
+      }
+
+      if (reduced) {
+        // Reduced motion: no video, ever -- a short crossfade straight to
+        // MemoryScene, hash/focus/inert unchanged.
+        root!.classList.add('is-revealing-memory');
+        completionTimer = window.setTimeout(() => {
+          completionTimer = null;
+          currentScene = scene;
+          isTransitioning = false;
+          root!.classList.remove('is-transitioning');
+          focusSceneHeading(scene);
+        }, REDUCED_MOTION_DURATION);
+        return;
+      }
+
+      // Forward, full motion: Fase A (cover's text fades) runs on the CSS
+      // selectors below as soon as is-transitioning + forward are set;
+      // Fase B/C/D are the async video sequence.
+      window.setTimeout(() => {
+        if (!isTransitioning) return;
+        runVideoAndReveal();
+      }, PHASE_A_MS);
     }
 
     document.addEventListener('click', (event) => {
@@ -387,51 +432,52 @@ const { displayName, dedication } = Astro.props;
     pointer-events: none;
   }
 
+  /*
+    Cover recedes and MemoryScene appears while .is-video-active /
+    .is-revealing-memory are present -- both toggled by the script above at
+    the real moment each phase begins, rather than driven by a fixed delay
+    from click-time. data-scene/inert/hash still flip immediately on click
+    (unchanged from before), but the *visual* crossfades are decoupled
+    from that so they can be timed against the video's real, variable
+    duration.
+  */
   @media (prefers-reduced-motion: no-preference) {
-    .experience:not(.is-instant) .experience__scene--cover {
-      transition: opacity 1000ms ease, transform 1300ms ease;
-      transition-delay: 450ms;
+    .experience.is-transitioning.is-video-active .experience__scene--cover {
+      transition: opacity 320ms ease;
+      opacity: 0;
     }
 
     .experience:not(.is-instant) .experience__scene--memory {
-      transition: opacity 900ms ease;
-      transition-delay: 450ms;
+      transition: opacity 360ms ease;
     }
 
-    .experience[data-scene='memory'] .experience__scene--cover {
-      opacity: 0;
-      transform: translateX(-6%);
-    }
-
-    .experience[data-scene='memory'] .experience__scene--memory {
+    .experience.is-revealing-memory .experience__scene--memory {
       opacity: 1;
     }
 
     .experience[data-transition-direction='back'].is-transitioning .experience__scene--cover,
     .experience[data-transition-direction='back'].is-transitioning .experience__scene--memory {
       transition-duration: 850ms;
-      transition-delay: 0ms;
     }
 
-    /* Phase 1 (0-420ms): guest name, dedication, signature, location and
-       CTA fade out with a small leftward shift. The duck and elephant
-       (and the ink strokes, still overlaid on them) stay fully visible
-       through this phase. */
+    /* Fase A (0-380ms): guest name, dedication, signature, location and
+       CTA fade out with a very small shift -- at most 8px, never a big
+       slide. The duck and elephant stay fully visible through this phase
+       so they can crossfade straight into the video's first frame next. */
     .experience.is-transitioning[data-transition-direction='forward'] :global(.cover__intro),
     .experience.is-transitioning[data-transition-direction='forward'] :global(.cover__names),
     .experience.is-transitioning[data-transition-direction='forward'] :global(.cover__meta) {
-      transition: opacity 420ms ease, transform 420ms ease;
+      transition: opacity 380ms ease, transform 380ms ease;
       opacity: 0;
-      transform: translateX(-10px);
+      transform: translateX(-8px);
     }
 
-    /* Phase 2 (450-1000ms): the rest of the animal PNGs fade away while
-       the four ink strokes (drawn on top, see .ink-stage below) stay
-       fully opaque -- this is the moment the strokes read as "part of
-       the animal" before detaching. */
-    .experience.is-transitioning[data-transition-direction='forward'] :global(.cover__elephant),
-    .experience.is-transitioning[data-transition-direction='forward'] :global(.cover__duck) {
-      transition: opacity 650ms ease 450ms;
+    /* Fase B (starts once Fase A ends): duck/elephant crossfade away as
+       the video crossfades in on top of them -- a short, matched fade on
+       both sides so the HTML/PNG-to-video handoff never reads as a cut. */
+    .experience.is-video-active :global(.cover__elephant),
+    .experience.is-video-active :global(.cover__duck) {
+      transition: opacity 320ms ease;
       opacity: 0;
     }
   }
@@ -446,7 +492,7 @@ const { displayName, dedication } = Astro.props;
     opacity: 0;
   }
 
-  .experience.is-reduced-motion[data-scene='memory'] .experience__scene--memory {
+  .experience.is-reduced-motion.is-revealing-memory .experience__scene--memory {
     opacity: 1;
   }
 
@@ -458,6 +504,7 @@ const { displayName, dedication } = Astro.props;
 
   .experience.is-instant .experience__scene--cover,
   .experience.is-instant .experience__scene--memory,
+  .experience.is-instant .experience__video-stage,
   .experience.is-instant :global(.cover__intro),
   .experience.is-instant :global(.cover__names),
   .experience.is-instant :global(.cover__meta),
@@ -466,64 +513,74 @@ const { displayName, dedication } = Astro.props;
     transition: none !important;
   }
 
-  /* --- Ink stage: same 390x844 logical canvas and same scale mechanism
-     Cover.astro's .cover-canvas uses (see the inline script in
-     Cover.astro that sets --cover-scale / --cover-scale-x/-y on <html>)
-     -- guarantees the four strokes stay pixel-aligned with the duck and
-     elephant in every viewport, exactly like the rest of the portada. */
-  .ink-stage {
+  /*
+    Video stage -- same fixed 390x844 canvas + same --cover-scale /
+    --cover-scale-x/-y transform Cover.astro's .cover-canvas uses, so it
+    lines up pixel-for-pixel with the cover/memory panels at any viewport.
+  */
+  .experience__video-stage {
     position: absolute;
     inset: 0;
     z-index: 3;
+    opacity: 0;
     pointer-events: none;
-    overflow: hidden;
   }
 
-  .ink-stage .experience__ink {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    width: 390px;
-    height: 844px;
-    transform-origin: center center;
-    transform: translate(-50%, -50%) scale(var(--cover-scale, 1));
-  }
-
-  :global(html.is-fill-viewport) .ink-stage .experience__ink {
-    transform: translate(-50%, -50%) scale(var(--cover-scale-x, 1), var(--cover-scale-y, 1));
-  }
-
-  .experience__ink-stroke {
-    fill: none;
-    stroke: var(--color-ink, #2a241d);
-    stroke-linecap: round;
-    stroke-linejoin: round;
-    transform-box: view-box;
-    transform-origin: var(--origin-x, 0) var(--origin-y, 0);
-    transform: translate(var(--tx, 0px), var(--ty, 0px)) rotate(var(--rot, 0deg)) scale(var(--scl, 1));
-  }
-
-  .experience__ink-stroke--d1,
-  .experience__ink-stroke--d2 {
-    stroke-width: 1.7;
-  }
-
-  .experience__ink-stroke--e1,
-  .experience__ink-stroke--e2 {
-    stroke-width: 2.1;
+  .experience.is-video-active .experience__video-stage {
+    opacity: 1;
   }
 
   @media (prefers-reduced-motion: no-preference) {
-    .experience:not(.is-instant) .experience__ink-stroke {
-      transition: transform var(--stroke-duration, 1100ms) cubic-bezier(0.33, 0.68, 0.4, 1) var(--stroke-delay, 0ms);
+    .experience:not(.is-instant) .experience__video-stage {
+      transition: opacity 320ms ease;
     }
   }
 
-  .experience.is-reduced-motion .experience__ink-stroke {
-    transition: none !important;
+  .experience__video-frame {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background-color: var(--color-bg);
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-position: 60% top;
   }
 
-  .experience.is-instant .experience__ink-stroke {
-    transition: none !important;
+  .experience__video-crop {
+    position: relative;
+    width: 390px;
+    height: 844px;
+    flex-shrink: 0;
+    overflow: hidden;
+    transform-origin: center center;
+    transform: scale(var(--cover-scale, 1));
+  }
+
+  :global(html.is-fill-viewport) .experience__video-crop {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(var(--cover-scale-x, 1), var(--cover-scale-y, 1));
+  }
+
+  /*
+    object-fit: cover + a centered object-position is the symmetric,
+    non-deforming horizontal crop the spec calls for: the source is wider
+    (relative to its height) than this 390:844 box, so the browser scales
+    it up until it fills the box's full height and crops the same amount
+    off both the left and right edges -- never top/bottom, never
+    stretched.
+  */
+  .experience__video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: 50% 50%;
+    display: block;
   }
 </style>
