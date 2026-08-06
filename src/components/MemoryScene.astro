@@ -120,8 +120,19 @@ const finalLine = getMemorySceneFinalLine(addressing);
     padding: 44px 28px 28px 28px;
   }
 
+  /*
+    margin-top carries .memory__eyebrow (and, via normal flow, everything
+    after it -- .memory__title included) up by the same ~60px the title
+    itself needs to rise. Putting the shift here rather than on the title
+    directly was a deliberate correction: a -60px margin on the title
+    alone made its own box start above .memory__eyebrow's box, i.e. an
+    overlap (confirmed by measuring real rendered positions, not assumed)
+    -- since .memory__eyebrow is the first child, moving *it* up instead
+    reaches the exact same net title position while keeping the original
+    gap between eyebrow and title intact, so nothing overlaps.
+  */
   .memory__eyebrow {
-    margin: 0;
+    margin: 21.85px 0 0 0;
     font-family: var(--font-sans);
     text-transform: uppercase;
     letter-spacing: 0.16em;
@@ -130,10 +141,10 @@ const finalLine = getMemorySceneFinalLine(addressing);
   }
 
   /*
-    Title -- same handwritten typeface, position and hierarchy as before,
-    sized up a bit for legibility (1.706rem -> 2rem, ~17% larger) plus the
-    reduced top padding above so it reads bigger and sits a little higher
-    in the canvas, without any other change to the composition.
+    Title -- same handwritten typeface, size, color, reveal, block width
+    and alignment as before; only its position changed, and indirectly
+    (see .memory__eyebrow's margin-top above, which is what actually
+    carries it ~1.5 of its own lines higher).
   */
   .memory__title {
     margin: 0;
@@ -160,10 +171,24 @@ const finalLine = getMemorySceneFinalLine(addressing);
     outline: none;
   }
 
+  /*
+    margin-top raises this block's own top edge ~1 of its own (pre-
+    increase) lines relative to where it previously sat. Because
+    .memory__eyebrow's own -60px shift above also pulls everything below
+    it up as a flow consequence (flex children stack), this margin is the
+    net figure needed to land on a ~1-line rise specifically for THIS
+    block's top -- not simply "1 line worth of margin" on its own; solved
+    against real measured positions, not hand-estimated. This only
+    controls the block's top; its bottom (and so .memory__final/.memory__
+    cta below it) is free to move down on its own once the font-size
+    increase below makes the block taller -- see .memory__final's own
+    comment for why that's left alone rather than force-compensated.
+  */
   .memory__body {
     display: flex;
     flex-direction: column;
     gap: 0.3em;
+    margin-top: 27.25px;
   }
 
   /*
@@ -182,24 +207,35 @@ const finalLine = getMemorySceneFinalLine(addressing);
     font-weight: 400;
     letter-spacing: 0.01em;
     color: #4a3f35;
-    /* Sized up from 1.15rem (~15%) for legibility -- same typeface,
-       weight and line-height ratio, just larger. */
-    font-size: 1.32rem;
     line-height: 1.55;
+  }
+
+  /* 1.5x the previous 1.32rem -- same typeface/weight/line-height ratio,
+     just larger; .memory__final keeps its own separate font-size below,
+     unaffected. */
+  .memory__body p {
+    font-size: 1.98rem;
   }
 
   /*
     The dynamic closing line ("Y tú, ahí." / "Y ustedes, ahí.") gets a
     subtle emphasis -- slightly larger and in the accent ink -- but stays
     the same typeface/weight as the four lines above it, well below the
-    title's presence.
+    title's presence. Untouched by this round's changes except
+    margin-top, which now also cancels out the extra height
+    .memory__body gained from its own font-size increase, so this line
+    (and the CTA after it) stay at their original position -- see the
+    long comment on .memory__body above.
   */
   .memory__final {
     /* Frozen at 390x844: 1.2vh there is 10.13px, within the old
-       clamp(6px, 1.2vh, 14px)'s range. */
+       clamp(6px, 1.2vh, 14px)'s range. Left exactly as it was -- see the
+       comment on .memory__body above: one of the four secondary lines
+       now wraps to two lines at the larger size, so the block is
+       genuinely taller than before, and this (and the CTA after it) are
+       left to flow down naturally to make room rather than forcing them
+       to stay artificially pinned to their old position. */
     margin-top: 10.13px;
-    /* Sized up from 1.3rem (~15%), same proportion above .memory__body as
-       before. */
     font-size: 1.5rem;
     color: var(--color-accent);
   }
