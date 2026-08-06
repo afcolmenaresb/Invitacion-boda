@@ -225,30 +225,52 @@ const finalLine = getMemorySceneFinalLine(addressing);
   }
 
   /*
-    Forward stagger, serene rather than "interface-like": title first,
-    then the body lines, then the final line + CTA -- opacity and a very
-    small translateY only, no manuscript ink-reveal. Delays are small and
-    relative to the moment .is-revealing-memory is added (i.e. right after
-    the video ends and its brief hold, or immediately for the
-    reduced-motion/fallback crossfade) -- never a large absolute delay
-    guessed against the video's own duration, since that duration varies
-    by device/network.
+    Forward reveal: title, body lines and the final line are handwritten
+    "ink" -- InvitationExperience.astro's script splits them into lines
+    (see src/lib/inkLineReveal.ts, the same mechanism already approved in
+    Cover.astro's own name/dedication reveal, re-implemented standalone so
+    Cover.astro itself is never touched) and animates each via clip-path.
+    .is-ink-revealing (added by that same script, in the same moment as
+    .is-revealing-memory) kills this plain opacity/transform transition for
+    those three elements -- clip-path becomes their only visible reveal,
+    exactly like Cover's own text. Eyebrow and CTA are plain uppercase
+    labels, not manuscript, and keep a simple opacity+translateY fade with
+    a fixed delay (Fase D's internal choreography is a fixed, designed
+    sequence once it starts -- unlike the outer cover/video crossfade,
+    which is intentionally never delay-based since the video's own
+    duration varies by device/network).
   */
   @media (prefers-reduced-motion: no-preference) {
-    :global(.experience.is-transitioning.is-revealing-memory[data-transition-direction='forward']) .memory__eyebrow,
-    :global(.experience.is-transitioning.is-revealing-memory[data-transition-direction='forward']) .memory__title {
+    :global(.experience.is-transitioning.is-revealing-memory[data-transition-direction='forward']) .memory__eyebrow {
+      transition: opacity 300ms ease, transform 300ms ease;
+    }
+
+    /*
+      Defensive fallback only, for title/body/final: normally superseded
+      by .is-ink-revealing's transition:none below plus the clip-path
+      reveal. If that script ever failed to run (e.g. a thrown error), this
+      still brings the content in with a plain, reasonable fade instead of
+      a hard pop.
+    */
+    :global(.experience.is-transitioning.is-revealing-memory[data-transition-direction='forward']) .memory__title,
+    :global(.experience.is-transitioning.is-revealing-memory[data-transition-direction='forward']) .memory__body,
+    :global(.experience.is-transitioning.is-revealing-memory[data-transition-direction='forward']) .memory__final {
       transition: opacity 380ms ease, transform 380ms ease;
     }
 
-    :global(.experience.is-transitioning.is-revealing-memory[data-transition-direction='forward']) .memory__body {
-      transition: opacity 380ms ease, transform 380ms ease;
-      transition-delay: 280ms;
-    }
-
-    :global(.experience.is-transitioning.is-revealing-memory[data-transition-direction='forward']) .memory__final,
     :global(.experience.is-transitioning.is-revealing-memory[data-transition-direction='forward']) .memory__cta {
-      transition: opacity 420ms ease, transform 420ms ease;
-      transition-delay: 540ms;
+      transition: opacity 320ms ease, transform 320ms ease;
+      /* title (1700ms) + body (1900ms) + pause (140ms) + final line
+         (650ms) + a short beat (100ms) before the CTA fades in -- see the
+         matching MEMORY_* constants in InvitationExperience.astro. */
+      transition-delay: 4490ms;
+    }
+
+    :global(.experience.is-ink-revealing) .memory__title,
+    :global(.experience.is-ink-revealing) .memory__body,
+    :global(.experience.is-ink-revealing) .memory__final {
+      transition: none !important;
+      transform: none !important;
     }
 
     :global(.experience.is-transitioning[data-transition-direction='back']) .memory__eyebrow,
@@ -258,6 +280,28 @@ const finalLine = getMemorySceneFinalLine(addressing);
     :global(.experience.is-transitioning[data-transition-direction='back']) .memory__cta {
       transition: opacity 400ms ease, transform 400ms ease;
     }
+  }
+
+  /*
+    .ink-line/.ink-word -- identical to Cover.astro's own rules (see that
+    file for the full rationale): .ink-line is the only element that ever
+    carries a clip-path (never mask-image), and its horizontal bleed lives
+    in the box model (padding + equal negative margin) so a cursive
+    overshoot is never clipped early. .ink-word never carries clip-path or
+    padding of its own; display:inline + overflow:visible (the default)
+    already lets it paint through untouched.
+  */
+  :global(.memory .ink-line) {
+    display: block;
+    padding-left: 0.5em;
+    padding-right: 0.5em;
+    margin-left: -0.5em;
+    margin-right: -0.5em;
+  }
+
+  :global(.memory .ink-word) {
+    display: inline;
+    overflow: visible;
   }
 
   :global(.experience.is-reduced-motion) .memory__eyebrow,
