@@ -19,8 +19,23 @@ const videoSrc = `${base}/videos/memory-transition2.mp4`;
     <Cover displayName={displayName} dedication={dedication} />
   </section>
 
+  <!--
+    MemoryScene lives inside the exact same fixed 390x844 logical canvas
+    (and the same --cover-scale / --cover-scale-x/-y transform) as
+    Cover.astro's .cover-canvas and the transition video's
+    .experience__video-crop above -- one shared canvas across all three,
+    so none of them can ever drift to a different size/position at any
+    viewport (see the matching CSS below).
+  -->
   <section class="experience__scene experience__scene--memory" data-scene-panel="memory" inert>
-    <MemoryScene addressing={addressing} />
+    <div
+      class="experience__memory-frame"
+      style={`background-image: url('${base}/images/textura_vertical_2.png')`}
+    >
+      <div class="experience__memory-canvas">
+        <MemoryScene addressing={addressing} />
+      </div>
+    </div>
   </section>
 
   <!--
@@ -87,6 +102,7 @@ const videoSrc = `${base}/videos/memory-transition2.mp4`;
     const coverPanel = root.querySelector<HTMLElement>('[data-scene-panel="cover"]');
     const memoryPanel = root.querySelector<HTMLElement>('[data-scene-panel="memory"]');
     const videoEl = root.querySelector<HTMLVideoElement>('.experience__video');
+    const videoStageEl = root.querySelector<HTMLElement>('.experience__video-stage');
 
     // Forward (cover -> memory) phase timings.
     const PHASE_A_MS = 380; // cover's own text (name/dedication/signature/location/cta) fades out
@@ -206,6 +222,29 @@ const videoSrc = `${base}/videos/memory-transition2.mp4`;
       });
     }
 
+    // Resolves once `property`'s transition on `el` actually finishes (the
+    // real, event-driven paint signal -- not a timer duplicating the CSS
+    // duration by hand), with a generous safety timeout in case the
+    // transition never fires for any reason (reduced motion switched mid-
+    // flight, an unsupported property, etc.) so this can never hang the
+    // sequence indefinitely.
+    function waitForTransitionEnd(el: HTMLElement, property: string, timeoutMs: number): Promise<void> {
+      return new Promise((resolve) => {
+        let settled = false;
+        const finish = () => {
+          if (settled) return;
+          settled = true;
+          el.removeEventListener('transitionend', onEnd);
+          resolve();
+        };
+        const onEnd = (ev: TransitionEvent) => {
+          if (ev.propertyName === property) finish();
+        };
+        el.addEventListener('transitionend', onEnd);
+        window.setTimeout(finish, timeoutMs);
+      });
+    }
+
     function setSceneAccessibility(scene: 'cover' | 'memory') {
       const showingMemory = scene === 'memory';
       if (memoryPanel) memoryPanel.toggleAttribute('inert', !showingMemory);
@@ -227,6 +266,13 @@ const videoSrc = `${base}/videos/memory-transition2.mp4`;
       root!.classList.remove('is-video-visible', 'is-ink-revealing');
       root!.classList.toggle('is-cover-receded', scene === 'memory');
       root!.classList.toggle('is-revealing-memory', scene === 'memory');
+      // Defensive: these are only ever set (and cleared) inside
+      // runVideoAndReveal's own video->MemoryScene handoff, but an instant
+      // scene switch should never risk inheriting a leftover inline value.
+      if (memoryPanel) {
+        memoryPanel.style.transition = '';
+        memoryPanel.style.opacity = '';
+      }
       void root!.offsetWidth;
       requestAnimationFrame(() => {
         root?.classList.remove('is-instant');
@@ -258,21 +304,32 @@ const videoSrc = `${base}/videos/memory-transition2.mp4`;
         });
     }
 
+    interface PreparedMemoryContent {
+      titleLines: HTMLElement[];
+      bodyLinesByParagraph: HTMLElement[][];
+      finalLines: HTMLElement[];
+    }
+
     // Splits MemoryScene's title/body/final line into per-rendered-line
-    // spans and reveals them with the same clip-path "ink" sweep
-    // Cover.astro uses for its own name/dedication (see
-    // src/lib/inkLineReveal.ts). Only ever called for the full-motion
-    // forward path -- reduced-motion and instant/direct-hash loads leave
-    // this text as plain, unsplit paragraphs and show it via the simple
-    // opacity crossfade already in MemoryScene.astro's CSS. Safe to call
-    // again on a later play-through: splitIntoLines always rebuilds from
-    // the element's current textContent, which resetLineUnit (invoked via
-    // each line's own transitionend) never touches.
-    function revealMemoryContent(memoryPanelEl: HTMLElement) {
+    // spans (see src/lib/inkLineReveal.ts, the same mechanism already
+    // approved in Cover.astro's own name/dedication reveal) and hides each
+    // one via clip-path immediately -- but does NOT start the visible
+    // sweep yet. Split from the actual reveal (startMemoryContentReveal,
+    // below) so the text can be made ready -- and MemoryScene's own panel
+    // flipped to opacity:1 -- while it's still fully hidden behind the
+    // video, without a single word ever flashing fully written. Only
+    // ever called for the full-motion forward path -- reduced-motion and
+    // instant/direct-hash loads leave this text as plain, unsplit
+    // paragraphs and show it via the simple opacity crossfade already in
+    // MemoryScene.astro's CSS. Safe to call again on a later play-through:
+    // splitIntoLines always rebuilds from the element's current
+    // textContent, which resetLineUnit (invoked via each line's own
+    // transitionend) never touches.
+    function prepareMemoryContent(memoryPanelEl: HTMLElement): PreparedMemoryContent | null {
       const titleEl = memoryPanelEl.querySelector<HTMLElement>('.memory__title');
       const bodyParagraphs = Array.from(memoryPanelEl.querySelectorAll<HTMLElement>('.memory__body p'));
       const finalEl = memoryPanelEl.querySelector<HTMLElement>('.memory__final');
-      if (!titleEl || !finalEl || bodyParagraphs.length === 0) return;
+      if (!titleEl || !finalEl || bodyParagraphs.length === 0) return null;
 
       const titleLines = splitIntoLines(titleEl);
       const bodyLinesByParagraph = bodyParagraphs.map((p) => splitIntoLines(p));
@@ -284,9 +341,19 @@ const videoSrc = `${base}/videos/memory-transition2.mp4`;
       bodyLinesByParagraph.forEach((lines, pi) => lines.forEach((line, i) => prepareLineHidden(line, 100 + pi * 10 + i)));
       finalLines.forEach((line, i) => prepareLineHidden(line, 900 + i));
 
-      // Double rAF, same as Cover.astro's own sequence, so the hidden
-      // state above is guaranteed to have painted before the first
-      // transition starts.
+      return { titleLines, bodyLinesByParagraph, finalLines };
+    }
+
+    // Starts the actual visible ink sweep -- called only once MemoryScene's
+    // clean background is confirmed fully painted and the video is gone
+    // (step 4 of the approved sequence: portada -> video -> fondo limpio
+    // -> texto). Double rAF, same as Cover.astro's own sequence, so
+    // whatever hidden state prepareMemoryContent left is guaranteed to
+    // have painted before the first transition starts.
+    function startMemoryContentReveal(prepared: PreparedMemoryContent | null) {
+      if (!prepared) return;
+      const { titleLines, bodyLinesByParagraph, finalLines } = prepared;
+
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
           // Title: first, and the longest single reveal.
@@ -373,10 +440,50 @@ const videoSrc = `${base}/videos/memory-transition2.mp4`;
         await sleep(PHASE_B_CROSSFADE_MS);
       }
 
-      resetVideo();
-      root!.classList.remove('is-video-visible');
+      // Order-of-paint fix for the video -> MemoryScene handoff: the
+      // approved sequence is strictly (1) portada, (2) video, (3)
+      // MemoryScene's clean background already fully painted, (4) text
+      // reveal starts -- never a moment where the video is already gone
+      // and MemoryScene doesn't fully cover the screen yet (the old
+      // simultaneous crossfade between the two had exactly that gap).
+      //
+      // MemoryScene's panel opacity is flipped to 1 *instantly* here (an
+      // inline style bypassing its own CSS transition, cleared right
+      // after) rather than animated at the same time the video fades --
+      // its own title/body/final text stays invisible regardless, since
+      // prepareMemoryContent already clipped every line hidden above.
+      // Two real animation frames -- the browser's own guarantee that
+      // this instant opacity:1 has actually been painted -- are awaited
+      // before the video is touched at all, and only once it is
+      // confirmed no longer visible (transitionend on its own fade-out,
+      // not a guessed sleep()) is its playback position ever reset.
+      // Resetting it earlier -- while still on screen -- was the exact
+      // bug: the video jumping back to its own opening frame (designed to
+      // echo the duck/elephant crossfade of Fase B) while still fading
+      // out read as the portada's animals reappearing.
+      const prepared = prepareMemoryContent(memoryPanel!);
+      memoryPanel!.style.transition = 'none';
+      memoryPanel!.style.opacity = '1';
       root!.classList.add('is-revealing-memory', 'is-ink-revealing');
-      revealMemoryContent(memoryPanel!);
+
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      });
+
+      if (played) {
+        root!.classList.remove('is-video-visible');
+        if (videoStageEl) {
+          await waitForTransitionEnd(videoStageEl, 'opacity', 500);
+        }
+      }
+      resetVideo();
+      memoryPanel!.style.transition = '';
+      memoryPanel!.style.opacity = '';
+
+      // Only now -- MemoryScene's clean background is confirmed fully
+      // visible, video gone -- does the handwritten text actually start
+      // revealing.
+      startMemoryContentReveal(prepared);
 
       completionTimer = window.setTimeout(() => {
         completionTimer = null;
@@ -413,6 +520,10 @@ const videoSrc = `${base}/videos/memory-transition2.mp4`;
         // exactly as before.
         root!.classList.remove('is-video-visible', 'is-revealing-memory', 'is-ink-revealing', 'is-cover-receded');
         resetVideo();
+        if (memoryPanel) {
+          memoryPanel.style.transition = '';
+          memoryPanel.style.opacity = '';
+        }
         const duration = reduced ? REDUCED_MOTION_DURATION : BACKWARD_DURATION;
         completionTimer = window.setTimeout(() => {
           completionTimer = null;
@@ -688,5 +799,47 @@ const videoSrc = `${base}/videos/memory-transition2.mp4`;
     object-fit: cover;
     object-position: 50% 50%;
     display: block;
+  }
+
+  /*
+    MemoryScene's own shared canvas -- structurally identical to
+    .experience__video-frame/-crop above and to Cover.astro's own
+    .cover-frame/-canvas: a full-viewport frame (letterboxed with the same
+    paper texture) centering a fixed 390x844 box, uniformly scaled via the
+    same --cover-scale / --cover-scale-x/-y custom properties Cover's own
+    inline script computes on <html>. This is what keeps MemoryScene's
+    composition (fonts, margins, background, water/foam) at the exact
+    same visual size/position as the cover and the video at every
+    viewport, instead of independently reflowing to fill the real
+    viewport the way a plain width:100%/height:100% panel would.
+  */
+  .experience__memory-frame {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background-color: var(--color-bg);
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-position: 60% top;
+  }
+
+  .experience__memory-canvas {
+    position: relative;
+    width: 390px;
+    height: 844px;
+    flex-shrink: 0;
+    overflow: hidden;
+    transform-origin: center center;
+    transform: scale(var(--cover-scale, 1));
+  }
+
+  :global(html.is-fill-viewport) .experience__memory-canvas {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(var(--cover-scale-x, 1), var(--cover-scale-y, 1));
   }
 </style>

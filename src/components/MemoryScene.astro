@@ -91,17 +91,29 @@ const finalLine = getMemorySceneFinalLine(addressing);
     }
   }
 
+  /*
+    Frozen at the approved 390x844 canvas -- same convention Cover.astro
+    itself uses for its own composition (see that file's own comment: "the
+    composition is frozen at its approved 390x844 pixel values"). This
+    element now always lives inside a fixed 390x844 box (see
+    InvitationExperience.astro's .experience__memory-canvas), uniformly
+    scaled to fit any real viewport -- the same shared canvas Cover and the
+    transition video use -- so vw/vh units here (which always resolve
+    against the real, unscaled viewport, never an ancestor's size) would
+    silently double up with that outer scale and produce a different
+    layout at every viewport instead of the same one, scaled. Every value
+    below is the exact number the previous vw/vh/clamp() formula produced
+    at 390x844 -- the visual result at that reference size is unchanged;
+    only every *other* viewport now matches it instead of drifting.
+  */
   .memory__content {
     margin: auto;
     width: 100%;
-    max-width: min(92vw, 620px);
+    max-width: 358.8px;
     display: flex;
     flex-direction: column;
-    gap: clamp(14px, 2.6vh, 26px);
-    padding: max(64px, env(safe-area-inset-top))
-      max(28px, env(safe-area-inset-right))
-      max(28px, env(safe-area-inset-bottom))
-      max(28px, env(safe-area-inset-left));
+    gap: 21.94px;
+    padding: 64px 28px 28px 28px;
   }
 
   .memory__eyebrow {
@@ -114,16 +126,19 @@ const finalLine = getMemorySceneFinalLine(addressing);
   }
 
   /*
-    Title -- untouched from the approved composition: same handwritten
-    typeface, position, hierarchy and size as before. Nothing in this file
-    changes .memory__title.
+    Title -- same handwritten typeface, position, hierarchy and *visual*
+    size as before. font-size is frozen to what the old
+    clamp(1.7rem, min(7vw, 8vh), 2.6rem) formula computed at exactly
+    390x844 (1.70625rem, i.e. barely above its own 1.7rem floor) -- see the
+    shared-canvas note on .memory__content above for why a live vw/vh
+    value can no longer be used here.
   */
   .memory__title {
     margin: 0;
     font-family: 'Homemade Apple', cursive;
     font-weight: 400;
     color: #211c18;
-    font-size: clamp(1.7rem, min(7vw, 8vh), 2.6rem);
+    font-size: 1.706rem;
     line-height: 1.25;
     outline: none;
   }
@@ -165,7 +180,10 @@ const finalLine = getMemorySceneFinalLine(addressing);
     font-weight: 400;
     letter-spacing: 0.01em;
     color: #4a3f35;
-    font-size: clamp(1.15rem, min(4.2vw, 4.4vh), 1.5rem);
+    /* Frozen at 390x844: the old clamp(1.15rem, min(4.2vw, 4.4vh), 1.5rem)
+       resolved to its own 1.15rem floor at that size (4.2vw there is
+       narrower than the floor). */
+    font-size: 1.15rem;
     line-height: 1.55;
   }
 
@@ -176,13 +194,19 @@ const finalLine = getMemorySceneFinalLine(addressing);
     title's presence.
   */
   .memory__final {
-    margin-top: clamp(6px, 1.2vh, 14px);
-    font-size: clamp(1.3rem, min(4.8vw, 5vh), 1.7rem);
+    /* Frozen at 390x844: 1.2vh there is 10.13px, within the old
+       clamp(6px, 1.2vh, 14px)'s range. */
+    margin-top: 10.13px;
+    /* Frozen at 390x844: the old clamp(1.3rem, min(4.8vw, 5vh), 1.7rem)
+       resolved to its own 1.3rem floor at that size. */
+    font-size: 1.3rem;
     color: var(--color-accent);
   }
 
   .memory__cta {
-    margin: clamp(8px, 1.6vh, 18px) 0 0;
+    /* Frozen at 390x844: 1.6vh there is 13.5px, within the old
+       clamp(8px, 1.6vh, 18px)'s range. */
+    margin: 13.5px 0 0;
     font-family: var(--font-sans);
     font-size: 0.78rem;
     letter-spacing: 0.12em;
@@ -317,31 +341,14 @@ const finalLine = getMemorySceneFinalLine(addressing);
     transition: none !important;
   }
 
-  /* Landscape (rotated phones, tablets, laptops): redistribute into two
-     columns instead of just re-flowing the same vertical stack sideways. */
-  @media (orientation: landscape) and (min-width: 560px) {
-    .memory__content {
-      max-width: min(88vw, 980px);
-      display: grid;
-      grid-template-columns: 1.05fr 1.3fr;
-      column-gap: clamp(28px, 5vw, 72px);
-      align-items: center;
-      padding-top: max(28px, env(safe-area-inset-top));
-    }
-
-    .memory__eyebrow,
-    .memory__title {
-      grid-column: 1;
-    }
-
-    .memory__body,
-    .memory__final,
-    .memory__cta {
-      grid-column: 2;
-    }
-
-    .memory__title {
-      margin-top: 0.4em;
-    }
-  }
+  /*
+    No per-orientation/viewport layout here anymore -- MemoryScene now
+    lives inside the same fixed 390x844 canvas Cover and the transition
+    video share (see InvitationExperience.astro's .experience__memory-
+    canvas), uniformly scaled and centered at every viewport, landscape
+    included. A separate landscape-only two-column composition would be
+    exactly the "estrategia independiente de escalado" the shared canvas
+    is meant to replace: Cover.astro itself has no such per-orientation
+    redesign, only the one composition, scaled.
+  */
 </style>
