@@ -121,20 +121,27 @@ const videoSrc = `${base}/videos/memory-transition2.mp4`;
     // in MemoryScene.astro's CSS (.memory__cta's transition-delay) --
     // keep both in sync by hand when adjusting.
     //
-    // The manuscript portion (title/body/final -- the actual ink sweeps,
-    // never the plain CTA fade) is ~2.5x its previous pass here: the
-    // earlier ~1700/1900/650ms pass read as too fast to feel handwritten.
-    // The pause before the dynamic line and the gap before the CTA scale
-    // up more modestly (they're pacing beats, not ink itself); the CTA's
-    // own fade stays close to what it was.
+    // Body and final are doubled again here (they're the manuscript
+    // block, now unified on Homemade Apple -- see MemoryScene.astro):
+    // slower writing was explicitly requested a second time, "el doble de
+    // tiempo que el actual". Title is untouched (out of scope this round).
+    // MEMORY_TITLE_BODY_OVERLAP_MS is new: body now starts this many ms
+    // *before* the title's own duration budget elapses, instead of
+    // exactly when it ends, closing the dead gap that made the page feel
+    // like it paused between the two blocks. MEMORY_FINAL_PAUSE_MS (the
+    // other named pause, before the dynamic line) is shortened for the
+    // same reason. MEMORY_CTA_GAP_MS/MEMORY_CTA_MS are untouched -- the
+    // CTA itself is out of scope this round.
     const MEMORY_TITLE_MS = 4250;
-    const MEMORY_BODY_MS = 4750;
-    const MEMORY_FINAL_PAUSE_MS = 280;
-    const MEMORY_FINAL_MS = 1625;
+    const MEMORY_TITLE_BODY_OVERLAP_MS = 300;
+    const MEMORY_BODY_MS = 9500;
+    const MEMORY_FINAL_PAUSE_MS = 100;
+    const MEMORY_FINAL_MS = 3250;
     const MEMORY_CTA_GAP_MS = 150;
     const MEMORY_CTA_MS = 350;
+    const MEMORY_BODY_START_MS = MEMORY_TITLE_MS - MEMORY_TITLE_BODY_OVERLAP_MS;
     const PHASE_D_MS =
-      MEMORY_TITLE_MS + MEMORY_BODY_MS + MEMORY_FINAL_PAUSE_MS + MEMORY_FINAL_MS + MEMORY_CTA_GAP_MS + MEMORY_CTA_MS; // 11405ms
+      MEMORY_BODY_START_MS + MEMORY_BODY_MS + MEMORY_FINAL_PAUSE_MS + MEMORY_FINAL_MS + MEMORY_CTA_GAP_MS + MEMORY_CTA_MS; // 17300ms
 
     let isTransitioning = false;
     let currentScene: 'cover' | 'memory' = 'cover';
@@ -366,15 +373,18 @@ const videoSrc = `${base}/videos/memory-transition2.mp4`;
 
           // The four secondary lines read as one continuous gesture, not
           // four separate reveals -- so every line across every paragraph
-          // is handed to a single revealLines() call together.
+          // is handed to a single revealLines() call together. Starts
+          // MEMORY_TITLE_BODY_OVERLAP_MS before the title's own duration
+          // budget elapses (not exactly when it ends) so there's no dead
+          // gap between the two blocks.
           window.setTimeout(() => {
             revealLines(bodyLinesByParagraph.flat(), MEMORY_BODY_MS, 100);
-          }, MEMORY_TITLE_MS);
+          }, MEMORY_BODY_START_MS);
 
           // The dynamic closing line gets its own brief pause first.
           window.setTimeout(() => {
             revealLines(finalLines, MEMORY_FINAL_MS, 900);
-          }, MEMORY_TITLE_MS + MEMORY_BODY_MS + MEMORY_FINAL_PAUSE_MS);
+          }, MEMORY_BODY_START_MS + MEMORY_BODY_MS + MEMORY_FINAL_PAUSE_MS);
         });
       });
     }
