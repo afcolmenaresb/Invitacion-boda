@@ -1,4 +1,5 @@
 ---
+import '@fontsource/sacramento/400.css';
 import { memoryScene, getMemorySceneFinalLine } from '../data/sceneMemory';
 import type { Guest } from '../data/guests';
 
@@ -131,7 +132,7 @@ const finalLine = getMemorySceneFinalLine(addressing);
     gap between eyebrow and title intact, so nothing overlaps.
   */
   .memory__eyebrow {
-    margin: 21.85px 0 0 0;
+    margin: 6px 0 0 0;
     font-family: var(--font-sans);
     text-transform: uppercase;
     letter-spacing: 0.16em;
@@ -191,47 +192,46 @@ const finalLine = getMemorySceneFinalLine(addressing);
   }
 
   /*
-    Secondary text -- now unified on Homemade Apple, the same handwritten
-    typeface as the title (was Sacramento, a separate, thinner script;
-    switched on explicit request). line-height brought in from 1.55 to
-    1.25 -- the same ratio the title itself uses -- so the block reads
-    denser/more compact without feeling cramped.
-
-    font-size is NOT a scaled-up version of the old 1.98rem number: at an
-    equal rem value, Homemade Apple renders visibly larger/wider than
-    Sacramento (a first attempt at 2.2rem made every one of the four
-    lines wrap to 2-3 lines each, overflowing the whole 844px canvas --
-    confirmed by measuring real rendered heights, not assumed). 1.3rem was
-    chosen empirically: the largest size at which only one of the four
-    lines ("Las personas que amamos reunidas.") wraps to a second line --
-    the same single-line-wraps pattern already accepted in the previous
-    (Sacramento) pass -- while still reading clearly bigger than that
-    previous pass in real visual terms (verified by screenshot, not by
-    comparing rem numbers across two different typefaces).
+    Secondary text -- "Opción A": an existing, already-installed
+    handwritten typeface (Sacramento -- imported above, was already a
+    project dependency but unused elsewhere), never a system serif/sans or
+    a second new font. Thinner and calmer than the title's Homemade Apple,
+    sized and spaced generously since script faces read smaller/tighter at
+    a given font-size than a normal serif -- this keeps it legible and
+    intimate rather than decorative or cramped.
   */
   .memory__body p,
   .memory__final {
     margin: 0;
-    font-family: 'Homemade Apple', cursive;
+    font-family: 'Sacramento', cursive;
     font-weight: 400;
     letter-spacing: 0.01em;
     color: #4a3f35;
-    line-height: 1.25;
+    line-height: 1.45;
   }
 
+  /* +25% from the previous 1.98rem -- same typeface, same line-height
+     (1.55, shared rule above, untouched), same position (.memory__body's
+     own margin-top, untouched) -- only the font-size grows.
+     .memory__final keeps its own separate font-size below, unaffected by
+     this rule. */
   .memory__body p {
-    font-size: 1.3rem;
+    font-size: 2.475rem;
   }
 
   /*
     The dynamic closing line ("Y tú, ahí." / "Y ustedes, ahí.") gets a
     subtle emphasis -- slightly larger and in the accent ink -- but stays
     the same typeface/weight as the four lines above it, well below the
-    title's presence.
+    title's presence. margin-top is untouched (same position as before);
+    only font-size grows +25%, same as .memory__body p above -- this line
+    (and the CTA after it) are left to flow down naturally to make room
+    for however much taller .memory__body ends up, exactly like the
+    previous pass.
   */
   .memory__final {
     margin-top: 10.13px;
-    font-size: 1.45rem;
+    font-size: 1.875rem;
     color: var(--color-accent);
   }
 
@@ -318,12 +318,10 @@ const finalLine = getMemorySceneFinalLine(addressing);
 
     :global(.experience.is-transitioning.is-revealing-memory[data-transition-direction='forward']) .memory__cta {
       transition: opacity 350ms ease, transform 350ms ease;
-      /* body starts 300ms before title's own 4250ms budget ends (3950ms)
-         + body (9500ms, doubled) + pause (100ms, shortened) + final line
-         (3250ms, doubled) + a short beat (150ms) before the CTA fades in
-         -- see the matching MEMORY_* constants in
-         InvitationExperience.astro. */
-      transition-delay: 16950ms;
+      /* title (4250ms) + body (4750ms) + pause (280ms) + final line
+         (1625ms) + a short beat (150ms) before the CTA fades in -- see the
+         matching MEMORY_* constants in InvitationExperience.astro. */
+      transition-delay: 11055ms;
     }
 
     :global(.experience.is-ink-revealing) .memory__title,
