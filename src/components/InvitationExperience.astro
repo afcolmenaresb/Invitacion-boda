@@ -119,17 +119,22 @@ const videoSrc = `${base}/videos/memory-transition2.mp4`;
     // fade. Fixed, designed durations (unlike the outer video crossfade):
     // this inner sequence never depends on the video's own length. Mirrored
     // in MemoryScene.astro's CSS (.memory__cta's transition-delay) --
-    // keep both in sync by hand when adjusting. Tightened from an earlier
-    // ~6.3s pass so the whole experience doesn't feel slow after the ~6.4s
-    // video -- still handwritten, never a hard pop.
-    const MEMORY_TITLE_MS = 1700;
-    const MEMORY_BODY_MS = 1900;
-    const MEMORY_FINAL_PAUSE_MS = 140;
-    const MEMORY_FINAL_MS = 650;
-    const MEMORY_CTA_GAP_MS = 100;
-    const MEMORY_CTA_MS = 320;
+    // keep both in sync by hand when adjusting.
+    //
+    // The manuscript portion (title/body/final -- the actual ink sweeps,
+    // never the plain CTA fade) is ~2.5x its previous pass here: the
+    // earlier ~1700/1900/650ms pass read as too fast to feel handwritten.
+    // The pause before the dynamic line and the gap before the CTA scale
+    // up more modestly (they're pacing beats, not ink itself); the CTA's
+    // own fade stays close to what it was.
+    const MEMORY_TITLE_MS = 4250;
+    const MEMORY_BODY_MS = 4750;
+    const MEMORY_FINAL_PAUSE_MS = 280;
+    const MEMORY_FINAL_MS = 1625;
+    const MEMORY_CTA_GAP_MS = 150;
+    const MEMORY_CTA_MS = 350;
     const PHASE_D_MS =
-      MEMORY_TITLE_MS + MEMORY_BODY_MS + MEMORY_FINAL_PAUSE_MS + MEMORY_FINAL_MS + MEMORY_CTA_GAP_MS + MEMORY_CTA_MS; // 4810ms
+      MEMORY_TITLE_MS + MEMORY_BODY_MS + MEMORY_FINAL_PAUSE_MS + MEMORY_FINAL_MS + MEMORY_CTA_GAP_MS + MEMORY_CTA_MS; // 11405ms
 
     let isTransitioning = false;
     let currentScene: 'cover' | 'memory' = 'cover';
@@ -586,6 +591,22 @@ const videoSrc = `${base}/videos/memory-transition2.mp4`;
     if (window.location.hash !== '#recuerdo' && window.location.hash !== '#portada') {
       history.replaceState({ scene: initialScene }, '', '#portada');
     }
+
+    // Reveal the whole, already-settled experience as one clean fade-in
+    // (see .is-ready in the CSS below) instead of letting the browser's
+    // own incremental paint show background/texture images and web fonts
+    // arriving separately. Bounded by BOOT_READY_TIMEOUT_MS -- fonts.ready
+    // on a slow connection must never hold the whole page hidden
+    // indefinitely, so whichever settles first wins.
+    const BOOT_READY_TIMEOUT_MS = 500;
+    Promise.race([
+      document.fonts ? document.fonts.ready : Promise.resolve(),
+      new Promise<void>((resolve) => window.setTimeout(resolve, BOOT_READY_TIMEOUT_MS)),
+    ]).then(() => {
+      requestAnimationFrame(() => {
+        root?.classList.add('is-ready');
+      });
+    });
   }
 </script>
 
@@ -597,6 +618,27 @@ const videoSrc = `${base}/videos/memory-transition2.mp4`;
     height: 100svh;
     overflow: hidden;
     background: var(--color-bg);
+    /*
+      Boot gate: hidden (opacity, not display/visibility, so nothing below
+      is blocked from loading or measuring itself) until the script below
+      adds .is-ready -- fonts settled (or a short bounded wait elapsed) and
+      the initial scene state already applied. Without this, the very
+      first paint could show background/texture images and web fonts
+      arriving over several separate frames, each one a visible "layer
+      loading" pop; this collapses all of that into one clean fade-in of
+      the whole, already-settled composition.
+    */
+    opacity: 0;
+  }
+
+  .experience.is-ready {
+    opacity: 1;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .experience.is-ready {
+      transition: opacity 220ms ease;
+    }
   }
 
   @supports (height: 100dvh) {
@@ -790,12 +832,27 @@ const videoSrc = `${base}/videos/memory-transition2.mp4`;
     it up until it fills the box's full height and crops the same amount
     off both the left and right edges -- never top/bottom, never
     stretched.
+
+    A 1px vertical seam was visible on the right edge during playback --
+    reproduced with .experience__video-crop's own transform:scale()
+    (fractional at most real viewport sizes, e.g. 390px scaled to
+    415.74px) combined with the <video> being its own GPU compositing
+    layer: at a fractional scale, the browser can rasterize that layer's
+    edge to a slightly different device-pixel boundary than the crop
+    box's own overflow:hidden clip, leaving a hairline gap that exposes
+    whatever sits behind it. A 1% overscan -- the video rendered very
+    slightly larger than its box, centered, with the crop box's own
+    overflow:hidden clipping the excess -- pushes that edge safely outside
+    the visible area on every side regardless of the exact scale factor,
+    without touching object-fit/object-position/the centered crop itself.
   */
   .experience__video {
     position: absolute;
-    inset: 0;
-    width: 100%;
-    height: 100%;
+    top: 50%;
+    left: 50%;
+    width: 101%;
+    height: 101%;
+    transform: translate(-50%, -50%);
     object-fit: cover;
     object-position: 50% 50%;
     display: block;

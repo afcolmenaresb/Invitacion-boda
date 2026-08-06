@@ -113,7 +113,11 @@ const finalLine = getMemorySceneFinalLine(addressing);
     display: flex;
     flex-direction: column;
     gap: 21.94px;
-    padding: 64px 28px 28px 28px;
+    /* Top padding reduced from 64px so the whole block -- eyebrow and
+       title especially -- sits a little higher, using more of the
+       canvas's own top space, without touching the rest of the
+       composition (bottom/side padding, gaps unchanged). */
+    padding: 44px 28px 28px 28px;
   }
 
   .memory__eyebrow {
@@ -126,19 +130,17 @@ const finalLine = getMemorySceneFinalLine(addressing);
   }
 
   /*
-    Title -- same handwritten typeface, position, hierarchy and *visual*
-    size as before. font-size is frozen to what the old
-    clamp(1.7rem, min(7vw, 8vh), 2.6rem) formula computed at exactly
-    390x844 (1.70625rem, i.e. barely above its own 1.7rem floor) -- see the
-    shared-canvas note on .memory__content above for why a live vw/vh
-    value can no longer be used here.
+    Title -- same handwritten typeface, position and hierarchy as before,
+    sized up a bit for legibility (1.706rem -> 2rem, ~17% larger) plus the
+    reduced top padding above so it reads bigger and sits a little higher
+    in the canvas, without any other change to the composition.
   */
   .memory__title {
     margin: 0;
     font-family: 'Homemade Apple', cursive;
     font-weight: 400;
     color: #211c18;
-    font-size: 1.706rem;
+    font-size: 2rem;
     line-height: 1.25;
     outline: none;
   }
@@ -180,10 +182,9 @@ const finalLine = getMemorySceneFinalLine(addressing);
     font-weight: 400;
     letter-spacing: 0.01em;
     color: #4a3f35;
-    /* Frozen at 390x844: the old clamp(1.15rem, min(4.2vw, 4.4vh), 1.5rem)
-       resolved to its own 1.15rem floor at that size (4.2vw there is
-       narrower than the floor). */
-    font-size: 1.15rem;
+    /* Sized up from 1.15rem (~15%) for legibility -- same typeface,
+       weight and line-height ratio, just larger. */
+    font-size: 1.32rem;
     line-height: 1.55;
   }
 
@@ -197,9 +198,9 @@ const finalLine = getMemorySceneFinalLine(addressing);
     /* Frozen at 390x844: 1.2vh there is 10.13px, within the old
        clamp(6px, 1.2vh, 14px)'s range. */
     margin-top: 10.13px;
-    /* Frozen at 390x844: the old clamp(1.3rem, min(4.8vw, 5vh), 1.7rem)
-       resolved to its own 1.3rem floor at that size. */
-    font-size: 1.3rem;
+    /* Sized up from 1.3rem (~15%), same proportion above .memory__body as
+       before. */
+    font-size: 1.5rem;
     color: var(--color-accent);
   }
 
@@ -208,7 +209,9 @@ const finalLine = getMemorySceneFinalLine(addressing);
        clamp(8px, 1.6vh, 18px)'s range. */
     margin: 13.5px 0 0;
     font-family: var(--font-sans);
-    font-size: 0.78rem;
+    /* Grown just slightly (0.78rem -> 0.82rem) -- stays a small uppercase
+       label, well below the title/final's presence. */
+    font-size: 0.82rem;
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: #6b6055;
@@ -283,11 +286,11 @@ const finalLine = getMemorySceneFinalLine(addressing);
     }
 
     :global(.experience.is-transitioning.is-revealing-memory[data-transition-direction='forward']) .memory__cta {
-      transition: opacity 320ms ease, transform 320ms ease;
-      /* title (1700ms) + body (1900ms) + pause (140ms) + final line
-         (650ms) + a short beat (100ms) before the CTA fades in -- see the
+      transition: opacity 350ms ease, transform 350ms ease;
+      /* title (4250ms) + body (4750ms) + pause (280ms) + final line
+         (1625ms) + a short beat (150ms) before the CTA fades in -- see the
          matching MEMORY_* constants in InvitationExperience.astro. */
-      transition-delay: 4490ms;
+      transition-delay: 11055ms;
     }
 
     :global(.experience.is-ink-revealing) .memory__title,
