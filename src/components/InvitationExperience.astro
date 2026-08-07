@@ -1,0 +1,929 @@
+---
+import Cover from './Cover.astro';
+import MemoryScene from './MemoryScene.astro';
+import type { Guest } from '../data/guests';
+
+interface Props {
+  displayName?: string;
+  dedication?: string;
+  addressing?: Guest['addressing'];
+}
+
+const { displayName, dedication, addressing } = Astro.props;
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const videoSrc = `${base}/videos/memory-transition2.mp4`;
+---
+
+<div class="experience" id="invitation-experience" data-scene="cover" data-transition-direction="forward">
+  <section class="experience__scene experience__scene--cover" data-scene-panel="cover">
+    <Cover displayName={displayName} dedication={dedication} />
+  </section>
+
+  <!--
+    MemoryScene lives inside the exact same fixed 390x844 logical canvas
+    (and the same --cover-scale / --cover-scale-x/-y transform) as
+    Cover.astro's .cover-canvas and the transition video's
+    .experience__video-crop above -- one shared canvas across all three,
+    so none of them can ever drift to a different size/position at any
+    viewport (see the matching CSS below).
+  -->
+  <section class="experience__scene experience__scene--memory" data-scene-panel="memory" inert>
+    <div
+      class="experience__memory-frame"
+      style={`background-image: url('${base}/images/textura_vertical_2.png')`}
+    >
+      <div class="experience__memory-canvas">
+        <MemoryScene addressing={addressing} />
+      </div>
+    </div>
+  </section>
+
+  <!--
+    Transition video stage: same fixed 390x844 logical canvas and same
+    --cover-scale / --cover-scale-x/-y transform Cover.astro's own
+    .cover-canvas uses (see the matching CSS below), so it sits in exactly
+    the same coordinate system as the cover and memory panels at any
+    viewport. .experience__video-frame carries the identical paper texture
+    Cover.astro letterboxes with, so on wide/desktop viewports -- where the
+    390x844 canvas is uniformly scaled down and centered, never
+    stretched -- the margins beside it read as more paper, never black
+    bars. The <video> itself uses object-fit: cover with a centered
+    object-position, which crops its wider source (16:9-ish) down to the
+    canvas's narrower 390:844 ratio symmetrically from both sides, never
+    top/bottom and never by deforming the footage.
+  -->
+  <div class="experience__video-stage" aria-hidden="true">
+    <div
+      class="experience__video-frame"
+      style={`background-image: url('${base}/images/textura_vertical_2.png')`}
+    >
+      <div class="experience__video-crop">
+        <video
+          class="experience__video"
+          data-video-src={videoSrc}
+          muted
+          playsinline
+          preload="auto"
+          aria-hidden="true"
+          tabindex="-1"
+          disablepictureinpicture
+          disableremoteplayback
+        ></video>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // --- Scene architecture: Cover <-> MemoryScene, hash-routed, no vertical scroll ---
+  //
+  // Two absolutely-positioned full-screen panels inside a fixed container;
+  // exactly one is interactive/visible at a time. Cover.astro's own
+  // approved intro animation is never touched -- this only listens for
+  // clicks on its existing .cover__cta (event delegation, no changes to
+  // Cover's internal script) and toggles CSS classes on this wrapper.
+  //
+  // The forward transition plays a real <video> (see the markup above)
+  // instead of the old four-path SVG "ink stroke" prototype. Because the
+  // video's own duration/readiness/failure modes are real async events
+  // (not a fixed guessed timeline), the whole forward sequence is a single
+  // async function driven by those events, rather than a chain of
+  // setTimeout calls keyed to a hardcoded duration.
+  //
+  // MemoryScene's own title/body/final-line reveal reuses the exact
+  // handwritten "ink" mechanism already approved in Cover.astro (line
+  // splitting + a single clip-path sweep per line -- see
+  // src/lib/inkLineReveal.ts for why it's a standalone reimplementation
+  // rather than an import from Cover.astro itself).
+  import { splitIntoLines, prepareLineHidden, revealLines } from '../lib/inkLineReveal';
+
+  const root = document.getElementById('invitation-experience');
+  if (root) {
+    const coverPanel = root.querySelector<HTMLElement>('[data-scene-panel="cover"]');
+    const memoryPanel = root.querySelector<HTMLElement>('[data-scene-panel="memory"]');
+    const videoEl = root.querySelector<HTMLVideoElement>('.experience__video');
+    const videoStageEl = root.querySelector<HTMLElement>('.experience__video-stage');
+
+    // Forward (cover -> memory) phase timings.
+    const PHASE_A_MS = 380; // cover's own text (name/dedication/signature/location/cta) fades out
+    const PHASE_B_CROSSFADE_MS = 320; // duck/elephant + cover recede while the video fades in
+    const VIDEO_READY_TIMEOUT_MS = 1200; // max wait for the video to become playable before falling back
+    const VIDEO_HARD_CAP_MS = 15000; // safety net against a video that never fires 'ended' or 'error'
+    const POST_VIDEO_HOLD_MS = 180; // hold the video's last frame (plain paper, no animals) before revealing MemoryScene
+    const BACKWARD_DURATION = 950;
+    const REDUCED_MOTION_DURATION = 280;
+
+    // MemoryScene's own content choreography, once Fase D begins -- title
+    // first and longest, then the four secondary lines as one continuous
+    // gesture, a short pause, the dynamic closing line, then a plain CTA
+    // fade. These are nominal *budgets* handed to revealLines(), not the
+    // real on-screen time each block takes: revealLines staggers/overlaps
+    // its lines and reports back the actual elapsed time until the last
+    // line settles, which is reliably shorter than the nominal number for
+    // any multi-line block. startMemoryContentReveal (below) awaits that
+    // *actual* duration between phases -- exactly the fix already proven
+    // in Cover.astro's own name/dedication sequence -- instead of the
+    // nominal budget, so there is never a dead, static gap between blocks
+    // while still letting the ink sweep itself take as long as these
+    // numbers intend.
+    const MEMORY_TITLE_MS = 7000;
+    const MEMORY_BODY_MS = 8000;
+    const MEMORY_FINAL_PAUSE_MS = 300;
+    const MEMORY_FINAL_MS = 1625;
+    const MEMORY_CTA_GAP_MS = 150;
+    const MEMORY_CTA_MS = 350;
+    // Small buffer subtracted from each block's *actual* settle time
+    // before starting the next -- the next block's first line begins
+    // slightly before the previous one's last line fully finishes, same
+    // as Cover.astro's own -250/-150 buffers on its name/dedication/
+    // signature sequence, so the handoff reads as one continuous gesture
+    // rather than a hard cut.
+    const MEMORY_PHASE_SETTLE_MS = 250;
+
+    let isTransitioning = false;
+    let currentScene: 'cover' | 'memory' = 'cover';
+    let completionTimer: number | null = null;
+
+    function clearCompletionTimer() {
+      if (completionTimer !== null) {
+        window.clearTimeout(completionTimer);
+        completionTimer = null;
+      }
+    }
+
+    function prefersReducedMotion() {
+      return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    }
+
+    function sleep(ms: number) {
+      return new Promise<void>((resolve) => window.setTimeout(resolve, ms));
+    }
+
+    // Begin loading the video from the cover itself (preload="auto" in the
+    // markup), but never for reduced-motion users -- per spec it must not
+    // be "loaded as an active part of the experience" for them. Assigning
+    // src only here (not in the SSR markup) is what makes that
+    // conditional: an unset src loads nothing, regardless of preload.
+    let videoSrcAssigned = false;
+    if (videoEl && !prefersReducedMotion()) {
+      const src = videoEl.dataset.videoSrc;
+      if (src) {
+        videoEl.src = src;
+        videoSrcAssigned = true;
+      }
+    }
+
+    function resetVideo() {
+      if (!videoEl) return;
+      videoEl.pause();
+      try {
+        videoEl.currentTime = 0;
+      } catch {
+        // Some browsers throw if metadata isn't loaded yet -- harmless,
+        // the video hasn't played anything to rewind from anyway.
+      }
+    }
+
+    // Waits until the video has enough data to play, or resolves false
+    // after a short, bounded wait -- "si está listo, reproduce
+    // inmediatamente; si todavía carga, espera solo un tiempo breve y
+    // razonable" (never blocks the transition indefinitely).
+    function waitForVideoReady(video: HTMLVideoElement, timeoutMs: number): Promise<boolean> {
+      if (video.readyState >= 2) return Promise.resolve(true); // HAVE_CURRENT_DATA or better
+      return new Promise((resolve) => {
+        let settled = false;
+        const finish = (ok: boolean) => {
+          if (settled) return;
+          settled = true;
+          video.removeEventListener('loadeddata', onReady);
+          video.removeEventListener('canplay', onReady);
+          video.removeEventListener('error', onError);
+          resolve(ok);
+        };
+        const onReady = () => finish(true);
+        const onError = () => finish(false);
+        video.addEventListener('loadeddata', onReady, { once: true });
+        video.addEventListener('canplay', onReady, { once: true });
+        video.addEventListener('error', onError, { once: true });
+        window.setTimeout(() => finish(false), timeoutMs);
+      });
+    }
+
+    // Races the video's own 'ended' event against 'error' and a generous
+    // hard cap -- so a stalled/broken playback can never freeze the
+    // transition on a dead screen; it always resolves and lets the caller
+    // fall through to the same clean crossfade into MemoryScene.
+    function waitForVideoOutcome(video: HTMLVideoElement, hardCapMs: number): Promise<boolean> {
+      return new Promise((resolve) => {
+        let settled = false;
+        const finish = (ok: boolean) => {
+          if (settled) return;
+          settled = true;
+          video.removeEventListener('ended', onEnded);
+          video.removeEventListener('error', onError);
+          resolve(ok);
+        };
+        const onEnded = () => finish(true);
+        const onError = () => finish(false);
+        video.addEventListener('ended', onEnded, { once: true });
+        video.addEventListener('error', onError, { once: true });
+        window.setTimeout(() => finish(false), hardCapMs);
+      });
+    }
+
+    // Resolves once `property`'s transition on `el` actually finishes (the
+    // real, event-driven paint signal -- not a timer duplicating the CSS
+    // duration by hand), with a generous safety timeout in case the
+    // transition never fires for any reason (reduced motion switched mid-
+    // flight, an unsupported property, etc.) so this can never hang the
+    // sequence indefinitely.
+    function waitForTransitionEnd(el: HTMLElement, property: string, timeoutMs: number): Promise<void> {
+      return new Promise((resolve) => {
+        let settled = false;
+        const finish = () => {
+          if (settled) return;
+          settled = true;
+          el.removeEventListener('transitionend', onEnd);
+          resolve();
+        };
+        const onEnd = (ev: TransitionEvent) => {
+          if (ev.propertyName === property) finish();
+        };
+        el.addEventListener('transitionend', onEnd);
+        window.setTimeout(finish, timeoutMs);
+      });
+    }
+
+    function setSceneAccessibility(scene: 'cover' | 'memory') {
+      const showingMemory = scene === 'memory';
+      if (memoryPanel) memoryPanel.toggleAttribute('inert', !showingMemory);
+      if (coverPanel) coverPanel.toggleAttribute('inert', showingMemory);
+    }
+
+    function focusSceneHeading(scene: 'cover' | 'memory') {
+      const target =
+        scene === 'memory'
+          ? memoryPanel?.querySelector<HTMLElement>('[data-scene-heading]')
+          : coverPanel?.querySelector<HTMLElement>('.cover__cta');
+      target?.focus({ preventScroll: true });
+    }
+
+    function applySceneInstantly(scene: 'cover' | 'memory') {
+      root!.classList.add('is-instant');
+      root!.dataset.scene = scene;
+      setSceneAccessibility(scene);
+      root!.classList.remove('is-video-visible', 'is-ink-revealing', 'is-memory-cta-ready');
+      root!.classList.toggle('is-cover-receded', scene === 'memory');
+      root!.classList.toggle('is-revealing-memory', scene === 'memory');
+      // Defensive: these are only ever set (and cleared) inside
+      // runVideoAndReveal's own video->MemoryScene handoff, but an instant
+      // scene switch should never risk inheriting a leftover inline value.
+      if (memoryPanel) {
+        memoryPanel.style.transition = '';
+        memoryPanel.style.opacity = '';
+      }
+      void root!.offsetWidth;
+      requestAnimationFrame(() => {
+        root?.classList.remove('is-instant');
+      });
+      currentScene = scene;
+    }
+
+    // Cover.astro's own intro reveal can still be mid-flight (it runs
+    // ~18-23s) if the CTA is reached early -- e.g. a keyboard user
+    // tabbing to it before the animals finish drawing in. While that
+    // reveal is running it holds an *inline* transition/clip-path/mask on
+    // the elephant/duck (see Cover.astro's triggerInkReveal), which -- an
+    // inline style always beating a stylesheet rule -- would otherwise
+    // silently swallow this file's own opacity fade for those elements.
+    // Clearing that inline state up front (never touching Cover.astro's
+    // file itself) means the recede-phase fade always runs on its own
+    // declared transition, at the cost of an instant, one-time "linework
+    // completes" snap in that rare early-click case -- far less jarring
+    // than the opacity itself popping with no transition at all.
+    function releaseCoverInkReveal() {
+      coverPanel
+        ?.querySelectorAll<HTMLElement>('[data-animation="elephant"], [data-animation="duck"]')
+        .forEach((el) => {
+          el.style.transition = '';
+          el.style.clipPath = '';
+          el.style.removeProperty('--reveal');
+          el.style.removeProperty('mask-image');
+          el.style.removeProperty('-webkit-mask-image');
+        });
+    }
+
+    interface PreparedMemoryContent {
+      titleLines: HTMLElement[];
+      bodyLinesByParagraph: HTMLElement[][];
+      finalLines: HTMLElement[];
+    }
+
+    // Splits MemoryScene's title/body/final line into per-rendered-line
+    // spans (see src/lib/inkLineReveal.ts, the same mechanism already
+    // approved in Cover.astro's own name/dedication reveal) and hides each
+    // one via clip-path immediately -- but does NOT start the visible
+    // sweep yet. Split from the actual reveal (startMemoryContentReveal,
+    // below) so the text can be made ready -- and MemoryScene's own panel
+    // flipped to opacity:1 -- while it's still fully hidden behind the
+    // video, without a single word ever flashing fully written. Only
+    // ever called for the full-motion forward path -- reduced-motion and
+    // instant/direct-hash loads leave this text as plain, unsplit
+    // paragraphs and show it via the simple opacity crossfade already in
+    // MemoryScene.astro's CSS. Safe to call again on a later play-through:
+    // splitIntoLines always rebuilds from the element's current
+    // textContent, which resetLineUnit (invoked via each line's own
+    // transitionend) never touches.
+    function prepareMemoryContent(memoryPanelEl: HTMLElement): PreparedMemoryContent | null {
+      const titleEl = memoryPanelEl.querySelector<HTMLElement>('.memory__title');
+      const bodyParagraphs = Array.from(memoryPanelEl.querySelectorAll<HTMLElement>('.memory__body p'));
+      const finalEl = memoryPanelEl.querySelector<HTMLElement>('.memory__final');
+      if (!titleEl || !finalEl || bodyParagraphs.length === 0) return null;
+
+      const titleLines = splitIntoLines(titleEl);
+      const bodyLinesByParagraph = bodyParagraphs.map((p) => splitIntoLines(p));
+      const finalLines = splitIntoLines(finalEl);
+
+      // Hide everything up front, in the same tick, before the next
+      // paint -- never a flash of fully-written text.
+      titleLines.forEach((line, i) => prepareLineHidden(line, i));
+      bodyLinesByParagraph.forEach((lines, pi) => lines.forEach((line, i) => prepareLineHidden(line, 100 + pi * 10 + i)));
+      finalLines.forEach((line, i) => prepareLineHidden(line, 900 + i));
+
+      return { titleLines, bodyLinesByParagraph, finalLines };
+    }
+
+    // Starts the actual visible ink sweep -- called only once MemoryScene's
+    // clean background is confirmed fully painted and the video is gone
+    // (step 4 of the approved sequence: portada -> video -> fondo limpio
+    // -> texto). Double rAF, same as Cover.astro's own sequence, so
+    // whatever hidden state prepareMemoryContent left is guaranteed to
+    // have painted before the first transition starts.
+    //
+    // Async, and gated on each block's *actual* settle time (revealLines'
+    // own return value) rather than its nominal budget -- see the
+    // MEMORY_* comment above. Resolves once the CTA has been told to
+    // fade in, so the caller can await it before scheduling the fixed,
+    // short remainder (the CTA's own fade duration).
+    async function startMemoryContentReveal(prepared: PreparedMemoryContent | null): Promise<void> {
+      if (!prepared) return;
+      const { titleLines, bodyLinesByParagraph, finalLines } = prepared;
+
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      });
+
+      // Title: first, and the longest single reveal.
+      const titleActual = revealLines(titleLines, MEMORY_TITLE_MS, 0);
+      await sleep(Math.max(titleActual - MEMORY_PHASE_SETTLE_MS, 0));
+
+      // The four secondary lines read as one continuous gesture, not
+      // four separate reveals -- so every line across every paragraph is
+      // handed to a single revealLines() call together.
+      const bodyActual = revealLines(bodyLinesByParagraph.flat(), MEMORY_BODY_MS, 100);
+      await sleep(Math.max(bodyActual - MEMORY_PHASE_SETTLE_MS, 0) + MEMORY_FINAL_PAUSE_MS);
+
+      // The dynamic closing line.
+      const finalActual = revealLines(finalLines, MEMORY_FINAL_MS, 900);
+      await sleep(Math.max(finalActual - MEMORY_PHASE_SETTLE_MS, 0) + MEMORY_CTA_GAP_MS);
+
+      // Plain CTA fade -- JS-triggered off the real elapsed timeline
+      // above instead of a hand-computed CSS transition-delay, so it can
+      // never drift out of sync with the ink sequence again (see
+      // .memory__cta's CSS in MemoryScene.astro: it now just fades on
+      // this class, no delay baked in).
+      root!.classList.add('is-memory-cta-ready');
+    }
+
+    // Fase B/C/D: crossfade into the video, hold it, then crossfade into
+    // MemoryScene. Runs entirely on real events (readiness, ended, error)
+    // instead of a guessed fixed duration -- see the individual helpers
+    // above. Always ends by revealing MemoryScene, whether the video
+    // played to completion, failed, or timed out: there is exactly one
+    // exit path, never a frozen screen.
+    async function runVideoAndReveal() {
+      releaseCoverInkReveal();
+      // Cover (including the duck/elephant) recedes now and stays
+      // receded for the rest of this run -- through the video, its hold,
+      // and MemoryScene's whole reveal -- never popping back until the
+      // user actually navigates back to the cover. Previously this same
+      // job was done by the *same* class that also controlled the video
+      // stage's own visibility, which got removed the moment Fase D
+      // began (right when the video ends); with nothing left to hold the
+      // cover panel's opacity at 0 during Fase D, and no other rule
+      // providing one, it silently reverted to its default opacity 1 --
+      // and since the cover panel sits at a higher z-index than
+      // MemoryScene, that put the whole portada (duck and elephant
+      // included) back on top of the screen for the entire text reveal.
+      // Splitting "cover is hidden" from "video is visible" into two
+      // independent classes removes that shared, prematurely-cleared
+      // switch entirely.
+      root!.classList.add('is-cover-receded');
+
+      let played = false;
+      if (videoEl && videoSrcAssigned) {
+        try {
+          videoEl.currentTime = 0;
+        } catch {
+          // ignore -- see resetVideo
+        }
+        const ready = await waitForVideoReady(videoEl, VIDEO_READY_TIMEOUT_MS);
+        if (ready) {
+          root!.classList.add('is-video-visible');
+          try {
+            await videoEl.play();
+            played = true;
+          } catch {
+            played = false;
+            // Never actually played -- don't leave a blank/black video
+            // box crossfaded in over nothing.
+            root!.classList.remove('is-video-visible');
+          }
+        }
+      }
+
+      if (played && videoEl) {
+        await sleep(PHASE_B_CROSSFADE_MS);
+        const finishedOk = await waitForVideoOutcome(videoEl, VIDEO_HARD_CAP_MS);
+        if (finishedOk) {
+          await sleep(POST_VIDEO_HOLD_MS);
+        }
+        // A mid-playback error/hard-timeout skips the hold (there's no
+        // good last frame to rest on) and falls straight through to the
+        // same reveal below -- "salta de forma limpia... sin dejar la
+        // pantalla congelada".
+      } else {
+        // play() rejected, or the video never became ready in time --
+        // same destination, just without ever having shown the video:
+        // the cover has already receded (is-cover-receded, above), so
+        // this is a plain, brief hold on the bare paper before revealing
+        // MemoryScene -- never a blank video flash.
+        await sleep(PHASE_B_CROSSFADE_MS);
+      }
+
+      // Order-of-paint fix for the video -> MemoryScene handoff: the
+      // approved sequence is strictly (1) portada, (2) video, (3)
+      // MemoryScene's clean background already fully painted, (4) text
+      // reveal starts -- never a moment where the video is already gone
+      // and MemoryScene doesn't fully cover the screen yet (the old
+      // simultaneous crossfade between the two had exactly that gap).
+      //
+      // MemoryScene's panel opacity is flipped to 1 *instantly* here (an
+      // inline style bypassing its own CSS transition, cleared right
+      // after) rather than animated at the same time the video fades --
+      // its own title/body/final text stays invisible regardless, since
+      // prepareMemoryContent already clipped every line hidden above.
+      // Two real animation frames -- the browser's own guarantee that
+      // this instant opacity:1 has actually been painted -- are awaited
+      // before the video is touched at all, and only once it is
+      // confirmed no longer visible (transitionend on its own fade-out,
+      // not a guessed sleep()) is its playback position ever reset.
+      // Resetting it earlier -- while still on screen -- was the exact
+      // bug: the video jumping back to its own opening frame (designed to
+      // echo the duck/elephant crossfade of Fase B) while still fading
+      // out read as the portada's animals reappearing.
+      const prepared = prepareMemoryContent(memoryPanel!);
+      memoryPanel!.style.transition = 'none';
+      memoryPanel!.style.opacity = '1';
+      root!.classList.add('is-revealing-memory', 'is-ink-revealing');
+
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      });
+
+      if (played) {
+        root!.classList.remove('is-video-visible');
+        if (videoStageEl) {
+          await waitForTransitionEnd(videoStageEl, 'opacity', 500);
+        }
+      }
+      resetVideo();
+      memoryPanel!.style.transition = '';
+      memoryPanel!.style.opacity = '';
+
+      // Only now -- MemoryScene's clean background is confirmed fully
+      // visible, video gone -- does the handwritten text actually start
+      // revealing. Awaited (unlike the old fire-and-forget call) since
+      // the whole sequence's length is no longer a fixed nominal number
+      // known in advance -- it now depends on each block's real settle
+      // time -- so the completion timer below is scheduled off of the
+      // actual moment the CTA was told to fade in, not a hand-summed
+      // constant.
+      await startMemoryContentReveal(prepared);
+
+      completionTimer = window.setTimeout(() => {
+        completionTimer = null;
+        currentScene = 'memory';
+        isTransitioning = false;
+        root!.classList.remove('is-transitioning');
+        focusSceneHeading('memory');
+      }, MEMORY_CTA_MS);
+    }
+
+    function goToScene(scene: 'cover' | 'memory', options: { pushHistory?: boolean } = {}) {
+      const { pushHistory = true } = options;
+      if (isTransitioning || scene === currentScene || !coverPanel || !memoryPanel) return;
+
+      isTransitioning = true;
+      clearCompletionTimer();
+      root!.classList.add('is-transitioning');
+      root!.dataset.transitionDirection = scene === 'memory' ? 'forward' : 'back';
+
+      const reduced = prefersReducedMotion();
+      root!.classList.toggle('is-reduced-motion', reduced);
+
+      root!.dataset.scene = scene;
+      setSceneAccessibility(scene);
+
+      if (pushHistory) {
+        const hash = scene === 'memory' ? '#recuerdo' : '#portada';
+        if (window.location.hash !== hash) history.pushState({ scene }, '', hash);
+      }
+
+      if (scene === 'cover') {
+        // Back: never plays the video in reverse -- just a short, elegant
+        // crossfade back to the cover, restoring its inert/focus/hash
+        // exactly as before.
+        root!.classList.remove(
+          'is-video-visible',
+          'is-revealing-memory',
+          'is-ink-revealing',
+          'is-cover-receded',
+          'is-memory-cta-ready'
+        );
+        resetVideo();
+        if (memoryPanel) {
+          memoryPanel.style.transition = '';
+          memoryPanel.style.opacity = '';
+        }
+        const duration = reduced ? REDUCED_MOTION_DURATION : BACKWARD_DURATION;
+        completionTimer = window.setTimeout(() => {
+          completionTimer = null;
+          currentScene = scene;
+          isTransitioning = false;
+          root!.classList.remove('is-transitioning');
+          focusSceneHeading(scene);
+        }, duration);
+        return;
+      }
+
+      if (reduced) {
+        // Reduced motion: no video, ever -- a short crossfade straight to
+        // MemoryScene, hash/focus/inert unchanged.
+        root!.classList.add('is-revealing-memory');
+        completionTimer = window.setTimeout(() => {
+          completionTimer = null;
+          currentScene = scene;
+          isTransitioning = false;
+          root!.classList.remove('is-transitioning');
+          focusSceneHeading(scene);
+        }, REDUCED_MOTION_DURATION);
+        return;
+      }
+
+      // Forward, full motion: Fase A (cover's text fades) runs on the CSS
+      // selectors below as soon as is-transitioning + forward are set;
+      // Fase B/C/D are the async video sequence.
+      window.setTimeout(() => {
+        if (!isTransitioning) return;
+        runVideoAndReveal();
+      }, PHASE_A_MS);
+    }
+
+    document.addEventListener('click', (event) => {
+      const target = event.target as HTMLElement;
+      const forwardTrigger = target.closest<HTMLElement>('.cover__cta');
+      const backTrigger = target.closest<HTMLElement>('[data-action="back-to-cover"]');
+
+      if (forwardTrigger && root!.contains(forwardTrigger)) {
+        event.preventDefault();
+        goToScene('memory');
+      } else if (backTrigger && root!.contains(backTrigger)) {
+        event.preventDefault();
+        goToScene('cover');
+      }
+    });
+
+    window.addEventListener('popstate', () => {
+      const scene = window.location.hash === '#recuerdo' ? 'memory' : 'cover';
+      goToScene(scene, { pushHistory: false });
+    });
+
+    // Initial state from the URL: a direct link to #recuerdo shows the
+    // memory scene immediately (no replayed animation -- the spec only
+    // asks for the transition on user action), otherwise default to
+    // #portada and make that canonical in the URL.
+    const initialScene = window.location.hash === '#recuerdo' ? 'memory' : 'cover';
+    applySceneInstantly(initialScene);
+    if (window.location.hash !== '#recuerdo' && window.location.hash !== '#portada') {
+      history.replaceState({ scene: initialScene }, '', '#portada');
+    }
+
+    // Reveal the whole, already-settled experience as one clean fade-in
+    // (see .is-ready in the CSS below) instead of letting the browser's
+    // own incremental paint show background/texture images and web fonts
+    // arriving separately. Bounded by BOOT_READY_TIMEOUT_MS -- fonts.ready
+    // on a slow connection must never hold the whole page hidden
+    // indefinitely, so whichever settles first wins.
+    const BOOT_READY_TIMEOUT_MS = 500;
+    Promise.race([
+      document.fonts ? document.fonts.ready : Promise.resolve(),
+      new Promise<void>((resolve) => window.setTimeout(resolve, BOOT_READY_TIMEOUT_MS)),
+    ]).then(() => {
+      requestAnimationFrame(() => {
+        root?.classList.add('is-ready');
+      });
+    });
+  }
+</script>
+
+<style>
+  .experience {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100svh;
+    overflow: hidden;
+    background: var(--color-bg);
+    /*
+      Boot gate: hidden (opacity, not display/visibility, so nothing below
+      is blocked from loading or measuring itself) until the script below
+      adds .is-ready -- fonts settled (or a short bounded wait elapsed) and
+      the initial scene state already applied. Without this, the very
+      first paint could show background/texture images and web fonts
+      arriving over several separate frames, each one a visible "layer
+      loading" pop; this collapses all of that into one clean fade-in of
+      the whole, already-settled composition.
+    */
+    opacity: 0;
+  }
+
+  .experience.is-ready {
+    opacity: 1;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .experience.is-ready {
+      transition: opacity 220ms ease;
+    }
+  }
+
+  @supports (height: 100dvh) {
+    .experience {
+      height: 100dvh;
+    }
+  }
+
+  .experience__scene {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  .experience__scene--cover {
+    z-index: 2;
+  }
+
+  .experience__scene--memory {
+    z-index: 1;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .experience[data-scene='memory'] .experience__scene--memory {
+    pointer-events: auto;
+  }
+
+  .experience[data-scene='memory'] .experience__scene--cover {
+    pointer-events: none;
+  }
+
+  .experience[data-scene='memory']:not(.is-transitioning) .experience__scene--cover {
+    visibility: hidden;
+  }
+
+  .experience.is-transitioning :global(.cover__cta),
+  .experience.is-transitioning :global([data-action='back-to-cover']) {
+    pointer-events: none;
+  }
+
+  /*
+    Cover recedes while .is-cover-receded is present, the video shows
+    while .is-video-visible is present, and MemoryScene appears while
+    .is-revealing-memory is present -- three independent classes, each
+    toggled by the script above at the real moment its own phase begins,
+    rather than driven by a fixed delay from click-time. data-scene/inert/
+    hash still flip immediately on click (unchanged from before), but the
+    *visual* crossfades are decoupled from that so they can be timed
+    against the video's real, variable duration.
+
+    is-cover-receded and is-video-visible are deliberately separate:
+    is-cover-receded is added once (Fase B) and stays through the video,
+    its hold, and MemoryScene's whole reveal -- the cover must never pop
+    back until the user actually navigates back. is-video-visible only
+    spans the video itself and is removed the moment it ends, without
+    affecting the cover's own (still-receded) state.
+  */
+  @media (prefers-reduced-motion: no-preference) {
+    .experience.is-transitioning.is-cover-receded .experience__scene--cover {
+      transition: opacity 320ms ease;
+      opacity: 0;
+    }
+
+    .experience:not(.is-instant) .experience__scene--memory {
+      transition: opacity 360ms ease;
+    }
+
+    .experience.is-revealing-memory .experience__scene--memory {
+      opacity: 1;
+    }
+
+    .experience[data-transition-direction='back'].is-transitioning .experience__scene--cover,
+    .experience[data-transition-direction='back'].is-transitioning .experience__scene--memory {
+      transition-duration: 850ms;
+    }
+
+    /* Fase A (0-380ms): guest name, dedication, signature, location and
+       CTA fade out with a very small shift -- at most 8px, never a big
+       slide. The duck and elephant stay fully visible through this phase
+       so they can crossfade straight into the video's first frame next. */
+    .experience.is-transitioning[data-transition-direction='forward'] :global(.cover__intro),
+    .experience.is-transitioning[data-transition-direction='forward'] :global(.cover__names),
+    .experience.is-transitioning[data-transition-direction='forward'] :global(.cover__meta) {
+      transition: opacity 380ms ease, transform 380ms ease;
+      opacity: 0;
+      transform: translateX(-8px);
+    }
+
+    /* Fase B (starts once Fase A ends): duck/elephant crossfade away as
+       the video crossfades in on top of them -- a short, matched fade on
+       both sides so the HTML/PNG-to-video handoff never reads as a cut.
+       Tied to is-cover-receded (not is-video-visible) so they stay hidden
+       through Fase C/D too, never popping back mid-reveal. */
+    .experience.is-cover-receded :global(.cover__elephant),
+    .experience.is-cover-receded :global(.cover__duck) {
+      transition: opacity 320ms ease;
+      opacity: 0;
+    }
+  }
+
+  .experience.is-reduced-motion .experience__scene--cover,
+  .experience.is-reduced-motion .experience__scene--memory {
+    transition: opacity 260ms ease !important;
+    transform: none !important;
+  }
+
+  .experience.is-reduced-motion[data-scene='memory'] .experience__scene--cover {
+    opacity: 0;
+  }
+
+  .experience.is-reduced-motion.is-revealing-memory .experience__scene--memory {
+    opacity: 1;
+  }
+
+  .experience.is-reduced-motion[data-transition-direction='forward'] :global(.cover__elephant),
+  .experience.is-reduced-motion[data-transition-direction='forward'] :global(.cover__duck) {
+    transition: opacity 260ms ease !important;
+    opacity: 0;
+  }
+
+  .experience.is-instant .experience__scene--cover,
+  .experience.is-instant .experience__scene--memory,
+  .experience.is-instant .experience__video-stage,
+  .experience.is-instant :global(.cover__intro),
+  .experience.is-instant :global(.cover__names),
+  .experience.is-instant :global(.cover__meta),
+  .experience.is-instant :global(.cover__elephant),
+  .experience.is-instant :global(.cover__duck) {
+    transition: none !important;
+  }
+
+  /*
+    Video stage -- same fixed 390x844 canvas + same --cover-scale /
+    --cover-scale-x/-y transform Cover.astro's .cover-canvas uses, so it
+    lines up pixel-for-pixel with the cover/memory panels at any viewport.
+  */
+  .experience__video-stage {
+    position: absolute;
+    inset: 0;
+    z-index: 3;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .experience.is-video-visible .experience__video-stage {
+    opacity: 1;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .experience:not(.is-instant) .experience__video-stage {
+      transition: opacity 320ms ease;
+    }
+  }
+
+  .experience__video-frame {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background-color: var(--color-bg);
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-position: 60% top;
+  }
+
+  .experience__video-crop {
+    position: relative;
+    width: 390px;
+    height: 844px;
+    flex-shrink: 0;
+    overflow: hidden;
+    transform-origin: center center;
+    transform: scale(var(--cover-scale, 1));
+  }
+
+  :global(html.is-fill-viewport) .experience__video-crop {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(var(--cover-scale-x, 1), var(--cover-scale-y, 1));
+  }
+
+  /*
+    object-fit: cover + a centered object-position is the symmetric,
+    non-deforming horizontal crop the spec calls for: the source is wider
+    (relative to its height) than this 390:844 box, so the browser scales
+    it up until it fills the box's full height and crops the same amount
+    off both the left and right edges -- never top/bottom, never
+    stretched.
+
+    A 1px vertical seam was visible on the right edge during playback --
+    reproduced with .experience__video-crop's own transform:scale()
+    (fractional at most real viewport sizes, e.g. 390px scaled to
+    415.74px) combined with the <video> being its own GPU compositing
+    layer: at a fractional scale, the browser can rasterize that layer's
+    edge to a slightly different device-pixel boundary than the crop
+    box's own overflow:hidden clip, leaving a hairline gap that exposes
+    whatever sits behind it. A 1% overscan -- the video rendered very
+    slightly larger than its box, centered, with the crop box's own
+    overflow:hidden clipping the excess -- pushes that edge safely outside
+    the visible area on every side regardless of the exact scale factor,
+    without touching object-fit/object-position/the centered crop itself.
+  */
+  .experience__video {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 101%;
+    height: 101%;
+    transform: translate(-50%, -50%);
+    object-fit: cover;
+    object-position: 50% 50%;
+    display: block;
+  }
+
+  /*
+    MemoryScene's own shared canvas -- structurally identical to
+    .experience__video-frame/-crop above and to Cover.astro's own
+    .cover-frame/-canvas: a full-viewport frame (letterboxed with the same
+    paper texture) centering a fixed 390x844 box, uniformly scaled via the
+    same --cover-scale / --cover-scale-x/-y custom properties Cover's own
+    inline script computes on <html>. This is what keeps MemoryScene's
+    composition (fonts, margins, background, water/foam) at the exact
+    same visual size/position as the cover and the video at every
+    viewport, instead of independently reflowing to fill the real
+    viewport the way a plain width:100%/height:100% panel would.
+  */
+  .experience__memory-frame {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background-color: var(--color-bg);
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-position: 60% top;
+  }
+
+  .experience__memory-canvas {
+    position: relative;
+    width: 390px;
+    height: 844px;
+    flex-shrink: 0;
+    overflow: hidden;
+    transform-origin: center center;
+    transform: scale(var(--cover-scale, 1));
+  }
+
+  :global(html.is-fill-viewport) .experience__memory-canvas {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(var(--cover-scale-x, 1), var(--cover-scale-y, 1));
+  }
+</style>

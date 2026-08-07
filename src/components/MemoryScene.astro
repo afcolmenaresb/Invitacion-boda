@@ -1,0 +1,414 @@
+---
+import '@fontsource/sacramento/400.css';
+import { memoryScene, getMemorySceneFinalLine } from '../data/sceneMemory';
+import type { Guest } from '../data/guests';
+
+interface Props {
+  /** Drives the dynamic closing line ("Y tú, ahí." / "Y ustedes, ahí."). */
+  addressing?: Guest['addressing'];
+}
+
+// 'plural' is the safer neutral default if this were ever rendered without
+// a guest context -- in practice InvitationExperience always passes the
+// real guest.addressing through.
+const { addressing = 'plural' } = Astro.props;
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+const finalLine = getMemorySceneFinalLine(addressing);
+---
+
+<section class="memory" data-scene-panel-content aria-label={memoryScene.eyebrow}>
+  <div class="memory__texture" style={`background-image: url('${base}/images/textura_vertical_2.png')`}></div>
+
+  <button type="button" class="memory__back" data-action="back-to-cover" aria-label={memoryScene.backLabel}>
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
+      <path d="M15 5 L8 12 L15 19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
+    <span>Portada</span>
+  </button>
+
+  <div class="memory__content">
+    <p class="memory__eyebrow">{memoryScene.eyebrow}</p>
+    <h2 class="memory__title" data-scene-heading tabindex="-1">{memoryScene.title}</h2>
+    <div class="memory__body">
+      {memoryScene.body.map((line) => (
+        <p>{line}</p>
+      ))}
+    </div>
+    <p class="memory__final">{finalLine}</p>
+    <p class="memory__cta">{memoryScene.cta}</p>
+  </div>
+</section>
+
+<style>
+  .memory {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    isolation: isolate;
+    overflow: hidden;
+  }
+
+  .memory__texture {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background-color: var(--color-bg);
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-position: 40% top;
+  }
+
+  .memory__back {
+    position: absolute;
+    top: max(18px, env(safe-area-inset-top));
+    left: max(18px, env(safe-area-inset-left));
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: none;
+    border: none;
+    padding: 0.4rem 0.2rem;
+    cursor: pointer;
+    font-family: var(--font-sans);
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #6b6055;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .memory__back {
+      transition: color 0.2s ease, transform 0.2s ease;
+    }
+
+    .memory__back:hover,
+    .memory__back:focus-visible {
+      color: var(--color-accent);
+      transform: translateX(-2px);
+    }
+  }
+
+  /*
+    Frozen at the approved 390x844 canvas -- same convention Cover.astro
+    itself uses for its own composition (see that file's own comment: "the
+    composition is frozen at its approved 390x844 pixel values"). This
+    element now always lives inside a fixed 390x844 box (see
+    InvitationExperience.astro's .experience__memory-canvas), uniformly
+    scaled to fit any real viewport -- the same shared canvas Cover and the
+    transition video use -- so vw/vh units here (which always resolve
+    against the real, unscaled viewport, never an ancestor's size) would
+    silently double up with that outer scale and produce a different
+    layout at every viewport instead of the same one, scaled. Every value
+    below is the exact number the previous vw/vh/clamp() formula produced
+    at 390x844 -- the visual result at that reference size is unchanged;
+    only every *other* viewport now matches it instead of drifting.
+  */
+  .memory__content {
+    margin: auto;
+    width: 100%;
+    max-width: 358.8px;
+    display: flex;
+    flex-direction: column;
+    gap: 21.94px;
+    /* Top padding reduced from 64px so the whole block -- eyebrow and
+       title especially -- sits a little higher, using more of the
+       canvas's own top space, without touching the rest of the
+       composition (bottom/side padding, gaps unchanged). */
+    padding: 44px 28px 28px 28px;
+  }
+
+  /*
+    margin-top carries .memory__eyebrow (and, via normal flow, everything
+    after it -- .memory__title included) up by the same ~60px the title
+    itself needs to rise. Putting the shift here rather than on the title
+    directly was a deliberate correction: a -60px margin on the title
+    alone made its own box start above .memory__eyebrow's box, i.e. an
+    overlap (confirmed by measuring real rendered positions, not assumed)
+    -- since .memory__eyebrow is the first child, moving *it* up instead
+    reaches the exact same net title position while keeping the original
+    gap between eyebrow and title intact, so nothing overlaps.
+  */
+  .memory__eyebrow {
+    margin: 21.85px 0 0 0;
+    font-family: var(--font-sans);
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    font-size: 0.68rem;
+    color: #8c7f6a;
+  }
+
+  /*
+    Title -- same handwritten typeface, size, color, reveal, block width
+    and alignment as before; only its position changed, and indirectly
+    (see .memory__eyebrow's margin-top above, which is what actually
+    carries it ~1.5 of its own lines higher).
+  */
+  .memory__title {
+    margin: 0;
+    font-family: 'Homemade Apple', cursive;
+    font-weight: 400;
+    color: #211c18;
+    font-size: 2rem;
+    line-height: 1.25;
+    outline: none;
+  }
+
+  /*
+    tabindex="-1" means this heading is only ever reached via the
+    scripted focus() call in InvitationExperience.astro's
+    focusSceneHeading (never by a user tabbing through the page) -- its
+    purpose is purely to move a screen reader's attention to the new
+    scene, since sighted users already have the whole scene change as
+    their cue. The browser's default focus ring would otherwise box in
+    the handwritten heading, fighting the ink strokes' own framing, so it
+    stays suppressed (redundant with the outline:none above, kept
+    explicit here since :focus-visible would otherwise reintroduce it).
+  */
+  .memory__title:focus-visible {
+    outline: none;
+  }
+
+  /*
+    margin-top raises this block's own top edge ~1 of its own (pre-
+    increase) lines relative to where it previously sat. Because
+    .memory__eyebrow's own -60px shift above also pulls everything below
+    it up as a flow consequence (flex children stack), this margin is the
+    net figure needed to land on a ~1-line rise specifically for THIS
+    block's top -- not simply "1 line worth of margin" on its own; solved
+    against real measured positions, not hand-estimated. This only
+    controls the block's top; its bottom (and so .memory__final/.memory__
+    cta below it) is free to move down on its own once the font-size
+    increase below makes the block taller -- see .memory__final's own
+    comment for why that's left alone rather than force-compensated.
+  */
+  .memory__body {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3em;
+    margin-top: 27.25px;
+  }
+
+  /*
+    Secondary text -- "Opción A": an existing, already-installed
+    handwritten typeface (Sacramento -- imported above, was already a
+    project dependency but unused elsewhere), never a system serif/sans or
+    a second new font. Thinner and calmer than the title's Homemade Apple,
+    sized and spaced generously since script faces read smaller/tighter at
+    a given font-size than a normal serif -- this keeps it legible and
+    intimate rather than decorative or cramped.
+  */
+  .memory__body p,
+  .memory__final {
+    margin: 0;
+    font-family: 'Sacramento', cursive;
+    font-weight: 400;
+    letter-spacing: 0.01em;
+    color: #4a3f35;
+    line-height: 1.55;
+  }
+
+  /* 1.5x the previous 1.32rem -- same typeface/weight/line-height ratio,
+     just larger; .memory__final keeps its own separate font-size below,
+     unaffected. */
+  .memory__body p {
+    font-size: 1.98rem;
+  }
+
+  /*
+    The dynamic closing line ("Y tú, ahí." / "Y ustedes, ahí.") gets a
+    subtle emphasis -- slightly larger and in the accent ink -- but stays
+    the same typeface/weight as the four lines above it, well below the
+    title's presence. Untouched by this round's changes except
+    margin-top, which now also cancels out the extra height
+    .memory__body gained from its own font-size increase, so this line
+    (and the CTA after it) stay at their original position -- see the
+    long comment on .memory__body above.
+  */
+  .memory__final {
+    /* Frozen at 390x844: 1.2vh there is 10.13px, within the old
+       clamp(6px, 1.2vh, 14px)'s range. Left exactly as it was -- see the
+       comment on .memory__body above: one of the four secondary lines
+       now wraps to two lines at the larger size, so the block is
+       genuinely taller than before, and this (and the CTA after it) are
+       left to flow down naturally to make room rather than forcing them
+       to stay artificially pinned to their old position. */
+    margin-top: 10.13px;
+    font-size: 1.5rem;
+    color: var(--color-accent);
+  }
+
+  .memory__cta {
+    /* Frozen at 390x844: 1.6vh there is 13.5px, within the old
+       clamp(8px, 1.6vh, 18px)'s range. */
+    margin: 13.5px 0 0;
+    font-family: var(--font-sans);
+    /* Grown just slightly (0.78rem -> 0.82rem) -- stays a small uppercase
+       label, well below the title/final's presence. */
+    font-size: 0.82rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #6b6055;
+  }
+
+  .memory__cta::after {
+    content: ' →';
+  }
+
+  /*
+    Reveal: hidden by default, visible either (a) once
+    InvitationExperience's script adds .is-revealing-memory to the shared
+    .experience root -- the real, video-timed moment during a forward
+    transition -- or (b) whenever the scene is already settled on 'memory'
+    outside of a transition (direct #recuerdo load, or once a transition
+    has fully finished). Decoupling from data-scene/is-transitioning
+    directly (unlike the old choreography, which was keyed to the SVG ink
+    strokes' own fixed timeline) is what lets this same markup work
+    whether the video played, failed over, or never ran at all
+    (reduced-motion).
+  */
+  :global(.experience:not(.is-revealing-memory)) .memory__eyebrow,
+  :global(.experience:not(.is-revealing-memory)) .memory__title,
+  :global(.experience:not(.is-revealing-memory)) .memory__body,
+  :global(.experience:not(.is-revealing-memory)) .memory__final,
+  :global(.experience:not(.is-revealing-memory)) .memory__cta {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  :global(.experience.is-revealing-memory) .memory__eyebrow,
+  :global(.experience.is-revealing-memory) .memory__title,
+  :global(.experience.is-revealing-memory) .memory__body,
+  :global(.experience.is-revealing-memory) .memory__final,
+  :global(.experience.is-revealing-memory) .memory__cta {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /*
+    During an animated forward transition specifically, the CTA overrides
+    the rule above and stays hidden until InvitationExperience.astro's
+    script adds .is-memory-cta-ready -- the real moment (driven by each
+    block's *actual* settle time, not a fixed nominal number) the final
+    line has finished and the short pacing beat after it has elapsed. This
+    replaced a hand-computed transition-delay here that had to be kept in
+    sync by hand with the MEMORY_* constants and silently drifted whenever
+    those were tuned (the CTA popping in before the final line had even
+    started). Direct/instant loads and reduced-motion never reach this
+    selector (no .is-transitioning[data-transition-direction='forward']),
+    so they're unaffected -- see the base rule above and the
+    is-reduced-motion/is-instant transition:none rules below.
+  */
+  @media (prefers-reduced-motion: no-preference) {
+    :global(.experience.is-transitioning.is-revealing-memory[data-transition-direction='forward']):not(.is-memory-cta-ready)
+      .memory__cta {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+  }
+
+  /*
+    Forward reveal: title, body lines and the final line are handwritten
+    "ink" -- InvitationExperience.astro's script splits them into lines
+    (see src/lib/inkLineReveal.ts, the same mechanism already approved in
+    Cover.astro's own name/dedication reveal, re-implemented standalone so
+    Cover.astro itself is never touched) and animates each via clip-path.
+    .is-ink-revealing (added by that same script, in the same moment as
+    .is-revealing-memory) kills this plain opacity/transform transition for
+    those three elements -- clip-path becomes their only visible reveal,
+    exactly like Cover's own text. Eyebrow and CTA are plain uppercase
+    labels, not manuscript, and keep a simple opacity+translateY fade --
+    the eyebrow appears immediately (fixed 300ms fade), while the CTA's
+    fade is gated on .is-memory-cta-ready (see that class's own comment
+    above) instead of a fixed delay, since it must wait for the real,
+    variable-length ink sequence above it to finish first.
+  */
+  @media (prefers-reduced-motion: no-preference) {
+    :global(.experience.is-transitioning.is-revealing-memory[data-transition-direction='forward']) .memory__eyebrow {
+      transition: opacity 300ms ease, transform 300ms ease;
+    }
+
+    /*
+      Defensive fallback only, for title/body/final: normally superseded
+      by .is-ink-revealing's transition:none below plus the clip-path
+      reveal. If that script ever failed to run (e.g. a thrown error), this
+      still brings the content in with a plain, reasonable fade instead of
+      a hard pop.
+    */
+    :global(.experience.is-transitioning.is-revealing-memory[data-transition-direction='forward']) .memory__title,
+    :global(.experience.is-transitioning.is-revealing-memory[data-transition-direction='forward']) .memory__body,
+    :global(.experience.is-transitioning.is-revealing-memory[data-transition-direction='forward']) .memory__final {
+      transition: opacity 380ms ease, transform 380ms ease;
+    }
+
+    :global(.experience.is-transitioning.is-revealing-memory[data-transition-direction='forward'].is-memory-cta-ready)
+      .memory__cta {
+      opacity: 1;
+      transform: translateY(0);
+      transition: opacity 350ms ease, transform 350ms ease;
+    }
+
+    :global(.experience.is-ink-revealing) .memory__title,
+    :global(.experience.is-ink-revealing) .memory__body,
+    :global(.experience.is-ink-revealing) .memory__final {
+      transition: none !important;
+      transform: none !important;
+    }
+
+    :global(.experience.is-transitioning[data-transition-direction='back']) .memory__eyebrow,
+    :global(.experience.is-transitioning[data-transition-direction='back']) .memory__title,
+    :global(.experience.is-transitioning[data-transition-direction='back']) .memory__body,
+    :global(.experience.is-transitioning[data-transition-direction='back']) .memory__final,
+    :global(.experience.is-transitioning[data-transition-direction='back']) .memory__cta {
+      transition: opacity 400ms ease, transform 400ms ease;
+    }
+  }
+
+  /*
+    .ink-line/.ink-word -- identical to Cover.astro's own rules (see that
+    file for the full rationale): .ink-line is the only element that ever
+    carries a clip-path (never mask-image), and its horizontal bleed lives
+    in the box model (padding + equal negative margin) so a cursive
+    overshoot is never clipped early. .ink-word never carries clip-path or
+    padding of its own; display:inline + overflow:visible (the default)
+    already lets it paint through untouched.
+  */
+  :global(.memory .ink-line) {
+    display: block;
+    padding-left: 0.5em;
+    padding-right: 0.5em;
+    margin-left: -0.5em;
+    margin-right: -0.5em;
+  }
+
+  :global(.memory .ink-word) {
+    display: inline;
+    overflow: visible;
+  }
+
+  :global(.experience.is-reduced-motion) .memory__eyebrow,
+  :global(.experience.is-reduced-motion) .memory__title,
+  :global(.experience.is-reduced-motion) .memory__body,
+  :global(.experience.is-reduced-motion) .memory__final,
+  :global(.experience.is-reduced-motion) .memory__cta,
+  :global(.experience.is-instant) .memory__eyebrow,
+  :global(.experience.is-instant) .memory__title,
+  :global(.experience.is-instant) .memory__body,
+  :global(.experience.is-instant) .memory__final,
+  :global(.experience.is-instant) .memory__cta {
+    transition: none !important;
+  }
+
+  /*
+    No per-orientation/viewport layout here anymore -- MemoryScene now
+    lives inside the same fixed 390x844 canvas Cover and the transition
+    video share (see InvitationExperience.astro's .experience__memory-
+    canvas), uniformly scaled and centered at every viewport, landscape
+    included. A separate landscape-only two-column composition would be
+    exactly the "estrategia independiente de escalado" the shared canvas
+    is meant to replace: Cover.astro itself has no such per-orientation
+    redesign, only the one composition, scaled.
+  */
+</style>

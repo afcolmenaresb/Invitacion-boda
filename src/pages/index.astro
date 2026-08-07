@@ -1,23 +1,10 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
-import Cover from '../components/Cover.astro';
+import InvitationExperience from '../components/InvitationExperience.astro';
 ---
 
 <BaseLayout title="Invitación de Fátima y Andrés">
   <main>
-    <Cover />
-    <div id="viaje" class="scroll-check"></div>
+    <InvitationExperience />
   </main>
 </BaseLayout>
-
-<style>
-  /*
-    Anchor target for the cover's "Comenzar el viaje" CTA. No forced
-    height: there is no second section yet, and the cover's own
-    .cover-frame already fills the initial viewport exactly, so this must
-    not add scrollable empty space below it.
-  */
-  .scroll-check {
-    height: 0;
-  }
-</style>

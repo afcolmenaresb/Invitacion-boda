@@ -1,6 +1,6 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
-import Cover from '../components/Cover.astro';
+import InvitationExperience from '../components/InvitationExperience.astro';
 import { guests } from '../data/guests';
 
 export function getStaticPaths() {
@@ -15,19 +15,10 @@ const { guest } = Astro.props;
 
 <BaseLayout title={`Invitación para ${guest.displayName}`}>
   <main>
-    <Cover displayName={guest.displayName} dedication={guest.dedication} />
-    <div id="viaje" class="scroll-check"></div>
+    <InvitationExperience
+      displayName={guest.displayName}
+      dedication={guest.dedication}
+      addressing={guest.addressing}
+    />
   </main>
 </BaseLayout>
-
-<style>
-  /*
-    Anchor target for the cover's "Comenzar el viaje" CTA. No forced
-    height: there is no second section yet, and the cover's own
-    .cover-frame already fills the initial viewport exactly, so this must
-    not add scrollable empty space below it.
-  */
-  .scroll-check {
-    height: 0;
-  }
-</style>
