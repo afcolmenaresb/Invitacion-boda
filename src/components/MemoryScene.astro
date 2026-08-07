@@ -288,6 +288,28 @@ const finalLine = getMemorySceneFinalLine(addressing);
   }
 
   /*
+    During an animated forward transition specifically, the CTA overrides
+    the rule above and stays hidden until InvitationExperience.astro's
+    script adds .is-memory-cta-ready -- the real moment (driven by each
+    block's *actual* settle time, not a fixed nominal number) the final
+    line has finished and the short pacing beat after it has elapsed. This
+    replaced a hand-computed transition-delay here that had to be kept in
+    sync by hand with the MEMORY_* constants and silently drifted whenever
+    those were tuned (the CTA popping in before the final line had even
+    started). Direct/instant loads and reduced-motion never reach this
+    selector (no .is-transitioning[data-transition-direction='forward']),
+    so they're unaffected -- see the base rule above and the
+    is-reduced-motion/is-instant transition:none rules below.
+  */
+  @media (prefers-reduced-motion: no-preference) {
+    :global(.experience.is-transitioning.is-revealing-memory[data-transition-direction='forward']):not(.is-memory-cta-ready)
+      .memory__cta {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+  }
+
+  /*
     Forward reveal: title, body lines and the final line are handwritten
     "ink" -- InvitationExperience.astro's script splits them into lines
     (see src/lib/inkLineReveal.ts, the same mechanism already approved in
@@ -297,11 +319,11 @@ const finalLine = getMemorySceneFinalLine(addressing);
     .is-revealing-memory) kills this plain opacity/transform transition for
     those three elements -- clip-path becomes their only visible reveal,
     exactly like Cover's own text. Eyebrow and CTA are plain uppercase
-    labels, not manuscript, and keep a simple opacity+translateY fade with
-    a fixed delay (Fase D's internal choreography is a fixed, designed
-    sequence once it starts -- unlike the outer cover/video crossfade,
-    which is intentionally never delay-based since the video's own
-    duration varies by device/network).
+    labels, not manuscript, and keep a simple opacity+translateY fade --
+    the eyebrow appears immediately (fixed 300ms fade), while the CTA's
+    fade is gated on .is-memory-cta-ready (see that class's own comment
+    above) instead of a fixed delay, since it must wait for the real,
+    variable-length ink sequence above it to finish first.
   */
   @media (prefers-reduced-motion: no-preference) {
     :global(.experience.is-transitioning.is-revealing-memory[data-transition-direction='forward']) .memory__eyebrow {
@@ -321,12 +343,11 @@ const finalLine = getMemorySceneFinalLine(addressing);
       transition: opacity 380ms ease, transform 380ms ease;
     }
 
-    :global(.experience.is-transitioning.is-revealing-memory[data-transition-direction='forward']) .memory__cta {
+    :global(.experience.is-transitioning.is-revealing-memory[data-transition-direction='forward'].is-memory-cta-ready)
+      .memory__cta {
+      opacity: 1;
+      transform: translateY(0);
       transition: opacity 350ms ease, transform 350ms ease;
-      /* title (4250ms) + body (4750ms) + pause (280ms) + final line
-         (1625ms) + a short beat (150ms) before the CTA fades in -- see the
-         matching MEMORY_* constants in InvitationExperience.astro. */
-      transition-delay: 11055ms;
     }
 
     :global(.experience.is-ink-revealing) .memory__title,

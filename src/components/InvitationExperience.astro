@@ -116,25 +116,29 @@ const videoSrc = `${base}/videos/memory-transition2.mp4`;
     // MemoryScene's own content choreography, once Fase D begins -- title
     // first and longest, then the four secondary lines as one continuous
     // gesture, a short pause, the dynamic closing line, then a plain CTA
-    // fade. Fixed, designed durations (unlike the outer video crossfade):
-    // this inner sequence never depends on the video's own length. Mirrored
-    // in MemoryScene.astro's CSS (.memory__cta's transition-delay) --
-    // keep both in sync by hand when adjusting.
-    //
-    // The manuscript portion (title/body/final -- the actual ink sweeps,
-    // never the plain CTA fade) is ~2.5x its previous pass here: the
-    // earlier ~1700/1900/650ms pass read as too fast to feel handwritten.
-    // The pause before the dynamic line and the gap before the CTA scale
-    // up more modestly (they're pacing beats, not ink itself); the CTA's
-    // own fade stays close to what it was.
+    // fade. These are nominal *budgets* handed to revealLines(), not the
+    // real on-screen time each block takes: revealLines staggers/overlaps
+    // its lines and reports back the actual elapsed time until the last
+    // line settles, which is reliably shorter than the nominal number for
+    // any multi-line block. startMemoryContentReveal (below) awaits that
+    // *actual* duration between phases -- exactly the fix already proven
+    // in Cover.astro's own name/dedication sequence -- instead of the
+    // nominal budget, so there is never a dead, static gap between blocks
+    // while still letting the ink sweep itself take as long as these
+    // numbers intend.
     const MEMORY_TITLE_MS = 7000;
     const MEMORY_BODY_MS = 8000;
-    const MEMORY_FINAL_PAUSE_MS = 0;
+    const MEMORY_FINAL_PAUSE_MS = 300;
     const MEMORY_FINAL_MS = 1625;
     const MEMORY_CTA_GAP_MS = 150;
     const MEMORY_CTA_MS = 350;
-    const PHASE_D_MS =
-      MEMORY_TITLE_MS + MEMORY_BODY_MS + MEMORY_FINAL_PAUSE_MS + MEMORY_FINAL_MS + MEMORY_CTA_GAP_MS + MEMORY_CTA_MS; // 11405ms
+    // Small buffer subtracted from each block's *actual* settle time
+    // before starting the next -- the next block's first line begins
+    // slightly before the previous one's last line fully finishes, same
+    // as Cover.astro's own -250/-150 buffers on its name/dedication/
+    // signature sequence, so the handoff reads as one continuous gesture
+    // rather than a hard cut.
+    const MEMORY_PHASE_SETTLE_MS = 250;
 
     let isTransitioning = false;
     let currentScene: 'cover' | 'memory' = 'cover';
@@ -268,7 +272,7 @@ const videoSrc = `${base}/videos/memory-transition2.mp4`;
       root!.classList.add('is-instant');
       root!.dataset.scene = scene;
       setSceneAccessibility(scene);
-      root!.classList.remove('is-video-visible', 'is-ink-revealing');
+      root!.classList.remove('is-video-visible', 'is-ink-revealing', 'is-memory-cta-ready');
       root!.classList.toggle('is-cover-receded', scene === 'memory');
       root!.classList.toggle('is-revealing-memory', scene === 'memory');
       // Defensive: these are only ever set (and cleared) inside
@@ -355,28 +359,40 @@ const videoSrc = `${base}/videos/memory-transition2.mp4`;
     // -> texto). Double rAF, same as Cover.astro's own sequence, so
     // whatever hidden state prepareMemoryContent left is guaranteed to
     // have painted before the first transition starts.
-    function startMemoryContentReveal(prepared: PreparedMemoryContent | null) {
+    //
+    // Async, and gated on each block's *actual* settle time (revealLines'
+    // own return value) rather than its nominal budget -- see the
+    // MEMORY_* comment above. Resolves once the CTA has been told to
+    // fade in, so the caller can await it before scheduling the fixed,
+    // short remainder (the CTA's own fade duration).
+    async function startMemoryContentReveal(prepared: PreparedMemoryContent | null): Promise<void> {
       if (!prepared) return;
       const { titleLines, bodyLinesByParagraph, finalLines } = prepared;
 
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          // Title: first, and the longest single reveal.
-          revealLines(titleLines, MEMORY_TITLE_MS, 0);
-
-          // The four secondary lines read as one continuous gesture, not
-          // four separate reveals -- so every line across every paragraph
-          // is handed to a single revealLines() call together.
-          window.setTimeout(() => {
-            revealLines(bodyLinesByParagraph.flat(), MEMORY_BODY_MS, 100);
-          }, MEMORY_TITLE_MS);
-
-          // The dynamic closing line gets its own brief pause first.
-          window.setTimeout(() => {
-            revealLines(finalLines, MEMORY_FINAL_MS, 900);
-          }, MEMORY_TITLE_MS + MEMORY_BODY_MS + MEMORY_FINAL_PAUSE_MS);
-        });
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
       });
+
+      // Title: first, and the longest single reveal.
+      const titleActual = revealLines(titleLines, MEMORY_TITLE_MS, 0);
+      await sleep(Math.max(titleActual - MEMORY_PHASE_SETTLE_MS, 0));
+
+      // The four secondary lines read as one continuous gesture, not
+      // four separate reveals -- so every line across every paragraph is
+      // handed to a single revealLines() call together.
+      const bodyActual = revealLines(bodyLinesByParagraph.flat(), MEMORY_BODY_MS, 100);
+      await sleep(Math.max(bodyActual - MEMORY_PHASE_SETTLE_MS, 0) + MEMORY_FINAL_PAUSE_MS);
+
+      // The dynamic closing line.
+      const finalActual = revealLines(finalLines, MEMORY_FINAL_MS, 900);
+      await sleep(Math.max(finalActual - MEMORY_PHASE_SETTLE_MS, 0) + MEMORY_CTA_GAP_MS);
+
+      // Plain CTA fade -- JS-triggered off the real elapsed timeline
+      // above instead of a hand-computed CSS transition-delay, so it can
+      // never drift out of sync with the ink sequence again (see
+      // .memory__cta's CSS in MemoryScene.astro: it now just fades on
+      // this class, no delay baked in).
+      root!.classList.add('is-memory-cta-ready');
     }
 
     // Fase B/C/D: crossfade into the video, hold it, then crossfade into
@@ -487,8 +503,13 @@ const videoSrc = `${base}/videos/memory-transition2.mp4`;
 
       // Only now -- MemoryScene's clean background is confirmed fully
       // visible, video gone -- does the handwritten text actually start
-      // revealing.
-      startMemoryContentReveal(prepared);
+      // revealing. Awaited (unlike the old fire-and-forget call) since
+      // the whole sequence's length is no longer a fixed nominal number
+      // known in advance -- it now depends on each block's real settle
+      // time -- so the completion timer below is scheduled off of the
+      // actual moment the CTA was told to fade in, not a hand-summed
+      // constant.
+      await startMemoryContentReveal(prepared);
 
       completionTimer = window.setTimeout(() => {
         completionTimer = null;
@@ -496,7 +517,7 @@ const videoSrc = `${base}/videos/memory-transition2.mp4`;
         isTransitioning = false;
         root!.classList.remove('is-transitioning');
         focusSceneHeading('memory');
-      }, PHASE_D_MS);
+      }, MEMORY_CTA_MS);
     }
 
     function goToScene(scene: 'cover' | 'memory', options: { pushHistory?: boolean } = {}) {
@@ -523,7 +544,13 @@ const videoSrc = `${base}/videos/memory-transition2.mp4`;
         // Back: never plays the video in reverse -- just a short, elegant
         // crossfade back to the cover, restoring its inert/focus/hash
         // exactly as before.
-        root!.classList.remove('is-video-visible', 'is-revealing-memory', 'is-ink-revealing', 'is-cover-receded');
+        root!.classList.remove(
+          'is-video-visible',
+          'is-revealing-memory',
+          'is-ink-revealing',
+          'is-cover-receded',
+          'is-memory-cta-ready'
+        );
         resetVideo();
         if (memoryPanel) {
           memoryPanel.style.transition = '';
