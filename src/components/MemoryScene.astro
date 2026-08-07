@@ -132,7 +132,7 @@ const finalLine = getMemorySceneFinalLine(addressing);
     gap between eyebrow and title intact, so nothing overlaps.
   */
   .memory__eyebrow {
-    margin: 6px 0 0 0;
+    margin: 21.85px 0 0 0;
     font-family: var(--font-sans);
     text-transform: uppercase;
     letter-spacing: 0.16em;
@@ -207,31 +207,36 @@ const finalLine = getMemorySceneFinalLine(addressing);
     font-weight: 400;
     letter-spacing: 0.01em;
     color: #4a3f35;
-    line-height: 1.45;
+    line-height: 1.55;
   }
 
-  /* +25% from the previous 1.98rem -- same typeface, same line-height
-     (1.55, shared rule above, untouched), same position (.memory__body's
-     own margin-top, untouched) -- only the font-size grows.
-     .memory__final keeps its own separate font-size below, unaffected by
-     this rule. */
+  /* 1.5x the previous 1.32rem -- same typeface/weight/line-height ratio,
+     just larger; .memory__final keeps its own separate font-size below,
+     unaffected. */
   .memory__body p {
-    font-size: 2.475rem;
+    font-size: 1.98rem;
   }
 
   /*
     The dynamic closing line ("Y tú, ahí." / "Y ustedes, ahí.") gets a
     subtle emphasis -- slightly larger and in the accent ink -- but stays
     the same typeface/weight as the four lines above it, well below the
-    title's presence. margin-top is untouched (same position as before);
-    only font-size grows +25%, same as .memory__body p above -- this line
-    (and the CTA after it) are left to flow down naturally to make room
-    for however much taller .memory__body ends up, exactly like the
-    previous pass.
+    title's presence. Untouched by this round's changes except
+    margin-top, which now also cancels out the extra height
+    .memory__body gained from its own font-size increase, so this line
+    (and the CTA after it) stay at their original position -- see the
+    long comment on .memory__body above.
   */
   .memory__final {
+    /* Frozen at 390x844: 1.2vh there is 10.13px, within the old
+       clamp(6px, 1.2vh, 14px)'s range. Left exactly as it was -- see the
+       comment on .memory__body above: one of the four secondary lines
+       now wraps to two lines at the larger size, so the block is
+       genuinely taller than before, and this (and the CTA after it) are
+       left to flow down naturally to make room rather than forcing them
+       to stay artificially pinned to their old position. */
     margin-top: 10.13px;
-    font-size: 1.875rem;
+    font-size: 1.5rem;
     color: var(--color-accent);
   }
 
