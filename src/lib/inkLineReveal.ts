@@ -182,7 +182,7 @@ export function resetLineUnit(el: HTMLElement) {
   el.style.transition = '';
 }
 
-const LINE_OVERLAP_MS = 50;
+const LINE_OVERLAP_MS = 500;
 const MIN_LINE_DURATION_MS = 420;
 
 /**
