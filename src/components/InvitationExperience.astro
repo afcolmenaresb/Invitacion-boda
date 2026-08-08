@@ -102,7 +102,6 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
         <video
           class="experience__destination-video"
           data-video-src={videoSrc2}
-          muted
           playsinline
           preload="none"
           aria-hidden="true"
@@ -1296,9 +1295,14 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
        the existing ".is-revealing-memory .experience__scene--memory
        {opacity:1}" rule above so it wins on the (otherwise equal)
        specificity, same as .is-cover-receded overriding cover's own
-       opacity. */
+       opacity. 1320ms = the original 320ms +1000ms: a slower, more
+       elegant fade-out for MemoryScene's own text/panel on its way out,
+       without touching when the video itself starts (runDestinationVideoAndReveal
+       kicks off playback immediately, independent of this CSS duration --
+       see that function's own comment), so the handoff still reads as
+       continuous. */
     .experience.is-memory-receded .experience__scene--memory {
-      transition: opacity 320ms ease;
+      transition: opacity 1320ms ease;
       opacity: 0;
     }
 
