@@ -14,6 +14,11 @@ const { displayName, dedication, addressing } = Astro.props;
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 const videoSrc = `${base}/videos/memory-transition2.mp4`;
 const videoSrc2 = `${base}/videos/memory-transition3.mp4`;
+// The exact join frame shared by both transition videos -- the last frame
+// of memory-transition2.mp4 and the first frame of memory-transition3.mp4
+// -- so it doubles as MemoryScene's own static background, matching
+// whichever of the two videos is adjacent to it pixel-for-pixel.
+const memoryTextureSrc = `${base}/images/textura_vertical_2.1.png`;
 const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
 ---
 
@@ -29,6 +34,22 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
     .experience__video-crop above -- one shared canvas across all three,
     so none of them can ever drift to a different size/position at any
     viewport (see the matching CSS below).
+
+    .experience__memory-image is textura_vertical_2.1.png -- the exact
+    join frame shared by memory-transition2.mp4's last frame and
+    memory-transition3.mp4's first frame -- rendered with the identical
+    crop technique .experience__video/.experience__destination-video use
+    (position/top/left/width/height/transform/object-fit/object-position,
+    same values, same 1% overscan) inside this same 390x844 canvas, rather
+    than as MemoryScene's own independent background-image/-position. That
+    is what keeps it pixel-consistent with both videos: same box, same
+    --cover-scale, same crop math, just a static <img> instead of a
+    <video>. It sits behind MemoryScene itself in DOM order (MemoryScene's
+    own root has no background of its own anymore), so it paints first,
+    always fully loaded and in place under the video before that video
+    ever fades out or in -- see runVideoAndReveal/runDestinationVideoAndReveal
+    below, neither of which had to change for this: they already paint the
+    target scene before touching either video's opacity/currentTime.
   -->
   <section class="experience__scene experience__scene--memory" data-scene-panel="memory" inert>
     <div
@@ -36,6 +57,7 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
       style={`background-image: url('${base}/images/textura_vertical_2.png')`}
     >
       <div class="experience__memory-canvas">
+        <img class="experience__memory-image" src={memoryTextureSrc} alt="" aria-hidden="true" />
         <MemoryScene addressing={addressing} />
       </div>
     </div>
@@ -1247,6 +1269,26 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%) scale(var(--cover-scale-x, 1), var(--cover-scale-y, 1));
+  }
+
+  /*
+    Same crop technique as .experience__video/.experience__destination-video
+    above -- identical properties and values, just an <img> instead of a
+    <video> -- so textura_vertical_2.1.png lines up pixel-for-pixel with
+    both transition videos' own matching frame at any viewport. Sits
+    behind MemoryScene in DOM order within the same .experience__memory-canvas
+    box (no independent crop/position of its own).
+  */
+  .experience__memory-image {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 101%;
+    height: 101%;
+    transform: translate(-50%, -50%);
+    object-fit: cover;
+    object-position: 50% 50%;
+    display: block;
   }
 
   /*

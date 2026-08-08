@@ -13,13 +13,19 @@ interface Props {
 // real guest.addressing through.
 const { addressing = 'plural' } = Astro.props;
 
-const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 const finalLine = getMemorySceneFinalLine(addressing);
 ---
 
+<!--
+  No own background layer here anymore (was .memory__texture,
+  background-image + background-position: 40% top -- an independent crop
+  from the transition videos'). InvitationExperience.astro now renders
+  textura_vertical_2.1.png as a sibling .experience__memory-image behind
+  this section, using the exact same crop technique as the transition
+  videos, so this section itself stays transparent and lets it show
+  through -- see that file's own comment for why.
+-->
 <section class="memory" data-scene-panel-content aria-label={memoryScene.eyebrow}>
-  <div class="memory__texture" style={`background-image: url('${base}/images/textura_vertical_2.png')`}></div>
-
   <button type="button" class="memory__back" data-action="back-to-cover" aria-label={memoryScene.backLabel}>
     <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
       <path d="M15 5 L8 12 L15 19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
@@ -48,16 +54,6 @@ const finalLine = getMemorySceneFinalLine(addressing);
     display: flex;
     isolation: isolate;
     overflow: hidden;
-  }
-
-  .memory__texture {
-    position: absolute;
-    inset: 0;
-    z-index: -1;
-    background-color: var(--color-bg);
-    background-size: cover;
-    background-repeat: no-repeat;
-    background-position: 40% top;
   }
 
   .memory__back {
