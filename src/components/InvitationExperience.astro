@@ -754,7 +754,22 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
         await waitForTransitionEnd(destinationVideoEl, 'opacity', DESTINATION_VIDEO_FADE_MS + 200);
         resetDestinationVideo();
         destinationVideoEl.style.transition = '';
-        destinationVideoEl.style.opacity = '';
+        // Deliberately left at opacity:0 here, NOT cleared back to ''.
+        // .experience__destination-video has no stylesheet opacity of its
+        // own, so clearing this back to '' falls through to the initial
+        // value (1) -- and resetDestinationVideo() just above rewound
+        // currentTime to 0, i.e. the video's own first frame, which is
+        // textura_vertical_2.1.png (the exact join frame with
+        // memory-transition2.mp4). Clearing it here made the video pop
+        // back to fully visible showing that frame, which read as "the
+        // background reverted to page 2's texture" even though
+        // .experience__destination-image (textura_vertical_3.png) was
+        // correctly still painted underneath the whole time -- the video
+        // was simply back on top of it. textura_vertical_3.png must stay
+        // the one definitive background for the rest of this destination
+        // visit; the video only gets its opacity cleared again at the top
+        // of this very function, right before the *next* real playback
+        // actually starts (see above).
       } else {
         // Never played (readiness timeout/error, or reduced-motion-style
         // "no src assigned" edge case) -- hide the <video> element itself
