@@ -36,7 +36,7 @@ const finalLine = getMemorySceneFinalLine(addressing);
       ))}
     </div>
     <p class="memory__final">{finalLine}</p>
-    <p class="memory__cta">{memoryScene.cta}</p>
+    <button type="button" class="memory__cta" data-action="go-to-destination">{memoryScene.cta}</button>
   </div>
 </section>
 
@@ -251,6 +251,16 @@ const finalLine = getMemorySceneFinalLine(addressing);
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: #6b6055;
+    /* Now a real <button> (was a plain <p>) so it can trigger the
+       destination transition -- reset to look identical to the old
+       paragraph: no border/background/padding, left-aligned, same
+       cursor affordance the rest of the experience's controls use. */
+    display: block;
+    background: none;
+    border: none;
+    padding: 0;
+    text-align: left;
+    cursor: pointer;
   }
 
   .memory__cta::after {

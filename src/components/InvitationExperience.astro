@@ -1,6 +1,7 @@
 ---
 import Cover from './Cover.astro';
 import MemoryScene from './MemoryScene.astro';
+import DestinationScene from './DestinationScene.astro';
 import type { Guest } from '../data/guests';
 
 interface Props {
@@ -12,6 +13,8 @@ interface Props {
 const { displayName, dedication, addressing } = Astro.props;
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 const videoSrc = `${base}/videos/memory-transition2.mp4`;
+const videoSrc2 = `${base}/videos/memory-transition3.mp4`;
+const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
 ---
 
 <div class="experience" id="invitation-experience" data-scene="cover" data-transition-direction="forward">
@@ -72,6 +75,47 @@ const videoSrc = `${base}/videos/memory-transition2.mp4`;
       </div>
     </div>
   </div>
+
+  <!--
+    Destination stage: same fixed 390x844 logical canvas as everything
+    above. Unlike the cover->memory video (which fully hides *before* its
+    target scene's own text ever appears), transition3.mp4's target
+    content ("El destino") must appear on top of it while it keeps
+    playing, then stay put, unchanged, as the video itself is what
+    disappears -- so the static final frame, the video and the scene's
+    own text all live together in this one persistent stage rather than a
+    separate video-stage + panel pair that hands off to each other.
+    .experience__destination-image is the same textura_vertical_3.png the
+    video ends on, always painted underneath the video from the very
+    start (see the script's ensureDestinationAssets/runDestinationVideoAndReveal
+    for why that ordering -- final frame first, video removed after -- is
+    what keeps the handoff free of any flash, resize or reflow. Both the
+    frame/image backgrounds and the video's own src are intentionally left
+    unset here (data-bg-src/data-video-src only) and assigned lazily by
+    that same script once MemoryScene is actually reached, so this ~7MB of
+    media is never fetched as part of the initial cover load.
+  -->
+  <section class="experience__scene experience__scene--destination" data-scene-panel="destination" inert>
+    <div class="experience__destination-frame" data-bg-src={destinationTextureSrc}>
+      <div class="experience__destination-canvas">
+        <div class="experience__destination-image" data-bg-src={destinationTextureSrc} aria-hidden="true"></div>
+        <video
+          class="experience__destination-video"
+          data-video-src={videoSrc2}
+          muted
+          playsinline
+          preload="none"
+          aria-hidden="true"
+          tabindex="-1"
+          disablepictureinpicture
+          disableremoteplayback
+        ></video>
+        <div class="experience__destination-overlay">
+          <DestinationScene addressing={addressing} />
+        </div>
+      </div>
+    </div>
+  </section>
 </div>
 
 <script>
@@ -103,6 +147,10 @@ const videoSrc = `${base}/videos/memory-transition2.mp4`;
     const memoryPanel = root.querySelector<HTMLElement>('[data-scene-panel="memory"]');
     const videoEl = root.querySelector<HTMLVideoElement>('.experience__video');
     const videoStageEl = root.querySelector<HTMLElement>('.experience__video-stage');
+    const destinationPanel = root.querySelector<HTMLElement>('[data-scene-panel="destination"]');
+    const destinationFrameEl = root.querySelector<HTMLElement>('.experience__destination-frame');
+    const destinationImageEl = root.querySelector<HTMLElement>('.experience__destination-image');
+    const destinationVideoEl = root.querySelector<HTMLVideoElement>('.experience__destination-video');
 
     // Forward (cover -> memory) phase timings.
     const PHASE_A_MS = 380; // cover's own text (name/dedication/signature/location/cta) fades out
@@ -112,6 +160,21 @@ const videoSrc = `${base}/videos/memory-transition2.mp4`;
     const POST_VIDEO_HOLD_MS = 180; // hold the video's last frame (plain paper, no animals) before revealing MemoryScene
     const BACKWARD_DURATION = 950;
     const REDUCED_MOTION_DURATION = 280;
+
+    // Forward (memory -> destination) phase timings. DestinationScene's own
+    // content fade-in is pure CSS (transition-delay per part, see
+    // DestinationScene.astro) keyed to .is-destination-revealing -- these
+    // constants only govern the video/handoff plumbing here, not the text
+    // choreography itself.
+    const DESTINATION_VIDEO_HARD_CAP_MS = 12000; // transition3.mp4 runs ~8s; generous safety net
+    const DESTINATION_VIDEO_FADE_MS = 220; // fades out just the <video> element once it ends, revealing the already-painted static frame beneath it
+    const DESTINATION_SETTLE_MS = 200;
+    // If the video never plays at all (readiness timeout/error), there is
+    // nothing to time the handoff against -- this is the fallback hold so
+    // is-transitioning isn't cleared (and focus doesn't move) before
+    // DestinationScene's own last CSS-timed part (7.0s + its own 900ms
+    // transition) has actually finished settling.
+    const DESTINATION_FALLBACK_HOLD_MS = 7900;
 
     // MemoryScene's own content choreography, once Fase D begins -- title
     // first and longest, then the four secondary lines as one continuous
@@ -140,9 +203,24 @@ const videoSrc = `${base}/videos/memory-transition2.mp4`;
     // rather than a hard cut.
     const MEMORY_PHASE_SETTLE_MS = 250;
 
+    type SceneName = 'cover' | 'memory' | 'destination';
+    // Single source of truth for scene order/hash -- both goToScene's
+    // adjacency check (only cover<->memory and memory<->destination have a
+    // defined animated path) and the hash routing below read from this
+    // instead of hand-repeating the mapping.
+    const SCENE_ORDER: SceneName[] = ['cover', 'memory', 'destination'];
+    const SCENE_HASH: Record<SceneName, string> = {
+      cover: '#portada',
+      memory: '#recuerdo',
+      destination: '#destino',
+    };
+    const sceneIndex = (scene: SceneName) => SCENE_ORDER.indexOf(scene);
+
     let isTransitioning = false;
-    let currentScene: 'cover' | 'memory' = 'cover';
+    let currentScene: SceneName = 'cover';
     let completionTimer: number | null = null;
+    let destinationAssetsRequested = false;
+    let destinationVideoSrcAssigned = false;
 
     function clearCompletionTimer() {
       if (completionTimer !== null) {
@@ -181,6 +259,53 @@ const videoSrc = `${base}/videos/memory-transition2.mp4`;
       } catch {
         // Some browsers throw if metadata isn't loaded yet -- harmless,
         // the video hasn't played anything to rewind from anyway.
+      }
+    }
+
+    function resetDestinationVideo() {
+      if (!destinationVideoEl) return;
+      destinationVideoEl.pause();
+      try {
+        destinationVideoEl.currentTime = 0;
+      } catch {
+        // See resetVideo above -- harmless if metadata isn't loaded yet.
+      }
+    }
+
+    // Lazily assigns transition3.mp4 and textura_vertical_3.png -- both
+    // left unset in the SSR markup (data-bg-src/data-video-src only) so
+    // they are never fetched as part of the initial cover paint. Called
+    // once MemoryScene is actually reached (well before its own CTA can
+    // realistically be clicked, since MemoryScene's own reveal takes
+    // several seconds), so the destination assets have a real head start
+    // -- "de forma razonable para evitar espera al pulsar 'Descubrir el
+    // destino'" -- without ever competing with the cover's own load.
+    // Idempotent (guarded by destinationAssetsRequested) so it's safe to
+    // call from every place that can land on memory/destination (the
+    // animated reveal, reduced motion, and instant/direct-hash loads).
+    function ensureDestinationAssets() {
+      if (destinationAssetsRequested) return;
+      destinationAssetsRequested = true;
+
+      const frameSrc = destinationFrameEl?.dataset.bgSrc;
+      if (destinationFrameEl && frameSrc) {
+        destinationFrameEl.style.backgroundImage = `url('${frameSrc}')`;
+      }
+      const imageSrc = destinationImageEl?.dataset.bgSrc;
+      if (destinationImageEl && imageSrc) {
+        destinationImageEl.style.backgroundImage = `url('${imageSrc}')`;
+      }
+
+      // Same reduced-motion exception as the cover->memory video: never
+      // loaded as an active part of the experience for those users, who
+      // will see the static image directly instead (see goToScene).
+      if (destinationVideoEl && !prefersReducedMotion()) {
+        const src = destinationVideoEl.dataset.videoSrc;
+        if (src) {
+          destinationVideoEl.preload = 'auto';
+          destinationVideoEl.src = src;
+          destinationVideoSrcAssigned = true;
+        }
       }
     }
 
@@ -254,27 +379,42 @@ const videoSrc = `${base}/videos/memory-transition2.mp4`;
       });
     }
 
-    function setSceneAccessibility(scene: 'cover' | 'memory') {
-      const showingMemory = scene === 'memory';
-      if (memoryPanel) memoryPanel.toggleAttribute('inert', !showingMemory);
-      if (coverPanel) coverPanel.toggleAttribute('inert', showingMemory);
+    function setSceneAccessibility(scene: SceneName) {
+      if (memoryPanel) memoryPanel.toggleAttribute('inert', scene !== 'memory');
+      if (coverPanel) coverPanel.toggleAttribute('inert', scene !== 'cover');
+      if (destinationPanel) destinationPanel.toggleAttribute('inert', scene !== 'destination');
     }
 
-    function focusSceneHeading(scene: 'cover' | 'memory') {
+    function focusSceneHeading(scene: SceneName) {
       const target =
         scene === 'memory'
           ? memoryPanel?.querySelector<HTMLElement>('[data-scene-heading]')
-          : coverPanel?.querySelector<HTMLElement>('.cover__cta');
+          : scene === 'destination'
+            ? destinationPanel?.querySelector<HTMLElement>('[data-scene-heading]')
+            : coverPanel?.querySelector<HTMLElement>('.cover__cta');
       target?.focus({ preventScroll: true });
     }
 
-    function applySceneInstantly(scene: 'cover' | 'memory') {
+    function applySceneInstantly(scene: SceneName) {
       root!.classList.add('is-instant');
       root!.dataset.scene = scene;
       setSceneAccessibility(scene);
-      root!.classList.remove('is-video-visible', 'is-ink-revealing', 'is-memory-cta-ready');
-      root!.classList.toggle('is-cover-receded', scene === 'memory');
-      root!.classList.toggle('is-revealing-memory', scene === 'memory');
+      root!.classList.remove(
+        'is-video-visible',
+        'is-ink-revealing',
+        'is-memory-cta-ready',
+        'is-destination-revealing'
+      );
+      // memory and destination both sit "past" the cover, so it stays
+      // fully receded for either; destination additionally sits past
+      // memory, which stays fully painted (is-revealing-memory) but
+      // visually receded behind destination (is-memory-received) -- same
+      // convention as the cover/memory pair, one level deeper.
+      root!.classList.toggle('is-cover-receded', scene !== 'cover');
+      root!.classList.toggle('is-revealing-memory', scene !== 'cover');
+      root!.classList.toggle('is-memory-receded', scene === 'destination');
+      root!.classList.toggle('is-revealing-destination', scene === 'destination');
+      root!.classList.toggle('is-destination-revealing', scene === 'destination');
       // Defensive: these are only ever set (and cleared) inside
       // runVideoAndReveal's own video->MemoryScene handoff, but an instant
       // scene switch should never risk inheriting a leftover inline value.
@@ -282,6 +422,20 @@ const videoSrc = `${base}/videos/memory-transition2.mp4`;
         memoryPanel.style.transition = '';
         memoryPanel.style.opacity = '';
       }
+      if (destinationVideoEl) {
+        destinationVideoEl.style.transition = 'none';
+        // Instant loads never play transition3.mp4 (there is no
+        // animated transition to time it against) -- hidden outright so
+        // only the static final frame is ever visible, exactly like the
+        // reduced-motion path.
+        destinationVideoEl.style.opacity = '0';
+      }
+      resetDestinationVideo();
+      // A direct/instant load landing on memory or destination should
+      // still get the same lazy head start on transition3.mp4/
+      // textura_vertical_3.png as the animated path -- see
+      // ensureDestinationAssets.
+      if (scene === 'memory' || scene === 'destination') ensureDestinationAssets();
       void root!.offsetWidth;
       requestAnimationFrame(() => {
         root?.classList.remove('is-instant');
@@ -487,6 +641,11 @@ const videoSrc = `${base}/videos/memory-transition2.mp4`;
       memoryPanel!.style.opacity = '1';
       root!.classList.add('is-revealing-memory', 'is-ink-revealing');
 
+      // MemoryScene is reached -- give transition3.mp4/textura_vertical_3.png
+      // a head start now, well before MemoryScene's own CTA can realistically
+      // be reached/clicked (see ensureDestinationAssets).
+      ensureDestinationAssets();
+
       await new Promise<void>((resolve) => {
         requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
       });
@@ -520,14 +679,110 @@ const videoSrc = `${base}/videos/memory-transition2.mp4`;
       }, MEMORY_CTA_MS);
     }
 
-    function goToScene(scene: 'cover' | 'memory', options: { pushHistory?: boolean } = {}) {
+    // Fase for the memory -> destination forward transition: memory
+    // recedes (is-memory-receded) while the destination panel becomes
+    // visible (is-revealing-destination) -- both crossfading together,
+    // same principle as the cover->memory pair, just one scene deeper and
+    // without a dedicated top-level video-stage, since here the target
+    // content lives *inside* the destination panel alongside its own
+    // video (see the destination stage markup above and its own comment).
+    // is-destination-revealing is added in this same moment: it is the
+    // clock DestinationScene's own per-part CSS transition-delays (4.0s,
+    // 4.4s, 5.1s, ...) are measured against, matching the spec's "desde el
+    // inicio del video" reference point.
+    async function runDestinationVideoAndReveal() {
+      ensureDestinationAssets();
+      root!.classList.add('is-memory-receded', 'is-revealing-destination', 'is-destination-revealing');
+
+      let played = false;
+      if (destinationVideoEl && destinationVideoSrcAssigned) {
+        try {
+          destinationVideoEl.currentTime = 0;
+        } catch {
+          // ignore -- see resetDestinationVideo
+        }
+        destinationVideoEl.style.transition = '';
+        destinationVideoEl.style.opacity = '';
+        const ready = await waitForVideoReady(destinationVideoEl, VIDEO_READY_TIMEOUT_MS);
+        if (ready) {
+          try {
+            await destinationVideoEl.play();
+            played = true;
+          } catch {
+            played = false;
+          }
+        }
+      }
+
+      if (played && destinationVideoEl) {
+        // Whichever way playback ends -- clean 'ended', an error, or the
+        // hard cap -- textura_vertical_3.png has been fully painted
+        // underneath the video this entire time (see the destination
+        // stage's markup: the image div sits behind the video from the
+        // very start, never inserted afterwards), so fading out just the
+        // <video> element itself is always safe here: same
+        // paint-the-target-first-remove-the-video-after principle already
+        // proven for the cover->memory handoff, just without needing a
+        // separate panel to hand off to. currentTime is only ever reset
+        // (resetDestinationVideo) after this fade has actually finished,
+        // i.e. after the video is confirmed no longer visible.
+        await waitForVideoOutcome(destinationVideoEl, DESTINATION_VIDEO_HARD_CAP_MS);
+        destinationVideoEl.style.transition = `opacity ${DESTINATION_VIDEO_FADE_MS}ms ease`;
+        void destinationVideoEl.offsetWidth;
+        destinationVideoEl.style.opacity = '0';
+        await waitForTransitionEnd(destinationVideoEl, 'opacity', DESTINATION_VIDEO_FADE_MS + 200);
+        resetDestinationVideo();
+        destinationVideoEl.style.transition = '';
+        destinationVideoEl.style.opacity = '';
+      } else {
+        // Never played (readiness timeout/error, or reduced-motion-style
+        // "no src assigned" edge case) -- hide the <video> element itself
+        // outright (no transition: it never became visible to begin
+        // with) so its own empty/unloaded box can never paint over the
+        // static image, then hold for as long as the real video would
+        // have taken DestinationScene's own CSS-timed content to finish
+        // settling before declaring the scene settled.
+        if (destinationVideoEl) {
+          destinationVideoEl.style.transition = 'none';
+          destinationVideoEl.style.opacity = '0';
+        }
+        await sleep(DESTINATION_FALLBACK_HOLD_MS);
+      }
+
+      completionTimer = window.setTimeout(() => {
+        completionTimer = null;
+        currentScene = 'destination';
+        isTransitioning = false;
+        root!.classList.remove('is-transitioning');
+        focusSceneHeading('destination');
+      }, DESTINATION_SETTLE_MS);
+    }
+
+    function goToScene(scene: SceneName, options: { pushHistory?: boolean } = {}) {
       const { pushHistory = true } = options;
-      if (isTransitioning || scene === currentScene || !coverPanel || !memoryPanel) return;
+      if (isTransitioning || scene === currentScene || !coverPanel || !memoryPanel || !destinationPanel) return;
+
+      const fromIndex = sceneIndex(currentScene);
+      const toIndex = sceneIndex(scene);
+      const adjacent = Math.abs(fromIndex - toIndex) === 1;
+
+      if (!adjacent) {
+        // No defined animated path between these two scenes (e.g. a
+        // hand-edited hash jumping straight from #destino to #portada) --
+        // land on the target instantly rather than guessing an animation
+        // through the scene in between.
+        clearCompletionTimer();
+        applySceneInstantly(scene);
+        if (pushHistory && window.location.hash !== SCENE_HASH[scene]) {
+          history.pushState({ scene }, '', SCENE_HASH[scene]);
+        }
+        return;
+      }
 
       isTransitioning = true;
       clearCompletionTimer();
       root!.classList.add('is-transitioning');
-      root!.dataset.transitionDirection = scene === 'memory' ? 'forward' : 'back';
+      root!.dataset.transitionDirection = toIndex > fromIndex ? 'forward' : 'back';
 
       const reduced = prefersReducedMotion();
       root!.classList.toggle('is-reduced-motion', reduced);
@@ -536,14 +791,14 @@ const videoSrc = `${base}/videos/memory-transition2.mp4`;
       setSceneAccessibility(scene);
 
       if (pushHistory) {
-        const hash = scene === 'memory' ? '#recuerdo' : '#portada';
+        const hash = SCENE_HASH[scene];
         if (window.location.hash !== hash) history.pushState({ scene }, '', hash);
       }
 
       if (scene === 'cover') {
-        // Back: never plays the video in reverse -- just a short, elegant
-        // crossfade back to the cover, restoring its inert/focus/hash
-        // exactly as before.
+        // Back (memory -> cover): never plays the video in reverse -- just
+        // a short, elegant crossfade back to the cover, restoring its
+        // inert/focus/hash exactly as before.
         root!.classList.remove(
           'is-video-visible',
           'is-revealing-memory',
@@ -567,6 +822,64 @@ const videoSrc = `${base}/videos/memory-transition2.mp4`;
         return;
       }
 
+      if (scene === 'memory' && currentScene === 'destination') {
+        // Back (destination -> memory): same idea -- no video in reverse,
+        // just a short crossfade. MemoryScene's own panel/content were
+        // never cleared (is-revealing-memory stays set the whole time
+        // once first reached), so it simply reappears as-is.
+        root!.classList.remove('is-revealing-destination', 'is-destination-revealing', 'is-memory-receded');
+        resetDestinationVideo();
+        if (destinationVideoEl) {
+          destinationVideoEl.style.transition = '';
+          destinationVideoEl.style.opacity = '';
+        }
+        const duration = reduced ? REDUCED_MOTION_DURATION : BACKWARD_DURATION;
+        completionTimer = window.setTimeout(() => {
+          completionTimer = null;
+          currentScene = scene;
+          isTransitioning = false;
+          root!.classList.remove('is-transitioning');
+          focusSceneHeading(scene);
+        }, duration);
+        return;
+      }
+
+      if (scene === 'destination') {
+        // Forward (memory -> destination).
+        if (reduced) {
+          // Reduced motion: never plays transition3.mp4 -- the static
+          // final frame (textura_vertical_3.png, already painted
+          // underneath the video in the markup) shows directly, with a
+          // short crossfade into it; DestinationScene's own content fades
+          // in together, uniformly, no per-part stagger (see its
+          // is-reduced-motion CSS).
+          ensureDestinationAssets();
+          if (destinationVideoEl) {
+            // Never loaded/assigned a src for reduced motion (see
+            // ensureDestinationAssets) -- hidden outright so an empty
+            // <video> box can never paint over the static image.
+            destinationVideoEl.style.transition = 'none';
+            destinationVideoEl.style.opacity = '0';
+          }
+          root!.classList.add('is-memory-receded', 'is-revealing-destination', 'is-destination-revealing');
+          completionTimer = window.setTimeout(() => {
+            completionTimer = null;
+            currentScene = scene;
+            isTransitioning = false;
+            root!.classList.remove('is-transitioning');
+            focusSceneHeading(scene);
+          }, REDUCED_MOTION_DURATION);
+          return;
+        }
+
+        runDestinationVideoAndReveal();
+        return;
+      }
+
+      // scene === 'memory' && currentScene === 'cover': forward, full
+      // motion. Fase A (cover's text fades) runs on the CSS selectors
+      // below as soon as is-transitioning + forward are set; Fase B/C/D
+      // are the async video sequence.
       if (reduced) {
         // Reduced motion: no video, ever -- a short crossfade straight to
         // MemoryScene, hash/focus/inert unchanged.
@@ -581,9 +894,6 @@ const videoSrc = `${base}/videos/memory-transition2.mp4`;
         return;
       }
 
-      // Forward, full motion: Fase A (cover's text fades) runs on the CSS
-      // selectors below as soon as is-transitioning + forward are set;
-      // Fase B/C/D are the async video sequence.
       window.setTimeout(() => {
         if (!isTransitioning) return;
         runVideoAndReveal();
@@ -594,6 +904,8 @@ const videoSrc = `${base}/videos/memory-transition2.mp4`;
       const target = event.target as HTMLElement;
       const forwardTrigger = target.closest<HTMLElement>('.cover__cta');
       const backTrigger = target.closest<HTMLElement>('[data-action="back-to-cover"]');
+      const destinationTrigger = target.closest<HTMLElement>('[data-action="go-to-destination"]');
+      const backToMemoryTrigger = target.closest<HTMLElement>('[data-action="back-to-memory"]');
 
       if (forwardTrigger && root!.contains(forwardTrigger)) {
         event.preventDefault();
@@ -601,21 +913,32 @@ const videoSrc = `${base}/videos/memory-transition2.mp4`;
       } else if (backTrigger && root!.contains(backTrigger)) {
         event.preventDefault();
         goToScene('cover');
+      } else if (destinationTrigger && root!.contains(destinationTrigger)) {
+        event.preventDefault();
+        goToScene('destination');
+      } else if (backToMemoryTrigger && root!.contains(backToMemoryTrigger)) {
+        event.preventDefault();
+        goToScene('memory');
       }
     });
 
+    function sceneFromHash(hash: string): SceneName {
+      if (hash === '#destino') return 'destination';
+      if (hash === '#recuerdo') return 'memory';
+      return 'cover';
+    }
+
     window.addEventListener('popstate', () => {
-      const scene = window.location.hash === '#recuerdo' ? 'memory' : 'cover';
-      goToScene(scene, { pushHistory: false });
+      goToScene(sceneFromHash(window.location.hash), { pushHistory: false });
     });
 
-    // Initial state from the URL: a direct link to #recuerdo shows the
-    // memory scene immediately (no replayed animation -- the spec only
+    // Initial state from the URL: a direct link to #recuerdo or #destino
+    // shows that scene immediately (no replayed animation -- the spec only
     // asks for the transition on user action), otherwise default to
     // #portada and make that canonical in the URL.
-    const initialScene = window.location.hash === '#recuerdo' ? 'memory' : 'cover';
+    const initialScene = sceneFromHash(window.location.hash);
     applySceneInstantly(initialScene);
-    if (window.location.hash !== '#recuerdo' && window.location.hash !== '#portada') {
+    if (!Object.values(SCENE_HASH).includes(window.location.hash)) {
       history.replaceState({ scene: initialScene }, '', '#portada');
     }
 
@@ -925,5 +1248,151 @@ const videoSrc = `${base}/videos/memory-transition2.mp4`;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%) scale(var(--cover-scale-x, 1), var(--cover-scale-y, 1));
+  }
+
+  /*
+    Destination scene (page 3) -- additive only, mirrors the existing
+    cover/memory plumbing above rather than editing it: sits one level
+    below memory in the stacking order (z-index 0, memory 1, cover 2), so
+    the memory -> destination crossfade is the exact same "panel above
+    fades out, panel below is already there" pattern the cover -> memory
+    back transition uses, just one level deeper.
+  */
+  .experience__scene--destination {
+    z-index: 0;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .experience[data-scene='destination'] .experience__scene--destination {
+    pointer-events: auto;
+  }
+
+  .experience[data-scene='destination'] .experience__scene--cover,
+  .experience[data-scene='destination'] .experience__scene--memory {
+    pointer-events: none;
+  }
+
+  .experience[data-scene='destination']:not(.is-transitioning) .experience__scene--cover,
+  .experience[data-scene='destination']:not(.is-transitioning) .experience__scene--memory {
+    visibility: hidden;
+  }
+
+  .experience.is-transitioning :global(.memory__cta),
+  .experience.is-transitioning :global([data-action='back-to-memory']) {
+    pointer-events: none;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .experience:not(.is-instant) .experience__scene--destination {
+      transition: opacity 360ms ease;
+    }
+
+    .experience.is-revealing-destination .experience__scene--destination {
+      opacity: 1;
+    }
+
+    /* Memory recedes while .is-memory-receded is present -- defined after
+       the existing ".is-revealing-memory .experience__scene--memory
+       {opacity:1}" rule above so it wins on the (otherwise equal)
+       specificity, same as .is-cover-receded overriding cover's own
+       opacity. */
+    .experience.is-memory-receded .experience__scene--memory {
+      transition: opacity 320ms ease;
+      opacity: 0;
+    }
+
+    .experience[data-transition-direction='back'].is-transitioning .experience__scene--destination {
+      transition-duration: 850ms;
+    }
+  }
+
+  .experience.is-reduced-motion .experience__scene--destination {
+    transition: opacity 260ms ease !important;
+    transform: none !important;
+  }
+
+  .experience.is-reduced-motion.is-revealing-destination .experience__scene--destination {
+    opacity: 1;
+  }
+
+  .experience.is-reduced-motion[data-scene='destination'] .experience__scene--memory {
+    opacity: 0;
+  }
+
+  .experience.is-instant .experience__scene--destination,
+  .experience.is-instant .experience__destination-video,
+  .experience.is-instant :global(.memory__cta) {
+    transition: none !important;
+  }
+
+  /*
+    Destination stage -- same fixed 390x844 canvas convention as the video
+    stage and MemoryScene's canvas above. Unlike those, the static final
+    frame, the video and the scene's own text all live inside this one
+    box together (see the markup's own comment): .experience__destination-
+    image is always painted first, .experience__destination-video sits on
+    top of it and is the only thing that ever fades away, and
+    .experience__destination-overlay -- holding DestinationScene's actual
+    content -- sits above both for the whole lifetime of this stage, so it
+    is never affected by the video/image handoff underneath it.
+  */
+  .experience__destination-frame {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background-color: var(--color-bg);
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-position: 60% top;
+  }
+
+  .experience__destination-canvas {
+    position: relative;
+    width: 390px;
+    height: 844px;
+    flex-shrink: 0;
+    overflow: hidden;
+    transform-origin: center center;
+    transform: scale(var(--cover-scale, 1));
+  }
+
+  :global(html.is-fill-viewport) .experience__destination-canvas {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(var(--cover-scale-x, 1), var(--cover-scale-y, 1));
+  }
+
+  .experience__destination-image {
+    position: absolute;
+    inset: 0;
+    background-color: var(--color-bg);
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-position: 60% top;
+  }
+
+  /* Same 1% overscan as .experience__video above, and for the same reason
+     -- a fractional --cover-scale can otherwise leave a hairline seam on
+     one edge exposing whatever sits behind the video's own GPU layer. */
+  .experience__destination-video {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 101%;
+    height: 101%;
+    transform: translate(-50%, -50%);
+    object-fit: cover;
+    object-position: 50% 50%;
+    display: block;
+  }
+
+  .experience__destination-overlay {
+    position: absolute;
+    inset: 0;
   }
 </style>
