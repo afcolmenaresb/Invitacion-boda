@@ -1,0 +1,372 @@
+---
+import { sceneImaginedDays } from '../data/sceneImaginedDays';
+
+const memoryLines = sceneImaginedDays.memories.map((m) => m.split('\n'));
+const closingLines = sceneImaginedDays.closing.split('\n');
+---
+
+<div class="imagined" data-scene-panel-content aria-label={sceneImaginedDays.eyebrow}>
+  <button type="button" class="imagined__back" data-action="back-to-journey" aria-label={sceneImaginedDays.backLabel}>
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
+      <path d="M15 5 L8 12 L15 19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
+    <span>{sceneImaginedDays.backVisibleLabel}</span>
+  </button>
+
+  <div class="imagined__content">
+    <p class="imagined__eyebrow" data-scene-heading data-imagined-part="eyebrow" tabindex="-1">
+      <span class="imagined__halo" aria-hidden="true"></span>
+      {sceneImaginedDays.eyebrow}
+    </p>
+
+    <!--
+      The three memories share this one fixed-height box, each absolutely
+      stacked on top of the others (see .imagined__memory below) so they
+      all occupy the exact same place on screen -- appearing and
+      dissolving there one at a time, like recollections surfacing in the
+      same frame, never stacking up or shifting the layout as each one
+      arrives.
+    -->
+    <div class="imagined__memories" aria-hidden="true">
+      {memoryLines.map((lines, i) => (
+        <p class={`imagined__memory imagined__memory--${i + 1}`} data-imagined-memory={i + 1}>
+          <span class="imagined__halo imagined__halo--memory" aria-hidden="true"></span>
+          {lines.map((line, li) => (
+            <>
+              {li > 0 && <br />}
+              {line}
+            </>
+          ))}
+        </p>
+      ))}
+    </div>
+
+    <p class="imagined__closing" data-imagined-part="closing">
+      <span class="imagined__halo imagined__halo--wide" aria-hidden="true"></span>
+      {closingLines.map((line, li) => (
+        <>
+          {li > 0 && <br />}
+          {line}
+        </>
+      ))}
+    </p>
+
+    <p class="imagined__cta" data-imagined-part="cta" data-action="imagined-cta-primary">
+      {sceneImaginedDays.ctaPrimary}
+    </p>
+  </div>
+</div>
+
+<style>
+  .imagined {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    isolation: isolate;
+  }
+
+  /* Same control as the previous scenes' own back button -- identical
+     position, type treatment and icon, just pointing one scene back. */
+  .imagined__back {
+    position: absolute;
+    top: max(18px, env(safe-area-inset-top));
+    left: max(18px, env(safe-area-inset-left));
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: none;
+    border: none;
+    padding: 0.4rem 0.2rem;
+    cursor: pointer;
+    font-family: var(--font-sans);
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #3a332b;
+    opacity: 0;
+  }
+
+  .imagined__back::before {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    inset: -6px -10px;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, rgba(255, 254, 248, 0.95), rgba(255, 254, 248, 0) 80%);
+  }
+
+  :global(.experience.is-revealing-imagined) .imagined__back {
+    opacity: 1;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    :global(.experience:not(.is-instant)) .imagined__back {
+      transition: opacity 320ms ease, color 0.2s ease, transform 0.2s ease;
+    }
+
+    .imagined__back:hover,
+    .imagined__back:focus-visible {
+      color: var(--color-accent);
+      transform: translateX(-2px);
+    }
+  }
+
+  :global(.experience.is-instant) .imagined__back {
+    transition: none !important;
+  }
+
+  /*
+    Same fixed 390x844 canvas convention as every other scene. Content
+    sits low, over the video's own quieter lower register, leaving the
+    frame's upper two-thirds (wherever the altar/chairs the source
+    footage shows actually sit) unobstructed -- never centering a big
+    block over the middle of the frame the way DestinationScene does.
+  */
+  .imagined__content {
+    margin-top: auto;
+    width: 100%;
+    max-width: 358.8px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    text-align: left;
+    padding: 0 28px 108px;
+  }
+
+  /* Shared halo language already approved on pages 2-4: a soft, local
+     opening of ivory light behind text, never a card/pill (no
+     border-radius, no solid fill, no visible edge) and never a global
+     scrim over the video. */
+  .imagined__halo {
+    position: absolute;
+    z-index: -1;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, rgba(255, 254, 248, 0.92) 0%, rgba(255, 254, 248, 0) 72%);
+  }
+
+  .imagined__halo {
+    inset: -10px -18px;
+  }
+
+  .imagined__halo--memory,
+  .imagined__halo--wide {
+    inset: -16px -26px;
+  }
+
+  .imagined__eyebrow {
+    position: relative;
+    margin: 0 0 34px;
+    font-family: var(--font-sans);
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    font-size: 0.68rem;
+    color: #8c7f6a;
+    outline: none;
+  }
+
+  .imagined__eyebrow:focus-visible {
+    outline: none;
+  }
+
+  /*
+    Fixed-height stage for the three memories -- tall enough for the
+    longest (two-line) phrase so none of them ever reflow the layout as
+    they take turns. Each .imagined__memory is absolutely positioned to
+    fill it, so they overlap in place rather than stacking.
+  */
+  .imagined__memories {
+    position: relative;
+    width: 100%;
+    min-height: 5.4rem;
+  }
+
+  .imagined__memory {
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-weight: 400;
+    font-size: 1.3rem;
+    line-height: 1.55;
+    color: #4a3f35;
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  /*
+    The closing statement -- upright (not italic, unlike the memories
+    above), the accent ink, and deliberately the largest text in the
+    scene: "debe permanecer más tiempo y tener mayor peso visual" than the
+    memories. Unlike them it never fades back out (plain transition, not
+    an animation) -- it settles and stays.
+  */
+  .imagined__closing {
+    position: relative;
+    margin: 20px 0 0;
+    font-family: var(--font-serif);
+    font-style: normal;
+    font-weight: 400;
+    font-size: 1.55rem;
+    line-height: 1.42;
+    color: var(--color-accent);
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  /*
+    CTA -- separated clearly from the closing as its own later gesture
+    (not too close to it, not too close to the bottom edge), same
+    editorial sans/uppercase/arrow language as every other primary CTA in
+    the experience.
+  */
+  .imagined__cta {
+    position: relative;
+    margin: 46px 0 0;
+    font-family: var(--font-sans);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-size: 0.92rem;
+    color: #3a332b;
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  .imagined__cta::before {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    inset: -8px -14px;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, rgba(255, 254, 248, 1), rgba(255, 254, 248, 0) 80%);
+  }
+
+  .imagined__cta::after {
+    content: ' →';
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    /*
+      Eyebrow and CTA/closing settle with a plain, quiet transition --
+      only the three memories need the full fade-in/hold/fade-out
+      lifecycle, via @keyframes below, since a two-state transition can't
+      express "appear, then later disappear again" on its own.
+    */
+    :global(.experience.is-imagined-revealing) .imagined__eyebrow {
+      transition: opacity 1200ms ease;
+      opacity: 1;
+    }
+
+    :global(.experience.is-imagined-revealing) .imagined__closing {
+      transition: opacity 3000ms ease, transform 3000ms ease;
+      transition-delay: 25900ms;
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    :global(.experience.is-imagined-revealing) .imagined__cta {
+      transition: opacity 1500ms ease, transform 1500ms ease;
+      transition-delay: 30100ms;
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /*
+      Each memory: fade in slowly, hold long enough to actually read it,
+      fade back out -- "contemplativa, como recuerdos que aparecen y se
+      desvanecen", never all three at once. Delays are chained so each
+      one starts only once the previous has fully finished (plus a small
+      breathing gap), all measured from is-imagined-revealing itself
+      being added -- which only happens ~1.5s *after* transition5.mp4 has
+      already ended and frozen on its last frame (see
+      runImaginedVideoAndReveal's own comment), never while it's still
+      playing.
+    */
+    :global(.experience.is-imagined-revealing) .imagined__memory--1 {
+      animation: imaginedMemoryShort 8000ms ease 0ms 1 both;
+    }
+
+    :global(.experience.is-imagined-revealing) .imagined__memory--2 {
+      animation: imaginedMemoryShort 8000ms ease 8300ms 1 both;
+    }
+
+    /* Slightly longer hold -- it's the one two-line phrase, and needs a
+       touch more time to read. */
+    :global(.experience.is-imagined-revealing) .imagined__memory--3 {
+      animation: imaginedMemoryLong 8500ms ease 16600ms 1 both;
+    }
+  }
+
+  @keyframes imaginedMemoryShort {
+    0% {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    31% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    69% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    100% {
+      opacity: 0;
+      transform: translateY(0);
+    }
+  }
+
+  @keyframes imaginedMemoryLong {
+    0% {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    29% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    76% {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    100% {
+      opacity: 0;
+      transform: translateY(0);
+    }
+  }
+
+  /*
+    Reduced motion / instant loads: no per-part choreography, no
+    keyframes, no delays -- one short, uniform fade so the whole scene
+    (eyebrow + all three memories, shown together since there's no video
+    timeline to sequence them against + closing + CTA) settles as a
+    single quiet crossfade, same convention as the previous scenes.
+  */
+  :global(.experience.is-reduced-motion.is-imagined-revealing) .imagined__eyebrow,
+  :global(.experience.is-reduced-motion.is-imagined-revealing) .imagined__memory,
+  :global(.experience.is-reduced-motion.is-imagined-revealing) .imagined__closing,
+  :global(.experience.is-reduced-motion.is-imagined-revealing) .imagined__cta,
+  :global(.experience.is-instant) .imagined__eyebrow,
+  :global(.experience.is-instant) .imagined__memory,
+  :global(.experience.is-instant) .imagined__closing,
+  :global(.experience.is-instant) .imagined__cta {
+    transition: opacity 260ms ease !important;
+    animation: none !important;
+    transform: none !important;
+    transition-delay: 0ms !important;
+  }
+
+  :global(.experience.is-reduced-motion.is-imagined-revealing) .imagined__eyebrow,
+  :global(.experience.is-reduced-motion.is-imagined-revealing) .imagined__memory,
+  :global(.experience.is-reduced-motion.is-imagined-revealing) .imagined__closing,
+  :global(.experience.is-reduced-motion.is-imagined-revealing) .imagined__cta,
+  :global(.experience[data-scene='imagined'].is-instant) .imagined__eyebrow,
+  :global(.experience[data-scene='imagined'].is-instant) .imagined__memory,
+  :global(.experience[data-scene='imagined'].is-instant) .imagined__closing,
+  :global(.experience[data-scene='imagined'].is-instant) .imagined__cta {
+    opacity: 1;
+    transform: translateY(0);
+  }
+</style>

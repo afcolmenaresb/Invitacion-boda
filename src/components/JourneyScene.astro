@@ -38,13 +38,14 @@ const bodyLine = getJourneyBodyLine(addressing);
       {sceneJourney.closing}
     </p>
     <div class="journey__cta-group">
-      <p
+      <button
+        type="button"
         class="journey__cta journey__cta--primary"
         data-journey-part="cta-primary"
-        data-action="journey-cta-primary"
+        data-action="go-to-imagined"
       >
         {sceneJourney.ctaPrimary}
-      </p>
+      </button>
       <p
         class="journey__cta journey__cta--secondary"
         data-journey-part="cta-secondary"
@@ -279,8 +280,23 @@ const bodyLine = getJourneyBodyLine(addressing);
 
   /* Dominant over the secondary CTA, as specified -- larger, in the
      accent ink, with the same arrow suffix pattern used for every other
-     primary CTA in the experience. */
+     primary CTA in the experience. Now a real <button> (was a plain <p>)
+     so it can trigger the imagined-days transition -- reset to look
+     identical to the old paragraph: no border/background/padding, same
+     cursor affordance the rest of the experience's controls use.
+     .journey__cta-group already uses align-items: flex-start, so no
+     extra width is needed to keep it shrink-wrapped to its own text.
+     Deliberately NOT resetting font/letter-spacing/text-transform to
+     "inherit" here -- see DestinationScene.astro's own .destination__cta
+     --primary comment for why that specific trick silently breaks the
+     uppercase transform instead of fixing anything. */
   .journey__cta--primary {
+    display: block;
+    background: none;
+    border: none;
+    padding: 0;
+    text-align: left;
+    cursor: pointer;
     font-size: 0.92rem;
     color: var(--color-accent);
   }
