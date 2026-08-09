@@ -915,9 +915,8 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
     // CSS transition-delays (1.4s, 2.7s, ...) are measured against.
     async function runJourneyVideoAndReveal() {
       ensureJourneyAssets();
-      root!.classList.add('is-destination-receded', 'is-revealing-journey', 'is-journey-revealing');
 
-      let played = false;
+      let ready = false;
       if (journeyVideoEl && journeyVideoSrcAssigned) {
         try {
           journeyVideoEl.currentTime = 0;
@@ -926,14 +925,29 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
         }
         journeyVideoEl.style.transition = '';
         journeyVideoEl.style.opacity = '';
-        const ready = await waitForVideoReady(journeyVideoEl, VIDEO_READY_TIMEOUT_MS);
-        if (ready) {
-          try {
-            await journeyVideoEl.play();
-            played = true;
-          } catch {
-            played = false;
-          }
+        ready = await waitForVideoReady(journeyVideoEl, VIDEO_READY_TIMEOUT_MS);
+      }
+
+      // Only now -- once the journey video is confirmed to actually have
+      // a real frame to show (or the bounded wait above gave up) -- does
+      // DestinationScene start receding and the journey panel start
+      // revealing, together. Starting this crossfade any earlier (i.e.
+      // while still awaiting readiness above) was the exact cause of a
+      // brief empty/plain-paper flash between the two scenes: destination
+      // would finish fading out before the journey video had any frame
+      // decoded yet, briefly exposing .experience__journey-frame's own
+      // plain background-color underneath. Same paint-before-reveal
+      // principle already used for the cover->memory handoff (see
+      // runVideoAndReveal's own is-video-visible gating above).
+      root!.classList.add('is-destination-receded', 'is-revealing-journey', 'is-journey-revealing');
+
+      let played = false;
+      if (ready && journeyVideoEl) {
+        try {
+          await journeyVideoEl.play();
+          played = true;
+        } catch {
+          played = false;
         }
       }
 
@@ -1781,8 +1795,13 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
        .experience__scene--destination {opacity:1}" rule above so it wins
        on the (otherwise equal) specificity, same trick as
        .is-memory-receded overriding memory's own opacity. */
+    /* 1860ms = 360ms +1500ms -- DestinationScene's video+text fade out
+       together as this one panel-level opacity animation (its own text
+       overlay has no independent fade of its own), so slowing this
+       directly is what makes "la desaparición del texto" read as slower
+       and more deliberate on its way to JourneyScene. */
     .experience.is-destination-receded .experience__scene--destination {
-      transition: opacity 360ms ease;
+      transition: opacity 1860ms ease;
       opacity: 0;
     }
 
