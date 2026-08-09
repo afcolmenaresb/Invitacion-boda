@@ -1374,6 +1374,30 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
     spans the video itself and is removed the moment it ends, without
     affecting the cover's own (still-receded) state.
   */
+  /*
+    Persistent, unconditional: once cover has receded it stays fully
+    transparent from then on, independent of is-transitioning -- unlike
+    the combo rule below (which only supplies the *animated* 320ms
+    transition property for cover's own recede), this is what keeps cover
+    invisible during every *later* transition too (memory<->destination,
+    destination<->journey, ...), not just its own. Without this, cover's
+    opacity had no rule at all outside that combo -- at rest it was only
+    ever hidden via the :not(.is-transitioning) visibility:hidden rules
+    above (each scoped to one specific data-scene), so the instant any
+    later transition started, data-scene changed and is-transitioning
+    reappeared, visibility snapped back to its default 'visible' while
+    opacity -- never persistently 0 -- animated back down from its
+    default 1, a brief re-fade that flashed Cover's own content (guest
+    names, dedication, signature) behind whichever scenes were actually
+    transitioning. Same always-on pattern already used for
+    .is-memory-receded/.is-destination-receded's own panels. Deliberately
+    outside the reduced-motion media query below so it protects reduced-
+    motion users the same way.
+  */
+  .experience.is-cover-receded .experience__scene--cover {
+    opacity: 0;
+  }
+
   @media (prefers-reduced-motion: no-preference) {
     .experience.is-transitioning.is-cover-receded .experience__scene--cover {
       transition: opacity 320ms ease;
