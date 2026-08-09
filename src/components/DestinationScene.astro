@@ -231,16 +231,24 @@ const finalLine = getDestinationFinalLine(addressing);
        the rest of the experience's controls use. .destination__content
        already uses align-items: flex-start, so no extra width is needed
        to keep it shrink-wrapped to its own text (see .destination__cta's
-       own comment above). */
+       own comment above).
+
+       Deliberately NOT resetting font/letter-spacing/text-transform to
+       "inherit" here: .destination__cta above already declares the real
+       font-family/font-size/letter-spacing/text-transform (uppercase) as
+       normal author styles, which apply to this <button> exactly as they
+       did to the old <p> -- author rules already beat the browser's own
+       UA default button styling regardless. A prior "inherit" on these
+       properties looked defensive but actually pulled the *parent*
+       element's (.destination__content's) computed values instead --
+       text-transform: none there -- silently undoing .destination__cta's
+       own uppercase and rendering the CTA in its stored sentence case. */
     display: block;
     background: none;
     border: none;
     padding: 0;
     text-align: left;
     cursor: pointer;
-    font: inherit;
-    letter-spacing: inherit;
-    text-transform: inherit;
     margin-top: 14px;
     color: var(--color-accent);
   }

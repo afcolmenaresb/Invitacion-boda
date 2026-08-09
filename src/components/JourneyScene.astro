@@ -258,19 +258,23 @@ const bodyLine = getJourneyBodyLine(addressing);
   }
 
   /*
-    CTA group -- pulled clearly away from the narrative block above (was
-    18px flex-gap + 16px margin-top = 34px total; now 18px flex-gap +
-    56px margin-top = 74px total, +40px) so the two actions read as a
-    distinct, separate gesture rather than a continuation of "antes del
-    'sí', está el viaje." Position/spacing only: text, typography, halos
-    and the primary/secondary hierarchy are all unchanged.
+    CTA group -- pulled clearly away from the narrative block above.
+    History: originally 18px flex-gap + 16px margin-top = 34px total;
+    then 18px flex-gap + 56px margin-top = 74px total (+40px); now 18px
+    flex-gap + 91px margin-top = 109px total (+35px more), so the group
+    reads unmistakably as a separate, later gesture rather than a
+    continuation of "antes del 'sí', está el viaje." The group moves as a
+    single unit (margin-top only) -- the narrative block above is
+    untouched, and the 22px gap between the two CTAs themselves is
+    unchanged. Position/spacing only: text, typography, halos and the
+    primary/secondary hierarchy are all unchanged.
   */
   .journey__cta-group {
     display: flex;
     flex-direction: column;
     align-items: flex-start;
     gap: 22px;
-    margin-top: 56px;
+    margin-top: 91px;
   }
 
   /* Dominant over the secondary CTA, as specified -- larger, in the
@@ -312,6 +316,23 @@ const bodyLine = getJourneyBodyLine(addressing);
   }
 
   @media (prefers-reduced-motion: no-preference) {
+    /*
+      Exit (back to #destino): is-journey-revealing is removed the moment
+      the user navigates back (see InvitationExperience.astro's own
+      journey->destination branch), so without a transition declared
+      here every part would otherwise snap back to its hidden state
+      instantly instead of fading -- same fade/movement as the entrance
+      (opacity + translateY), just slower and all four parts together
+      (no per-part stagger, so the whole scene reads as one coordinated
+      dissolve) rather than a hard cut. 2350ms = the panel's own back
+      duration (850ms, unchanged below) +1500ms, so the text has time to
+      visibly finish fading before the panel itself is hidden.
+    */
+    :global(.experience[data-transition-direction='back']) [data-journey-part] {
+      transition: opacity 2350ms ease, transform 2350ms ease;
+      transition-delay: 0ms;
+    }
+
     :global(.experience.is-journey-revealing) [data-journey-part] {
       transition: opacity 850ms ease, transform 850ms ease;
     }
