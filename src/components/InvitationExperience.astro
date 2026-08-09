@@ -249,13 +249,13 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
     // part (6.3s + its own 850ms transition).
     const JOURNEY_FALLBACK_HOLD_MS = 7150;
     const JOURNEY_SETTLE_MS = 200;
-    // Back (journey -> destination) duration: 2350ms, matching the CSS
+    // Back (journey -> destination) duration: 3850ms, matching the CSS
     // exit fade (panel + text, see JourneyScene.astro's own
     // [data-journey-part] back-exit rule and this file's own
     // .experience__scene--journey back-duration override) -- kept
     // separate from the shared BACKWARD_DURATION so memory/destination's
     // own back timings are untouched.
-    const JOURNEY_BACKWARD_DURATION = 2350;
+    const JOURNEY_BACKWARD_DURATION = 3850;
 
     // MemoryScene's own content choreography, once Fase D begins -- title
     // first and longest, then the four secondary lines as one continuous
@@ -1786,7 +1786,7 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
       opacity: 0;
     }
 
-    /* 2350ms = 850ms +1500ms -- the panel (video/background) now lingers
+    /* 3850ms = 2350ms +1500ms -- the panel (video/background) now lingers
        exactly as long as JourneyScene's own text takes to finish its
        slower exit fade (see JourneyScene.astro's own [data-journey-part]
        back-exit rule), so the text is never cut off mid-fade by the
@@ -1794,7 +1794,7 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
        visibility:hidden) underneath it. Scoped to journey only --
        memory/destination's own back durations are untouched. */
     .experience[data-transition-direction='back'].is-transitioning .experience__scene--journey {
-      transition-duration: 2350ms;
+      transition-duration: 3850ms;
     }
   }
 

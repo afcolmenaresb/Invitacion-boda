@@ -324,12 +324,15 @@ const bodyLine = getJourneyBodyLine(addressing);
       instantly instead of fading -- same fade/movement as the entrance
       (opacity + translateY), just slower and all four parts together
       (no per-part stagger, so the whole scene reads as one coordinated
-      dissolve) rather than a hard cut. 2350ms = the panel's own back
-      duration (850ms, unchanged below) +1500ms, so the text has time to
-      visibly finish fading before the panel itself is hidden.
+      dissolve) rather than a hard cut. 3850ms = 2350ms +1500ms, so the
+      exit reads slower and closer to cinematic; the panel's own back
+      duration (InvitationExperience.astro's .experience__scene--journey)
+      and the JS settle timer (JOURNEY_BACKWARD_DURATION) are kept in
+      sync with this same value so the text always has time to visibly
+      finish fading before the panel itself is hidden.
     */
     :global(.experience[data-transition-direction='back']) [data-journey-part] {
-      transition: opacity 2350ms ease, transform 2350ms ease;
+      transition: opacity 3850ms ease, transform 3850ms ease;
       transition-delay: 0ms;
     }
 
