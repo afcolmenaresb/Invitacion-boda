@@ -13,13 +13,19 @@ interface Props {
 // real guest.addressing through.
 const { addressing = 'plural' } = Astro.props;
 
-const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 const finalLine = getMemorySceneFinalLine(addressing);
 ---
 
+<!--
+  No own background layer here anymore (was .memory__texture,
+  background-image + background-position: 40% top -- an independent crop
+  from the transition videos'). InvitationExperience.astro now renders
+  textura_vertical_2.1.png as a sibling .experience__memory-image behind
+  this section, using the exact same crop technique as the transition
+  videos, so this section itself stays transparent and lets it show
+  through -- see that file's own comment for why.
+-->
 <section class="memory" data-scene-panel-content aria-label={memoryScene.eyebrow}>
-  <div class="memory__texture" style={`background-image: url('${base}/images/textura_vertical_2.png')`}></div>
-
   <button type="button" class="memory__back" data-action="back-to-cover" aria-label={memoryScene.backLabel}>
     <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
       <path d="M15 5 L8 12 L15 19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
@@ -36,7 +42,7 @@ const finalLine = getMemorySceneFinalLine(addressing);
       ))}
     </div>
     <p class="memory__final">{finalLine}</p>
-    <p class="memory__cta">{memoryScene.cta}</p>
+    <button type="button" class="memory__cta" data-action="go-to-destination">{memoryScene.cta}</button>
   </div>
 </section>
 
@@ -48,16 +54,6 @@ const finalLine = getMemorySceneFinalLine(addressing);
     display: flex;
     isolation: isolate;
     overflow: hidden;
-  }
-
-  .memory__texture {
-    position: absolute;
-    inset: 0;
-    z-index: -1;
-    background-color: var(--color-bg);
-    background-size: cover;
-    background-repeat: no-repeat;
-    background-position: 40% top;
   }
 
   .memory__back {
@@ -251,10 +247,48 @@ const finalLine = getMemorySceneFinalLine(addressing);
     letter-spacing: 0.12em;
     text-transform: uppercase;
     color: #6b6055;
+    /* Now a real <button> (was a plain <p>) so it can trigger the
+       destination transition -- reset to look identical to the old
+       paragraph: no border/background/padding, left-aligned, same
+       cursor affordance the rest of the experience's controls use. */
+    display: block;
+    position: relative;
+    /* .memory__content has no align-items override (default stretch), so
+       without an explicit width this button's own box would span the
+       full content width -- harmless while it had no background, but it
+       would make the new ::before glow below stretch into a wide bar
+       instead of hugging just the text. fit-content shrink-wraps the box
+       to the label; the rendered text position is unchanged either way
+       (text-align: left already put it flush against the same left
+       edge). */
+    width: fit-content;
+    background: none;
+    border: none;
+    padding: 0;
+    text-align: left;
+    cursor: pointer;
   }
 
   .memory__cta::after {
     content: ' →';
+  }
+
+  /*
+    Same soft translucent ivory glow Cover.astro already uses behind
+    .cover__meta (see that file's .cover__meta::before -- identical
+    rgba(255, 254, 248, ...) radial-gradient, just resized here to hug
+    this single-line label instead of the two-line location/date block).
+    Not a card/pill -- no border-radius, no visible edge, no blur -- just
+    enough of a lift against the destination texture to read clearly,
+    behind the text (z-index: -1) and inert to pointer events.
+  */
+  .memory__cta::before {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    inset: -8px -14px;
+    background: radial-gradient(ellipse at center, rgba(255, 254, 248, 1), rgba(255, 254, 248, 0) 80%);
+    pointer-events: none;
   }
 
   /*
