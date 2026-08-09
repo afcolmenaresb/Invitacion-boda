@@ -1,0 +1,392 @@
+---
+import { sceneJourney, getJourneyIntroLine, getJourneyBodyLine } from '../data/sceneJourney';
+import type { Guest } from '../data/guests';
+
+interface Props {
+  /** Drives the first and second blocks ("...invitarte.../...invitarlos...", "...contigo..." / "...con ustedes..."). */
+  addressing?: Guest['addressing'];
+}
+
+// 'plural' is the safer neutral default if this were ever rendered without
+// a guest context -- in practice InvitationExperience always passes the
+// real guest.addressing through (same convention as MemoryScene/DestinationScene).
+const { addressing = 'plural' } = Astro.props;
+
+const introLine = getJourneyIntroLine(addressing);
+const bodyLine = getJourneyBodyLine(addressing);
+---
+
+<div class="journey" data-scene-panel-content aria-label={introLine}>
+  <button type="button" class="journey__back" data-action="back-to-destination" aria-label={sceneJourney.backLabel}>
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
+      <path d="M15 5 L8 12 L15 19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
+    <span>{sceneJourney.backVisibleLabel}</span>
+  </button>
+
+  <div class="journey__content">
+    <h2 class="journey__intro" data-scene-heading data-journey-part="intro" tabindex="-1">
+      <span class="journey__halo" aria-hidden="true"></span>
+      {introLine}
+    </h2>
+    <p class="journey__body" data-journey-part="body">
+      <span class="journey__halo" aria-hidden="true"></span>
+      {bodyLine}
+    </p>
+    <p class="journey__closing" data-journey-part="closing">
+      <span class="journey__halo" aria-hidden="true"></span>
+      {sceneJourney.closing}
+    </p>
+    <div class="journey__cta-group">
+      <p
+        class="journey__cta journey__cta--primary"
+        data-journey-part="cta-primary"
+        data-action="journey-cta-primary"
+      >
+        {sceneJourney.ctaPrimary}
+      </p>
+      <p
+        class="journey__cta journey__cta--secondary"
+        data-journey-part="cta-secondary"
+        data-action="journey-cta-secondary"
+      >
+        {sceneJourney.ctaSecondary}
+      </p>
+    </div>
+  </div>
+</div>
+
+<style>
+  .journey {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    isolation: isolate;
+  }
+
+  /* Same control as MemoryScene/DestinationScene's own back button --
+     identical position, type treatment and icon, just pointing one scene
+     back. */
+  .journey__back {
+    position: absolute;
+    top: max(18px, env(safe-area-inset-top));
+    left: max(18px, env(safe-area-inset-left));
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: none;
+    border: none;
+    padding: 0.4rem 0.2rem;
+    cursor: pointer;
+    font-family: var(--font-sans);
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #3a332b;
+    opacity: 0;
+  }
+
+  /* Same tight, fully-opaque halo as the CTAs -- this control sits over
+     live footage too, so it needs the same light-behind-dark-ink
+     treatment, not the plain flat color MemoryScene/DestinationScene's
+     back buttons use over paper. */
+  .journey__back::before {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    inset: -6px -10px;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, rgba(255, 254, 248, 0.95), rgba(255, 254, 248, 0) 80%);
+  }
+
+  :global(.experience.is-revealing-journey) .journey__back {
+    opacity: 1;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    :global(.experience:not(.is-instant)) .journey__back {
+      transition: opacity 320ms ease, color 0.2s ease, transform 0.2s ease;
+    }
+
+    .journey__back:hover,
+    .journey__back:focus-visible {
+      color: var(--color-accent);
+      transform: translateX(-2px);
+    }
+  }
+
+  :global(.experience.is-instant) .journey__back {
+    transition: none !important;
+  }
+
+  /*
+    Same fixed 390x844 canvas convention as every other scene -- see
+    MemoryScene.astro's own comment on .memory__content for why px
+    values, not vw/vh/clamp(), are correct here.
+
+    More open/cinematic than pages 2-3: the block sits lower, closer to
+    two-thirds down the canvas, leaving the video's own open sky/water
+    read through unobstructed above it -- "más cinematográfica y
+    abierta" -- rather than centering everything the way DestinationScene
+    does.
+  */
+  .journey__content {
+    margin: 0 auto auto;
+    margin-top: auto;
+    width: 100%;
+    max-width: 358.8px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    text-align: left;
+    gap: 18px;
+    padding: 0 28px 96px;
+  }
+
+  /*
+    Shared halo: a soft, wide opening of light behind each text block --
+    never a card/pill (no border-radius, no solid fill, no visible edge).
+    Same radial-gradient language already approved for the CTA glows on
+    pages 2-3, just spread wider and feathered earlier (72% instead of
+    80%) so it reads as an ambient lift across the whole block rather
+    than a tight halo around single-line text -- the video's sand/water/
+    palm-shadow footage needs a broader, gentler assist than the paper
+    backgrounds pages 2-3 sit on. Positioned as each block's own first
+    child (absolute, filling the block) rather than a ::before so it can
+    be sized generously without being clipped by the text's own tight
+    inline box.
+  */
+  .journey__halo {
+    position: absolute;
+    inset: -14px -24px;
+    z-index: -1;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, rgba(255, 254, 248, 0.92) 0%, rgba(255, 254, 248, 0) 72%);
+  }
+
+  .journey__intro,
+  .journey__body,
+  .journey__closing {
+    position: relative;
+    margin: 0;
+  }
+
+  /*
+    Block 1 -- editorial, uppercase, sober: the scene's opening statement,
+    plain sans-serif label treatment (same family/letter-spacing language
+    as the eyebrows/CTAs elsewhere), never the largest or warmest voice
+    here.
+  */
+  .journey__intro {
+    font-family: var(--font-sans);
+    text-transform: uppercase;
+    font-weight: 400;
+    letter-spacing: 0.1em;
+    font-size: 0.92rem;
+    line-height: 1.55;
+    color: #3a332b;
+    max-width: 280px;
+    outline: none;
+  }
+
+  /* Same rationale as the other scenes' own *:focus-visible rules -- this
+     heading is only ever reached via the scripted focus() call in
+     InvitationExperience.astro, never by tabbing. */
+  .journey__intro:focus-visible {
+    outline: none;
+  }
+
+  /*
+    Block 2 -- the human, close voice: existing editorial serif, italic,
+    warmer and larger than block 1, but still well below the closing
+    line's own presence.
+  */
+  .journey__body {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-weight: 400;
+    font-size: 1.2rem;
+    line-height: 1.6;
+    color: #4a3f35;
+  }
+
+  /*
+    Block 3 -- the emotional payoff ("antes del 'sí', está el viaje").
+    Not the largest text in the scene, but set apart deliberately: the
+    accent ink (same warm gold already used for MemoryScene's closing
+    line and DestinationScene's date), upright serif (vs. block 2's
+    italic) and its own top margin so it reads as a standalone
+    declaration -- the scene's own "remate" -- rather than a continuation
+    of the paragraph above it.
+  */
+  .journey__closing {
+    font-family: var(--font-serif);
+    font-style: normal;
+    font-weight: 400;
+    font-size: 1.35rem;
+    line-height: 1.4;
+    color: var(--color-accent);
+    margin-top: 6px;
+  }
+
+  /* CTAs sit on the same tight, fully-opaque halo already approved for
+     pages 2-3's CTAs (unlike the wider, more feathered paragraph halos
+     above), so -- like those -- their text reads in dark ink against
+     that light glow, not pale-on-pale. */
+  .journey__cta {
+    margin: 0;
+    position: relative;
+    font-family: var(--font-sans);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #3a332b;
+  }
+
+  /* Same soft halo language as the CTA glows already approved on pages
+     2-3 (identical rgba(255, 254, 248, ...) radial-gradient), sized to
+     hug each single-line CTA rather than the wider paragraph treatment
+     above. */
+  .journey__cta::before {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    inset: -8px -14px;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, rgba(255, 254, 248, 1), rgba(255, 254, 248, 0) 80%);
+  }
+
+  /*
+    CTA group -- pulled clearly away from the narrative block above.
+    History: originally 18px flex-gap + 16px margin-top = 34px total;
+    then 18px flex-gap + 56px margin-top = 74px total (+40px); now 18px
+    flex-gap + 91px margin-top = 109px total (+35px more), so the group
+    reads unmistakably as a separate, later gesture rather than a
+    continuation of "antes del 'sí', está el viaje." The group moves as a
+    single unit (margin-top only) -- the narrative block above is
+    untouched, and the 22px gap between the two CTAs themselves is
+    unchanged. Position/spacing only: text, typography, halos and the
+    primary/secondary hierarchy are all unchanged.
+  */
+  .journey__cta-group {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 22px;
+    margin-top: 91px;
+  }
+
+  /* Dominant over the secondary CTA, as specified -- larger, in the
+     accent ink, with the same arrow suffix pattern used for every other
+     primary CTA in the experience. */
+  .journey__cta--primary {
+    font-size: 0.92rem;
+    color: var(--color-accent);
+  }
+
+  .journey__cta--primary::after {
+    content: ' →';
+  }
+
+  .journey__cta--secondary {
+    font-size: 0.72rem;
+    color: #6b6055;
+  }
+
+  .journey__cta--secondary::before {
+    inset: -6px -10px;
+    opacity: 0.75;
+  }
+
+  /*
+    Entrance: plain, quiet opacity + small translateY -- never the
+    handwritten ink sweep MemoryScene uses, matching DestinationScene's
+    own approach. Hidden by default; each part becomes visible once
+    InvitationExperience.astro's script adds .is-journey-revealing to the
+    shared .experience root (the moment transition4.mp4 begins playing,
+    or -- for reduced motion / an instant direct load -- the moment the
+    scene is simply shown), at which point each [data-journey-part] fades
+    in on its own transition-delay, timed against that same moment (1.4s /
+    2.7s / 4.4s / 5.8s / 6.3s, per spec).
+  */
+  [data-journey-part] {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    /*
+      Exit (back to #destino): is-journey-revealing is removed the moment
+      the user navigates back (see InvitationExperience.astro's own
+      journey->destination branch), so without a transition declared
+      here every part would otherwise snap back to its hidden state
+      instantly instead of fading -- same fade/movement as the entrance
+      (opacity + translateY), just slower and all four parts together
+      (no per-part stagger, so the whole scene reads as one coordinated
+      dissolve) rather than a hard cut. 3850ms = 2350ms +1500ms, so the
+      exit reads slower and closer to cinematic; the panel's own back
+      duration (InvitationExperience.astro's .experience__scene--journey)
+      and the JS settle timer (JOURNEY_BACKWARD_DURATION) are kept in
+      sync with this same value so the text always has time to visibly
+      finish fading before the panel itself is hidden.
+    */
+    :global(.experience[data-transition-direction='back']) [data-journey-part] {
+      transition: opacity 3850ms ease, transform 3850ms ease;
+      transition-delay: 0ms;
+    }
+
+    :global(.experience.is-journey-revealing) [data-journey-part] {
+      transition: opacity 850ms ease, transform 850ms ease;
+    }
+
+    :global(.experience.is-journey-revealing) [data-journey-part='intro'] {
+      opacity: 1;
+      transform: translateY(0);
+      transition-delay: 1400ms;
+    }
+
+    :global(.experience.is-journey-revealing) [data-journey-part='body'] {
+      opacity: 1;
+      transform: translateY(0);
+      transition-delay: 2700ms;
+    }
+
+    :global(.experience.is-journey-revealing) [data-journey-part='closing'] {
+      opacity: 1;
+      transform: translateY(0);
+      transition-delay: 4400ms;
+    }
+
+    :global(.experience.is-journey-revealing) [data-journey-part='cta-primary'] {
+      opacity: 1;
+      transform: translateY(0);
+      transition-delay: 5800ms;
+    }
+
+    :global(.experience.is-journey-revealing) [data-journey-part='cta-secondary'] {
+      opacity: 1;
+      transform: translateY(0);
+      transition-delay: 6300ms;
+    }
+  }
+
+  /*
+    Reduced motion / instant loads: no per-part stagger, no delays -- one
+    short, uniform fade so the whole scene settles as a single quiet
+    crossfade instead of a video-timed sequence that has no video to
+    follow -- same convention as DestinationScene.
+  */
+  :global(.experience.is-reduced-motion.is-journey-revealing) [data-journey-part],
+  :global(.experience.is-instant) [data-journey-part] {
+    transition: opacity 260ms ease !important;
+    transform: none !important;
+    transition-delay: 0ms !important;
+  }
+
+  :global(.experience.is-reduced-motion.is-journey-revealing) [data-journey-part],
+  :global(.experience[data-scene='journey'].is-instant) [data-journey-part] {
+    opacity: 1;
+    transform: translateY(0);
+  }
+</style>

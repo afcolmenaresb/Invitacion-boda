@@ -36,9 +36,14 @@ const finalLine = getDestinationFinalLine(addressing);
       ))}
       <p class="destination__final">{finalLine}</p>
     </div>
-    <p class="destination__cta destination__cta--primary" data-destination-part="cta-primary" data-action="next-destination-step">
+    <button
+      type="button"
+      class="destination__cta destination__cta--primary"
+      data-destination-part="cta-primary"
+      data-action="go-to-journey"
+    >
       {sceneDestination.ctaPrimary}
-    </p>
+    </button>
     <p class="destination__cta destination__cta--secondary" data-destination-part="cta-secondary" data-action="show-trip-info">
       {sceneDestination.ctaSecondary}
     </p>
@@ -220,6 +225,30 @@ const finalLine = getDestinationFinalLine(addressing);
   }
 
   .destination__cta--primary {
+    /* Now a real <button> (was a plain <p>) so it can trigger the
+       journey transition -- reset to look identical to the old
+       paragraph: no border/background/padding, same cursor affordance
+       the rest of the experience's controls use. .destination__content
+       already uses align-items: flex-start, so no extra width is needed
+       to keep it shrink-wrapped to its own text (see .destination__cta's
+       own comment above).
+
+       Deliberately NOT resetting font/letter-spacing/text-transform to
+       "inherit" here: .destination__cta above already declares the real
+       font-family/font-size/letter-spacing/text-transform (uppercase) as
+       normal author styles, which apply to this <button> exactly as they
+       did to the old <p> -- author rules already beat the browser's own
+       UA default button styling regardless. A prior "inherit" on these
+       properties looked defensive but actually pulled the *parent*
+       element's (.destination__content's) computed values instead --
+       text-transform: none there -- silently undoing .destination__cta's
+       own uppercase and rendering the CTA in its stored sentence case. */
+    display: block;
+    background: none;
+    border: none;
+    padding: 0;
+    text-align: left;
+    cursor: pointer;
     margin-top: 14px;
     color: var(--color-accent);
   }
