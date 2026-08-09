@@ -252,6 +252,16 @@ const finalLine = getMemorySceneFinalLine(addressing);
        paragraph: no border/background/padding, left-aligned, same
        cursor affordance the rest of the experience's controls use. */
     display: block;
+    position: relative;
+    /* .memory__content has no align-items override (default stretch), so
+       without an explicit width this button's own box would span the
+       full content width -- harmless while it had no background, but it
+       would make the new ::before glow below stretch into a wide bar
+       instead of hugging just the text. fit-content shrink-wraps the box
+       to the label; the rendered text position is unchanged either way
+       (text-align: left already put it flush against the same left
+       edge). */
+    width: fit-content;
     background: none;
     border: none;
     padding: 0;
@@ -261,6 +271,24 @@ const finalLine = getMemorySceneFinalLine(addressing);
 
   .memory__cta::after {
     content: ' →';
+  }
+
+  /*
+    Same soft translucent ivory glow Cover.astro already uses behind
+    .cover__meta (see that file's .cover__meta::before -- identical
+    rgba(255, 254, 248, ...) radial-gradient, just resized here to hug
+    this single-line label instead of the two-line location/date block).
+    Not a card/pill -- no border-radius, no visible edge, no blur -- just
+    enough of a lift against the destination texture to read clearly,
+    behind the text (z-index: -1) and inert to pointer events.
+  */
+  .memory__cta::before {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    inset: -8px -14px;
+    background: radial-gradient(ellipse at center, rgba(255, 254, 248, 1), rgba(255, 254, 248, 0) 80%);
+    pointer-events: none;
   }
 
   /*

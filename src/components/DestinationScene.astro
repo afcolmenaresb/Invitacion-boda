@@ -189,6 +189,12 @@ const finalLine = getDestinationFinalLine(addressing);
 
   .destination__cta {
     margin: 0;
+    /* .destination__content already uses align-items: flex-start (see
+       above), so these <p> CTAs already shrink-wrap to their own text --
+       position: relative here is only so the ::before glow below can
+       size itself against that same shrink-wrapped box, not a fresh
+       full-width one. */
+    position: relative;
     font-family: var(--font-sans);
     font-size: 0.78rem;
     letter-spacing: 0.14em;
@@ -196,9 +202,30 @@ const finalLine = getDestinationFinalLine(addressing);
     color: #6b6055;
   }
 
+  /*
+    Same soft translucent ivory glow Cover.astro already uses behind
+    .cover__meta (identical rgba(255, 254, 248, ...) radial-gradient, see
+    that file's .cover__meta::before) -- resized to hug each single-line
+    CTA. Not a card/pill: no border-radius, no visible edge, no blur, just
+    a quiet lift against the destination texture. The secondary CTA's own
+    glow is deliberately smaller/fainter than the primary's so the
+    existing hierarchy (color, size) stays intact with this added.
+  */
+  .destination__cta::before {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, rgba(255, 254, 248, 1), rgba(255, 254, 248, 0) 80%);
+  }
+
   .destination__cta--primary {
     margin-top: 14px;
     color: var(--color-accent);
+  }
+
+  .destination__cta--primary::before {
+    inset: -8px -14px;
   }
 
   .destination__cta--primary::after {
@@ -208,6 +235,11 @@ const finalLine = getDestinationFinalLine(addressing);
   .destination__cta--secondary {
     color: #8c7f6a;
     font-size: 0.72rem;
+  }
+
+  .destination__cta--secondary::before {
+    inset: -6px -10px;
+    opacity: 0.75;
   }
 
   /*

@@ -103,19 +103,20 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
     above. Unlike the cover->memory video (which fully hides *before* its
     target scene's own text ever appears), transition3.mp4's target
     content ("El destino") must appear on top of it while it keeps
-    playing, then stay put, unchanged, as the video itself is what
-    disappears -- so the static final frame, the video and the scene's
-    own text all live together in this one persistent stage rather than a
-    separate video-stage + panel pair that hands off to each other.
-    .experience__destination-image is the same textura_vertical_3.png the
-    video ends on, always painted underneath the video from the very
-    start (see the script's ensureDestinationAssets/runDestinationVideoAndReveal
-    for why that ordering -- final frame first, video removed after -- is
-    what keeps the handoff free of any flash, resize or reflow. Both the
-    frame/image backgrounds and the video's own src are intentionally left
-    unset here (data-bg-src/data-video-src only) and assigned lazily by
-    that same script once MemoryScene is actually reached, so this ~7MB of
-    media is never fetched as part of the initial cover load.
+    playing, then stay put unchanged. On a normal, successful playthrough
+    the video itself never disappears either: once it reaches 'ended' it
+    is left exactly as the browser paused it, painted on its own last
+    frame, currentTime untouched -- that frame *is* the scene's stable
+    background from then on (see runDestinationVideoAndReveal's own
+    comment). .experience__destination-image (textura_vertical_3.png) is
+    the same frame the video ends on, always painted underneath it from
+    the very start, but it is only ever what the user actually sees in
+    the fallback paths -- playback error/stall, or prefers-reduced-motion
+    (see ensureDestinationAssets/goToScene). Both the frame/image
+    backgrounds and the video's own src are intentionally left unset here
+    (data-bg-src/data-video-src only) and assigned lazily by that same
+    script once MemoryScene is actually reached, so this ~7MB of media is
+    never fetched as part of the initial cover load.
   -->
   <section class="experience__scene experience__scene--destination" data-scene-panel="destination" inert>
     <div class="experience__destination-frame" data-bg-src={destinationTextureSrc}>
@@ -736,40 +737,31 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
       }
 
       if (played && destinationVideoEl) {
-        // Whichever way playback ends -- clean 'ended', an error, or the
-        // hard cap -- textura_vertical_3.png has been fully painted
-        // underneath the video this entire time (see the destination
-        // stage's markup: the image div sits behind the video from the
-        // very start, never inserted afterwards), so fading out just the
-        // <video> element itself is always safe here: same
-        // paint-the-target-first-remove-the-video-after principle already
-        // proven for the cover->memory handoff, just without needing a
-        // separate panel to hand off to. currentTime is only ever reset
-        // (resetDestinationVideo) after this fade has actually finished,
-        // i.e. after the video is confirmed no longer visible.
-        await waitForVideoOutcome(destinationVideoEl, DESTINATION_VIDEO_HARD_CAP_MS);
-        destinationVideoEl.style.transition = `opacity ${DESTINATION_VIDEO_FADE_MS}ms ease`;
-        void destinationVideoEl.offsetWidth;
-        destinationVideoEl.style.opacity = '0';
-        await waitForTransitionEnd(destinationVideoEl, 'opacity', DESTINATION_VIDEO_FADE_MS + 200);
-        resetDestinationVideo();
-        destinationVideoEl.style.transition = '';
-        // Deliberately left at opacity:0 here, NOT cleared back to ''.
-        // .experience__destination-video has no stylesheet opacity of its
-        // own, so clearing this back to '' falls through to the initial
-        // value (1) -- and resetDestinationVideo() just above rewound
-        // currentTime to 0, i.e. the video's own first frame, which is
-        // textura_vertical_2.1.png (the exact join frame with
-        // memory-transition2.mp4). Clearing it here made the video pop
-        // back to fully visible showing that frame, which read as "the
-        // background reverted to page 2's texture" even though
-        // .experience__destination-image (textura_vertical_3.png) was
-        // correctly still painted underneath the whole time -- the video
-        // was simply back on top of it. textura_vertical_3.png must stay
-        // the one definitive background for the rest of this destination
-        // visit; the video only gets its opacity cleared again at the top
-        // of this very function, right before the *next* real playback
-        // actually starts (see above).
+        const finishedOk = await waitForVideoOutcome(destinationVideoEl, DESTINATION_VIDEO_HARD_CAP_MS);
+        if (finishedOk) {
+          // Clean 'ended': deliberately do nothing here. A <video> that
+          // reaches the end of its own playback naturally stays painted
+          // on its own last frame -- paused, not hidden, currentTime
+          // untouched -- so that last frame simply *becomes* the
+          // destination scene's stable background, pixel-for-pixel,
+          // with zero handoff to textura_vertical_3.png underneath (that
+          // image only exists as the fallback for the branches below and
+          // for reduced motion -- see ensureDestinationAssets/goToScene).
+          // No fade, no opacity change, no currentTime reset: resetting
+          // is deferred entirely to goToScene's own back-to-memory
+          // branch, and only once this scene is confirmed no longer
+          // visible (see that branch's own comment).
+        } else {
+          // Error or hard-cap (stalled/broken mid-playback) -- there is
+          // no good frame to freeze on here, so fall back to the
+          // always-present static image beneath it by fading the video
+          // out. currentTime is still left untouched (see the back-to-
+          // memory branch for the only place that ever resets it).
+          destinationVideoEl.style.transition = `opacity ${DESTINATION_VIDEO_FADE_MS}ms ease`;
+          void destinationVideoEl.offsetWidth;
+          destinationVideoEl.style.opacity = '0';
+          await waitForTransitionEnd(destinationVideoEl, 'opacity', DESTINATION_VIDEO_FADE_MS + 200);
+        }
       } else {
         // Never played (readiness timeout/error, or reduced-motion-style
         // "no src assigned" edge case) -- hide the <video> element itself
@@ -864,14 +856,22 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
         // never cleared (is-revealing-memory stays set the whole time
         // once first reached), so it simply reappears as-is.
         root!.classList.remove('is-revealing-destination', 'is-destination-revealing', 'is-memory-receded');
-        resetDestinationVideo();
-        if (destinationVideoEl) {
-          destinationVideoEl.style.transition = '';
-          destinationVideoEl.style.opacity = '';
-        }
         const duration = reduced ? REDUCED_MOTION_DURATION : BACKWARD_DURATION;
         completionTimer = window.setTimeout(() => {
           completionTimer = null;
+          // Only reset (and clear the frozen-frame opacity) now that the
+          // destination panel's own opacity transition (removed above)
+          // has had time to finish and the scene is no longer visible --
+          // `duration` is chosen to exceed that CSS transition's own
+          // length (850ms/260ms), so by this point resetting currentTime
+          // can never be seen: doing it any earlier, while the frozen
+          // last frame was still the on-screen background, would have
+          // been a visible jump back to frame 0 mid fade-out.
+          resetDestinationVideo();
+          if (destinationVideoEl) {
+            destinationVideoEl.style.transition = '';
+            destinationVideoEl.style.opacity = '';
+          }
           currentScene = scene;
           isTransitioning = false;
           root!.classList.remove('is-transitioning');
