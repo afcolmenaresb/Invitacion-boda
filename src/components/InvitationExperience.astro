@@ -2,6 +2,7 @@
 import Cover from './Cover.astro';
 import MemoryScene from './MemoryScene.astro';
 import DestinationScene from './DestinationScene.astro';
+import JourneyScene from './JourneyScene.astro';
 import type { Guest } from '../data/guests';
 
 interface Props {
@@ -14,6 +15,7 @@ const { displayName, dedication, addressing } = Astro.props;
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 const videoSrc = `${base}/videos/memory-transition2.mp4`;
 const videoSrc2 = `${base}/videos/memory-transition3.mp4`;
+const videoSrc3 = `${base}/videos/memory-transition4.mp4`;
 // The exact join frame shared by both transition videos -- the last frame
 // of memory-transition2.mp4 and the first frame of memory-transition3.mp4
 // -- so it doubles as MemoryScene's own static background, matching
@@ -138,6 +140,40 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
       </div>
     </div>
   </section>
+
+  <!--
+    Journey stage (page 4, "Seguir descubriendo"): same fixed 390x844
+    logical canvas as everything above, and the same principle as the
+    destination stage -- video and text live together in one persistent
+    box, the text appearing on top of the still-playing video rather than
+    after it. Unlike the destination stage, there is no static fallback
+    image to paint underneath the video here (none exists yet for this
+    scene -- see JourneyScene's own reduced-motion/fallback handling in
+    the script below, which uses the plain paper background instead of
+    fabricating or reusing an unrelated image). The video's own src is
+    intentionally left unset here (data-video-src only) and assigned
+    lazily once DestinationScene is actually reached, same convention as
+    ensureDestinationAssets.
+  -->
+  <section class="experience__scene experience__scene--journey" data-scene-panel="journey" inert>
+    <div class="experience__journey-frame" data-bg-src={destinationTextureSrc}>
+      <div class="experience__journey-canvas">
+        <video
+          class="experience__journey-video"
+          data-video-src={videoSrc3}
+          playsinline
+          preload="none"
+          aria-hidden="true"
+          tabindex="-1"
+          disablepictureinpicture
+          disableremoteplayback
+        ></video>
+        <div class="experience__journey-overlay">
+          <JourneyScene addressing={addressing} />
+        </div>
+      </div>
+    </div>
+  </section>
 </div>
 
 <script>
@@ -173,6 +209,9 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
     const destinationFrameEl = root.querySelector<HTMLElement>('.experience__destination-frame');
     const destinationImageEl = root.querySelector<HTMLElement>('.experience__destination-image');
     const destinationVideoEl = root.querySelector<HTMLVideoElement>('.experience__destination-video');
+    const journeyPanel = root.querySelector<HTMLElement>('[data-scene-panel="journey"]');
+    const journeyFrameEl = root.querySelector<HTMLElement>('.experience__journey-frame');
+    const journeyVideoEl = root.querySelector<HTMLVideoElement>('.experience__journey-video');
 
     // Forward (cover -> memory) phase timings.
     const PHASE_A_MS = 380; // cover's own text (name/dedication/signature/location/cta) fades out
@@ -197,6 +236,19 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
     // DestinationScene's own last CSS-timed part (7.0s + its own 900ms
     // transition) has actually finished settling.
     const DESTINATION_FALLBACK_HOLD_MS = 7900;
+
+    // Forward (destination -> journey) phase timings. JourneyScene's own
+    // content fade-in is pure CSS (transition-delay per part, see
+    // JourneyScene.astro) keyed to .is-journey-revealing -- same
+    // convention as the destination stage, one scene deeper.
+    const JOURNEY_VIDEO_HARD_CAP_MS = 12000; // transition4.mp4 runs ~8s; generous safety net
+    // No static fallback image exists for this scene yet (see the
+    // markup's own comment) -- if the video never plays at all, this is
+    // how long is-transitioning is held before settling on the plain
+    // background, roughly matching JourneyScene's own last CSS-timed
+    // part (6.3s + its own 850ms transition).
+    const JOURNEY_FALLBACK_HOLD_MS = 7150;
+    const JOURNEY_SETTLE_MS = 200;
 
     // MemoryScene's own content choreography, once Fase D begins -- title
     // first and longest, then the four secondary lines as one continuous
@@ -225,16 +277,17 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
     // rather than a hard cut.
     const MEMORY_PHASE_SETTLE_MS = 250;
 
-    type SceneName = 'cover' | 'memory' | 'destination';
+    type SceneName = 'cover' | 'memory' | 'destination' | 'journey';
     // Single source of truth for scene order/hash -- both goToScene's
-    // adjacency check (only cover<->memory and memory<->destination have a
-    // defined animated path) and the hash routing below read from this
-    // instead of hand-repeating the mapping.
-    const SCENE_ORDER: SceneName[] = ['cover', 'memory', 'destination'];
+    // adjacency check (only cover<->memory, memory<->destination and
+    // destination<->journey have a defined animated path) and the hash
+    // routing below read from this instead of hand-repeating the mapping.
+    const SCENE_ORDER: SceneName[] = ['cover', 'memory', 'destination', 'journey'];
     const SCENE_HASH: Record<SceneName, string> = {
       cover: '#portada',
       memory: '#recuerdo',
       destination: '#destino',
+      journey: '#viaje',
     };
     const sceneIndex = (scene: SceneName) => SCENE_ORDER.indexOf(scene);
 
@@ -243,6 +296,8 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
     let completionTimer: number | null = null;
     let destinationAssetsRequested = false;
     let destinationVideoSrcAssigned = false;
+    let journeyAssetsRequested = false;
+    let journeyVideoSrcAssigned = false;
 
     function clearCompletionTimer() {
       if (completionTimer !== null) {
@@ -294,6 +349,16 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
       }
     }
 
+    function resetJourneyVideo() {
+      if (!journeyVideoEl) return;
+      journeyVideoEl.pause();
+      try {
+        journeyVideoEl.currentTime = 0;
+      } catch {
+        // See resetVideo above -- harmless if metadata isn't loaded yet.
+      }
+    }
+
     // Lazily assigns transition3.mp4 and textura_vertical_3.png -- both
     // left unset in the SSR markup (data-bg-src/data-video-src only) so
     // they are never fetched as part of the initial cover paint. Called
@@ -327,6 +392,34 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
           destinationVideoEl.preload = 'auto';
           destinationVideoEl.src = src;
           destinationVideoSrcAssigned = true;
+        }
+      }
+    }
+
+    // Same idea as ensureDestinationAssets, one scene later: lazily
+    // assigns transition4.mp4 once DestinationScene is actually reached
+    // (well before its own "Seguir descubriendo" CTA can realistically be
+    // clicked, since that scene's own reveal takes several seconds), so
+    // the journey video has a real head start without ever competing with
+    // the cover's own load. No image asset to assign here -- none exists
+    // yet for this scene (see the markup's own comment).
+    function ensureJourneyAssets() {
+      if (journeyAssetsRequested) return;
+      journeyAssetsRequested = true;
+
+      const frameSrc = journeyFrameEl?.dataset.bgSrc;
+      if (journeyFrameEl && frameSrc) {
+        journeyFrameEl.style.backgroundImage = `url('${frameSrc}')`;
+      }
+
+      // Same reduced-motion exception as the other transition videos:
+      // never loaded as an active part of the experience for those users.
+      if (journeyVideoEl && !prefersReducedMotion()) {
+        const src = journeyVideoEl.dataset.videoSrc;
+        if (src) {
+          journeyVideoEl.preload = 'auto';
+          journeyVideoEl.src = src;
+          journeyVideoSrcAssigned = true;
         }
       }
     }
@@ -405,6 +498,7 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
       if (memoryPanel) memoryPanel.toggleAttribute('inert', scene !== 'memory');
       if (coverPanel) coverPanel.toggleAttribute('inert', scene !== 'cover');
       if (destinationPanel) destinationPanel.toggleAttribute('inert', scene !== 'destination');
+      if (journeyPanel) journeyPanel.toggleAttribute('inert', scene !== 'journey');
     }
 
     function focusSceneHeading(scene: SceneName) {
@@ -413,7 +507,9 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
           ? memoryPanel?.querySelector<HTMLElement>('[data-scene-heading]')
           : scene === 'destination'
             ? destinationPanel?.querySelector<HTMLElement>('[data-scene-heading]')
-            : coverPanel?.querySelector<HTMLElement>('.cover__cta');
+            : scene === 'journey'
+              ? journeyPanel?.querySelector<HTMLElement>('[data-scene-heading]')
+              : coverPanel?.querySelector<HTMLElement>('.cover__cta');
       target?.focus({ preventScroll: true });
     }
 
@@ -425,18 +521,23 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
         'is-video-visible',
         'is-ink-revealing',
         'is-memory-cta-ready',
-        'is-destination-revealing'
+        'is-destination-revealing',
+        'is-journey-revealing'
       );
-      // memory and destination both sit "past" the cover, so it stays
-      // fully receded for either; destination additionally sits past
-      // memory, which stays fully painted (is-revealing-memory) but
-      // visually receded behind destination (is-memory-received) -- same
-      // convention as the cover/memory pair, one level deeper.
+      // memory, destination and journey all sit "past" the cover, so it
+      // stays fully receded for any of them; destination additionally
+      // sits past memory, and journey past destination -- each stays
+      // fully painted (is-revealing-*) but visually receded behind the
+      // next one (is-*-receded) -- same convention as the cover/memory
+      // pair, repeated one level deeper each time.
       root!.classList.toggle('is-cover-receded', scene !== 'cover');
       root!.classList.toggle('is-revealing-memory', scene !== 'cover');
-      root!.classList.toggle('is-memory-receded', scene === 'destination');
-      root!.classList.toggle('is-revealing-destination', scene === 'destination');
-      root!.classList.toggle('is-destination-revealing', scene === 'destination');
+      root!.classList.toggle('is-memory-receded', scene === 'destination' || scene === 'journey');
+      root!.classList.toggle('is-revealing-destination', scene === 'destination' || scene === 'journey');
+      root!.classList.toggle('is-destination-revealing', scene === 'destination' || scene === 'journey');
+      root!.classList.toggle('is-destination-receded', scene === 'journey');
+      root!.classList.toggle('is-revealing-journey', scene === 'journey');
+      root!.classList.toggle('is-journey-revealing', scene === 'journey');
       // Defensive: these are only ever set (and cleared) inside
       // runVideoAndReveal's own video->MemoryScene handoff, but an instant
       // scene switch should never risk inheriting a leftover inline value.
@@ -453,11 +554,19 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
         destinationVideoEl.style.opacity = '0';
       }
       resetDestinationVideo();
-      // A direct/instant load landing on memory or destination should
-      // still get the same lazy head start on transition3.mp4/
-      // textura_vertical_3.png as the animated path -- see
-      // ensureDestinationAssets.
-      if (scene === 'memory' || scene === 'destination') ensureDestinationAssets();
+      if (journeyVideoEl) {
+        // Same reasoning as destinationVideoEl above -- instant loads
+        // never play transition4.mp4.
+        journeyVideoEl.style.transition = 'none';
+        journeyVideoEl.style.opacity = '0';
+      }
+      resetJourneyVideo();
+      // A direct/instant load landing on memory, destination or journey
+      // should still get the same lazy head start on each scene's own
+      // media as the animated path -- see ensureDestinationAssets/
+      // ensureJourneyAssets.
+      if (scene === 'memory' || scene === 'destination' || scene === 'journey') ensureDestinationAssets();
+      if (scene === 'destination' || scene === 'journey') ensureJourneyAssets();
       void root!.offsetWidth;
       requestAnimationFrame(() => {
         root?.classList.remove('is-instant');
@@ -716,6 +825,11 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
       ensureDestinationAssets();
       root!.classList.add('is-memory-receded', 'is-revealing-destination', 'is-destination-revealing');
 
+      // DestinationScene is reached -- give transition4.mp4 a head start
+      // now, well before its own "Seguir descubriendo" CTA can
+      // realistically be reached/clicked (see ensureJourneyAssets).
+      ensureJourneyAssets();
+
       let played = false;
       if (destinationVideoEl && destinationVideoSrcAssigned) {
         try {
@@ -786,9 +900,94 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
       }, DESTINATION_SETTLE_MS);
     }
 
+    // Fase for the destination -> journey forward transition: destination
+    // recedes (is-destination-receded) while the journey panel becomes
+    // visible (is-revealing-journey) -- same crossfade principle as the
+    // memory->destination pair, one scene deeper. is-journey-revealing is
+    // added in this same moment: the clock JourneyScene's own per-part
+    // CSS transition-delays (1.4s, 2.7s, ...) are measured against.
+    async function runJourneyVideoAndReveal() {
+      ensureJourneyAssets();
+      root!.classList.add('is-destination-receded', 'is-revealing-journey', 'is-journey-revealing');
+
+      let played = false;
+      if (journeyVideoEl && journeyVideoSrcAssigned) {
+        try {
+          journeyVideoEl.currentTime = 0;
+        } catch {
+          // ignore -- see resetJourneyVideo
+        }
+        journeyVideoEl.style.transition = '';
+        journeyVideoEl.style.opacity = '';
+        const ready = await waitForVideoReady(journeyVideoEl, VIDEO_READY_TIMEOUT_MS);
+        if (ready) {
+          try {
+            await journeyVideoEl.play();
+            played = true;
+          } catch {
+            played = false;
+          }
+        }
+      }
+
+      if (played && journeyVideoEl) {
+        const finishedOk = await waitForVideoOutcome(journeyVideoEl, JOURNEY_VIDEO_HARD_CAP_MS);
+        if (finishedOk) {
+          // Clean 'ended': deliberately do nothing here, same principle
+          // as the destination stage's own freeze -- a <video> that
+          // reaches the end of its own playback naturally stays painted
+          // on its own last frame, paused, currentTime untouched, so that
+          // frame simply becomes this scene's stable background. No
+          // fade, no opacity change, no reset here: resetting is
+          // deferred entirely to goToScene's own back-to-destination
+          // branch, and only once this scene is confirmed no longer
+          // visible.
+        } else {
+          // Error or hard-cap (stalled/broken mid-playback) -- there is
+          // no good frame to freeze on and no fallback image for this
+          // scene yet, so just hide the video and let the plain paper
+          // background (the journey frame's own background-color) show
+          // through instead of a frozen broken frame. currentTime is
+          // still left untouched (see the back-to-destination branch for
+          // the only place that ever resets it).
+          journeyVideoEl.style.transition = `opacity ${DESTINATION_VIDEO_FADE_MS}ms ease`;
+          void journeyVideoEl.offsetWidth;
+          journeyVideoEl.style.opacity = '0';
+          await waitForTransitionEnd(journeyVideoEl, 'opacity', DESTINATION_VIDEO_FADE_MS + 200);
+        }
+      } else {
+        // Never played (readiness timeout/error) -- hide the <video>
+        // element itself outright (no transition: it never became
+        // visible to begin with), then hold for as long as the real
+        // video would have taken JourneyScene's own CSS-timed content to
+        // finish settling before declaring the scene settled.
+        if (journeyVideoEl) {
+          journeyVideoEl.style.transition = 'none';
+          journeyVideoEl.style.opacity = '0';
+        }
+        await sleep(JOURNEY_FALLBACK_HOLD_MS);
+      }
+
+      completionTimer = window.setTimeout(() => {
+        completionTimer = null;
+        currentScene = 'journey';
+        isTransitioning = false;
+        root!.classList.remove('is-transitioning');
+        focusSceneHeading('journey');
+      }, JOURNEY_SETTLE_MS);
+    }
+
     function goToScene(scene: SceneName, options: { pushHistory?: boolean } = {}) {
       const { pushHistory = true } = options;
-      if (isTransitioning || scene === currentScene || !coverPanel || !memoryPanel || !destinationPanel) return;
+      if (
+        isTransitioning ||
+        scene === currentScene ||
+        !coverPanel ||
+        !memoryPanel ||
+        !destinationPanel ||
+        !journeyPanel
+      )
+        return;
 
       const fromIndex = sceneIndex(currentScene);
       const toIndex = sceneIndex(scene);
@@ -880,6 +1079,67 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
         return;
       }
 
+      if (scene === 'destination' && currentScene === 'journey') {
+        // Back (journey -> destination): same idea -- no video in
+        // reverse, just a short crossfade. DestinationScene's own panel/
+        // content were never cleared (is-revealing-destination stays set
+        // the whole time once first reached, including its frozen last
+        // video frame), so it simply reappears as-is.
+        root!.classList.remove('is-revealing-journey', 'is-journey-revealing', 'is-destination-receded');
+        const duration = reduced ? REDUCED_MOTION_DURATION : BACKWARD_DURATION;
+        completionTimer = window.setTimeout(() => {
+          completionTimer = null;
+          // Only reset (and clear the frozen-frame opacity) now that the
+          // journey panel's own opacity transition (removed above) has
+          // had time to finish and the scene is no longer visible -- same
+          // reasoning as the destination->memory back branch above.
+          resetJourneyVideo();
+          if (journeyVideoEl) {
+            journeyVideoEl.style.transition = '';
+            journeyVideoEl.style.opacity = '';
+          }
+          currentScene = scene;
+          isTransitioning = false;
+          root!.classList.remove('is-transitioning');
+          focusSceneHeading(scene);
+        }, duration);
+        return;
+      }
+
+      if (scene === 'journey') {
+        // Forward (destination -> journey).
+        if (reduced) {
+          // Reduced motion: never plays transition4.mp4 -- no static
+          // fallback image exists for this scene yet, so the plain paper
+          // background (the journey frame's own background-color) shows
+          // directly, with a short crossfade into it; JourneyScene's own
+          // content fades in together, uniformly, no per-part stagger
+          // (see its is-reduced-motion CSS) -- same convention as
+          // DestinationScene's reduced-motion path, no parallel
+          // architecture invented for this.
+          ensureJourneyAssets();
+          if (journeyVideoEl) {
+            // Never loaded/assigned a src for reduced motion (see
+            // ensureJourneyAssets) -- hidden outright so an empty
+            // <video> box can never paint over the background.
+            journeyVideoEl.style.transition = 'none';
+            journeyVideoEl.style.opacity = '0';
+          }
+          root!.classList.add('is-destination-receded', 'is-revealing-journey', 'is-journey-revealing');
+          completionTimer = window.setTimeout(() => {
+            completionTimer = null;
+            currentScene = scene;
+            isTransitioning = false;
+            root!.classList.remove('is-transitioning');
+            focusSceneHeading(scene);
+          }, REDUCED_MOTION_DURATION);
+          return;
+        }
+
+        runJourneyVideoAndReveal();
+        return;
+      }
+
       if (scene === 'destination') {
         // Forward (memory -> destination).
         if (reduced) {
@@ -942,6 +1202,8 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
       const backTrigger = target.closest<HTMLElement>('[data-action="back-to-cover"]');
       const destinationTrigger = target.closest<HTMLElement>('[data-action="go-to-destination"]');
       const backToMemoryTrigger = target.closest<HTMLElement>('[data-action="back-to-memory"]');
+      const journeyTrigger = target.closest<HTMLElement>('[data-action="go-to-journey"]');
+      const backToDestinationTrigger = target.closest<HTMLElement>('[data-action="back-to-destination"]');
 
       if (forwardTrigger && root!.contains(forwardTrigger)) {
         event.preventDefault();
@@ -955,10 +1217,17 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
       } else if (backToMemoryTrigger && root!.contains(backToMemoryTrigger)) {
         event.preventDefault();
         goToScene('memory');
+      } else if (journeyTrigger && root!.contains(journeyTrigger)) {
+        event.preventDefault();
+        goToScene('journey');
+      } else if (backToDestinationTrigger && root!.contains(backToDestinationTrigger)) {
+        event.preventDefault();
+        goToScene('destination');
       }
     });
 
     function sceneFromHash(hash: string): SceneName {
+      if (hash === '#viaje') return 'journey';
       if (hash === '#destino') return 'destination';
       if (hash === '#recuerdo') return 'memory';
       return 'cover';
@@ -1453,6 +1722,145 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
   }
 
   .experience__destination-overlay {
+    position: absolute;
+    inset: 0;
+  }
+
+  /*
+    Journey scene (page 4) -- additive only, same convention as the
+    destination block above, one level deeper: sits below destination in
+    the stacking order (z-index -1, destination 0, memory 1, cover 2), so
+    the destination -> journey crossfade is the same "panel above fades
+    out, panel below is already there" pattern, repeated.
+  */
+  .experience__scene--journey {
+    z-index: -1;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .experience[data-scene='journey'] .experience__scene--journey {
+    pointer-events: auto;
+  }
+
+  .experience[data-scene='journey'] .experience__scene--cover,
+  .experience[data-scene='journey'] .experience__scene--memory,
+  .experience[data-scene='journey'] .experience__scene--destination {
+    pointer-events: none;
+  }
+
+  .experience[data-scene='journey']:not(.is-transitioning) .experience__scene--cover,
+  .experience[data-scene='journey']:not(.is-transitioning) .experience__scene--memory,
+  .experience[data-scene='journey']:not(.is-transitioning) .experience__scene--destination {
+    visibility: hidden;
+  }
+
+  .experience.is-transitioning :global(.destination__cta--primary),
+  .experience.is-transitioning :global([data-action='back-to-destination']) {
+    pointer-events: none;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .experience:not(.is-instant) .experience__scene--journey {
+      transition: opacity 360ms ease;
+    }
+
+    .experience.is-revealing-journey .experience__scene--journey {
+      opacity: 1;
+    }
+
+    /* Destination recedes while .is-destination-receded is present --
+       defined after the existing ".is-revealing-destination
+       .experience__scene--destination {opacity:1}" rule above so it wins
+       on the (otherwise equal) specificity, same trick as
+       .is-memory-receded overriding memory's own opacity. */
+    .experience.is-destination-receded .experience__scene--destination {
+      transition: opacity 360ms ease;
+      opacity: 0;
+    }
+
+    .experience[data-transition-direction='back'].is-transitioning .experience__scene--journey {
+      transition-duration: 850ms;
+    }
+  }
+
+  .experience.is-reduced-motion .experience__scene--journey {
+    transition: opacity 260ms ease !important;
+    transform: none !important;
+  }
+
+  .experience.is-reduced-motion.is-revealing-journey .experience__scene--journey {
+    opacity: 1;
+  }
+
+  .experience.is-reduced-motion[data-scene='journey'] .experience__scene--destination {
+    opacity: 0;
+  }
+
+  .experience.is-instant .experience__scene--journey,
+  .experience.is-instant .experience__journey-video,
+  .experience.is-instant :global(.destination__cta--primary) {
+    transition: none !important;
+  }
+
+  /*
+    Journey stage -- same fixed 390x844 canvas convention as the
+    destination stage above. Unlike that one, there is no static fallback
+    image layer here (none exists yet for this scene -- see the markup's
+    own comment): just the video and JourneyScene's own overlay content
+    on top of it. On a normal, successful playthrough the video is left
+    exactly where the browser paused it once 'ended' fires (see
+    runJourneyVideoAndReveal), the same freeze already used for the
+    destination stage; the plain paper background-color on
+    .experience__journey-frame is what shows through only if the video
+    never plays at all (readiness/error) or for reduced motion.
+  */
+  .experience__journey-frame {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background-color: var(--color-bg);
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-position: 60% top;
+  }
+
+  .experience__journey-canvas {
+    position: relative;
+    width: 390px;
+    height: 844px;
+    flex-shrink: 0;
+    overflow: hidden;
+    transform-origin: center center;
+    transform: scale(var(--cover-scale, 1));
+  }
+
+  :global(html.is-fill-viewport) .experience__journey-canvas {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(var(--cover-scale-x, 1), var(--cover-scale-y, 1));
+  }
+
+  /* Same 1% overscan as .experience__video above, and for the same reason
+     -- a fractional --cover-scale can otherwise leave a hairline seam on
+     one edge exposing whatever sits behind the video's own GPU layer. */
+  .experience__journey-video {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 101%;
+    height: 101%;
+    transform: translate(-50%, -50%);
+    object-fit: cover;
+    object-position: 50% 50%;
+    display: block;
+  }
+
+  .experience__journey-overlay {
     position: absolute;
     inset: 0;
   }

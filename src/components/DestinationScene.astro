@@ -36,9 +36,14 @@ const finalLine = getDestinationFinalLine(addressing);
       ))}
       <p class="destination__final">{finalLine}</p>
     </div>
-    <p class="destination__cta destination__cta--primary" data-destination-part="cta-primary" data-action="next-destination-step">
+    <button
+      type="button"
+      class="destination__cta destination__cta--primary"
+      data-destination-part="cta-primary"
+      data-action="go-to-journey"
+    >
       {sceneDestination.ctaPrimary}
-    </p>
+    </button>
     <p class="destination__cta destination__cta--secondary" data-destination-part="cta-secondary" data-action="show-trip-info">
       {sceneDestination.ctaSecondary}
     </p>
@@ -220,6 +225,22 @@ const finalLine = getDestinationFinalLine(addressing);
   }
 
   .destination__cta--primary {
+    /* Now a real <button> (was a plain <p>) so it can trigger the
+       journey transition -- reset to look identical to the old
+       paragraph: no border/background/padding, same cursor affordance
+       the rest of the experience's controls use. .destination__content
+       already uses align-items: flex-start, so no extra width is needed
+       to keep it shrink-wrapped to its own text (see .destination__cta's
+       own comment above). */
+    display: block;
+    background: none;
+    border: none;
+    padding: 0;
+    text-align: left;
+    cursor: pointer;
+    font: inherit;
+    letter-spacing: inherit;
+    text-transform: inherit;
     margin-top: 14px;
     color: var(--color-accent);
   }
