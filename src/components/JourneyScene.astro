@@ -1,9 +1,9 @@
 ---
-import { sceneJourney, getJourneyBodyLine } from '../data/sceneJourney';
+import { sceneJourney, getJourneyIntroLine, getJourneyBodyLine } from '../data/sceneJourney';
 import type { Guest } from '../data/guests';
 
 interface Props {
-  /** Drives the second block ("...contigo..." / "...con ustedes..."). */
+  /** Drives the first and second blocks ("...invitarte.../...invitarlos...", "...contigo..." / "...con ustedes..."). */
   addressing?: Guest['addressing'];
 }
 
@@ -12,10 +12,11 @@ interface Props {
 // real guest.addressing through (same convention as MemoryScene/DestinationScene).
 const { addressing = 'plural' } = Astro.props;
 
+const introLine = getJourneyIntroLine(addressing);
 const bodyLine = getJourneyBodyLine(addressing);
 ---
 
-<div class="journey" data-scene-panel-content aria-label={sceneJourney.intro}>
+<div class="journey" data-scene-panel-content aria-label={introLine}>
   <button type="button" class="journey__back" data-action="back-to-destination" aria-label={sceneJourney.backLabel}>
     <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
       <path d="M15 5 L8 12 L15 19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
@@ -26,7 +27,7 @@ const bodyLine = getJourneyBodyLine(addressing);
   <div class="journey__content">
     <h2 class="journey__intro" data-scene-heading data-journey-part="intro" tabindex="-1">
       <span class="journey__halo" aria-hidden="true"></span>
-      {sceneJourney.intro}
+      {introLine}
     </h2>
     <p class="journey__body" data-journey-part="body">
       <span class="journey__halo" aria-hidden="true"></span>
@@ -36,20 +37,22 @@ const bodyLine = getJourneyBodyLine(addressing);
       <span class="journey__halo" aria-hidden="true"></span>
       {sceneJourney.closing}
     </p>
-    <p
-      class="journey__cta journey__cta--primary"
-      data-journey-part="cta-primary"
-      data-action="journey-cta-primary"
-    >
-      {sceneJourney.ctaPrimary}
-    </p>
-    <p
-      class="journey__cta journey__cta--secondary"
-      data-journey-part="cta-secondary"
-      data-action="journey-cta-secondary"
-    >
-      {sceneJourney.ctaSecondary}
-    </p>
+    <div class="journey__cta-group">
+      <p
+        class="journey__cta journey__cta--primary"
+        data-journey-part="cta-primary"
+        data-action="journey-cta-primary"
+      >
+        {sceneJourney.ctaPrimary}
+      </p>
+      <p
+        class="journey__cta journey__cta--secondary"
+        data-journey-part="cta-secondary"
+        data-action="journey-cta-secondary"
+      >
+        {sceneJourney.ctaSecondary}
+      </p>
+    </div>
   </div>
 </div>
 
@@ -254,11 +257,26 @@ const bodyLine = getJourneyBodyLine(addressing);
     background: radial-gradient(ellipse at center, rgba(255, 254, 248, 1), rgba(255, 254, 248, 0) 80%);
   }
 
+  /*
+    CTA group -- pulled clearly away from the narrative block above (was
+    18px flex-gap + 16px margin-top = 34px total; now 18px flex-gap +
+    56px margin-top = 74px total, +40px) so the two actions read as a
+    distinct, separate gesture rather than a continuation of "antes del
+    'sí', está el viaje." Position/spacing only: text, typography, halos
+    and the primary/secondary hierarchy are all unchanged.
+  */
+  .journey__cta-group {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 22px;
+    margin-top: 56px;
+  }
+
   /* Dominant over the secondary CTA, as specified -- larger, in the
      accent ink, with the same arrow suffix pattern used for every other
      primary CTA in the experience. */
   .journey__cta--primary {
-    margin-top: 16px;
     font-size: 0.92rem;
     color: var(--color-accent);
   }

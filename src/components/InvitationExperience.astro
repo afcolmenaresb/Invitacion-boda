@@ -1858,6 +1858,13 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
     object-fit: cover;
     object-position: 50% 50%;
     display: block;
+    /* Explicit, no-op guarantee: nothing in this file applies a filter,
+       blend mode or semi-transparent scrim over the video anywhere
+       (audited -- no such rule exists) -- legibility comes entirely from
+       the local ivory halos behind the text (see JourneyScene.astro's
+       own .journey__halo/.journey__cta::before), never from darkening
+       the footage itself. */
+    filter: none;
   }
 
   .experience__journey-overlay {

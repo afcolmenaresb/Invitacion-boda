@@ -7,7 +7,11 @@ import type { Guest } from './guests';
  * animation script -- same convention as sceneMemory.ts/sceneDestination.ts.
  */
 export const sceneJourney = {
-  intro: 'No queremos invitarte solamente a nuestra boda.',
+  // The first block depends on Guest.addressing too -- see getJourneyIntroLine.
+  intro: {
+    singular: 'No queremos invitarte solamente a nuestra boda.',
+    plural: 'No queremos invitarlos solamente a nuestra boda.',
+  },
   // The second block depends on Guest.addressing -- see getJourneyBodyLine.
   body: {
     singular: 'Queremos compartir contigo unos días que merezcan ser recordados.',
@@ -19,6 +23,11 @@ export const sceneJourney = {
   backLabel: 'Volver al destino',
   backVisibleLabel: 'Destino',
 };
+
+/** Derives JourneyScene's dynamic first block from Guest.addressing alone. */
+export function getJourneyIntroLine(addressing: Guest['addressing']): string {
+  return sceneJourney.intro[addressing];
+}
 
 /** Derives JourneyScene's dynamic second block from Guest.addressing alone. */
 export function getJourneyBodyLine(addressing: Guest['addressing']): string {
