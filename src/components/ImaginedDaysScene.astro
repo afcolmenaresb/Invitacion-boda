@@ -191,17 +191,18 @@ const closingLines = sceneImaginedDays.closing.split('\n');
     font-weight: 400;
     font-size: 1.3rem;
     line-height: 1.55;
-    color: #4a3f35;
+    color: #000;
     opacity: 0;
     transform: translateY(8px);
   }
 
   /*
     The closing statement -- upright (not italic, unlike the memories
-    above), the accent ink, and deliberately the largest text in the
-    scene: "debe permanecer más tiempo y tener mayor peso visual" than the
-    memories. Unlike them it never fades back out (plain transition, not
-    an animation) -- it settles and stays.
+    above), and deliberately the largest text in the scene: "debe
+    permanecer más tiempo y tener mayor peso visual" than the memories.
+    Unlike them it never fades back out (plain transition, not an
+    animation) -- it settles and stays. Same black ink as the memories
+    above, per spec (all of page 5's narrative text reads in black).
   */
   .imagined__closing {
     position: relative;
@@ -211,7 +212,7 @@ const closingLines = sceneImaginedDays.closing.split('\n');
     font-weight: 400;
     font-size: 1.55rem;
     line-height: 1.42;
-    color: var(--color-accent);
+    color: #000;
     opacity: 0;
     transform: translateY(8px);
   }
@@ -279,10 +280,10 @@ const closingLines = sceneImaginedDays.closing.split('\n');
       desvanecen", never all three at once. Delays are chained so each
       one starts only once the previous has fully finished (plus a small
       breathing gap), all measured from is-imagined-revealing itself
-      being added -- which only happens ~1.5s *after* transition5.mp4 has
-      already ended and frozen on its last frame (see
-      runImaginedVideoAndReveal's own comment), never while it's still
-      playing.
+      being added -- which happens once transition5.mp4 reaches roughly
+      its own halfway point (see runImaginedVideoAndReveal's own
+      comment), over the still-playing video; the fade-in/hold/fade-out
+      rhythm below is unchanged, only its start moved earlier.
     */
     :global(.experience.is-imagined-revealing) .imagined__memory--1 {
       animation: imaginedMemoryShort 8000ms ease 0ms 1 both;
