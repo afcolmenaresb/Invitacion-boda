@@ -3,6 +3,7 @@ import Cover from './Cover.astro';
 import MemoryScene from './MemoryScene.astro';
 import DestinationScene from './DestinationScene.astro';
 import JourneyScene from './JourneyScene.astro';
+import ImaginedDaysScene from './ImaginedDaysScene.astro';
 import type { Guest } from '../data/guests';
 
 interface Props {
@@ -16,6 +17,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 const videoSrc = `${base}/videos/memory-transition2.mp4`;
 const videoSrc2 = `${base}/videos/memory-transition3.mp4`;
 const videoSrc3 = `${base}/videos/memory-transition4.mp4`;
+const videoSrc4 = `${base}/videos/memory-transition5.mp4`;
 // The exact join frame shared by both transition videos -- the last frame
 // of memory-transition2.mp4 and the first frame of memory-transition3.mp4
 // -- so it doubles as MemoryScene's own static background, matching
@@ -174,6 +176,41 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
       </div>
     </div>
   </section>
+
+  <!--
+    Imagined-days stage (page 5, "Imagina esos días"): same fixed 390x844
+    logical canvas as everything above. Unlike the destination/journey
+    stages -- where the target scene's own text appears *on top of* the
+    still-playing video -- this one is deliberately paced slower: the
+    video plays out fully first, freezes on its own last frame exactly
+    like the journey stage does, and only *after* that (plus a further
+    ~1.5s pause) does ImaginedDaysScene's text begin appearing over the
+    frozen frame (see runImaginedVideoAndReveal's own comment for why).
+    No static fallback image exists for this scene either -- same
+    reasoning as the journey stage, see its own comment above. The
+    video's own src is intentionally left unset here (data-video-src
+    only) and assigned lazily once JourneyScene is actually reached, same
+    convention as ensureJourneyAssets.
+  -->
+  <section class="experience__scene experience__scene--imagined" data-scene-panel="imagined" inert>
+    <div class="experience__imagined-frame" data-bg-src={destinationTextureSrc}>
+      <div class="experience__imagined-canvas">
+        <video
+          class="experience__imagined-video"
+          data-video-src={videoSrc4}
+          playsinline
+          preload="none"
+          aria-hidden="true"
+          tabindex="-1"
+          disablepictureinpicture
+          disableremoteplayback
+        ></video>
+        <div class="experience__imagined-overlay">
+          <ImaginedDaysScene />
+        </div>
+      </div>
+    </div>
+  </section>
 </div>
 
 <script>
@@ -212,6 +249,9 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
     const journeyPanel = root.querySelector<HTMLElement>('[data-scene-panel="journey"]');
     const journeyFrameEl = root.querySelector<HTMLElement>('.experience__journey-frame');
     const journeyVideoEl = root.querySelector<HTMLVideoElement>('.experience__journey-video');
+    const imaginedPanel = root.querySelector<HTMLElement>('[data-scene-panel="imagined"]');
+    const imaginedFrameEl = root.querySelector<HTMLElement>('.experience__imagined-frame');
+    const imaginedVideoEl = root.querySelector<HTMLVideoElement>('.experience__imagined-video');
 
     // Forward (cover -> memory) phase timings.
     const PHASE_A_MS = 380; // cover's own text (name/dedication/signature/location/cta) fades out
@@ -257,6 +297,18 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
     // own back timings are untouched.
     const JOURNEY_BACKWARD_DURATION = 3850;
 
+    // Forward (journey -> imagined days) phase timings. Unlike
+    // destination/journey, ImaginedDaysScene's own content does NOT
+    // start appearing while the video plays -- it waits until the video
+    // has actually ended and frozen, plus a further deliberate pause
+    // (IMAGINED_TEXT_DELAY_MS), before is-imagined-revealing is added
+    // (see runImaginedVideoAndReveal). Its own per-part fade-in/keyframe
+    // timings are pure CSS (see ImaginedDaysScene.astro), measured from
+    // that same moment.
+    const IMAGINED_VIDEO_HARD_CAP_MS = 14000; // transition5.mp4 runs ~10s; generous safety net
+    const IMAGINED_TEXT_DELAY_MS = 1500; // "espera aprox. 1.5s antes del primer texto" -- after the video has already ended (or, in the fallback paths, after settling on the plain background)
+    const IMAGINED_SETTLE_MS = 200;
+
     // MemoryScene's own content choreography, once Fase D begins -- title
     // first and longest, then the four secondary lines as one continuous
     // gesture, a short pause, the dynamic closing line, then a plain CTA
@@ -284,17 +336,19 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
     // rather than a hard cut.
     const MEMORY_PHASE_SETTLE_MS = 250;
 
-    type SceneName = 'cover' | 'memory' | 'destination' | 'journey';
+    type SceneName = 'cover' | 'memory' | 'destination' | 'journey' | 'imagined';
     // Single source of truth for scene order/hash -- both goToScene's
-    // adjacency check (only cover<->memory, memory<->destination and
-    // destination<->journey have a defined animated path) and the hash
-    // routing below read from this instead of hand-repeating the mapping.
-    const SCENE_ORDER: SceneName[] = ['cover', 'memory', 'destination', 'journey'];
+    // adjacency check (only cover<->memory, memory<->destination,
+    // destination<->journey and journey<->imagined have a defined
+    // animated path) and the hash routing below read from this instead of
+    // hand-repeating the mapping.
+    const SCENE_ORDER: SceneName[] = ['cover', 'memory', 'destination', 'journey', 'imagined'];
     const SCENE_HASH: Record<SceneName, string> = {
       cover: '#portada',
       memory: '#recuerdo',
       destination: '#destino',
       journey: '#viaje',
+      imagined: '#imagina',
     };
     const sceneIndex = (scene: SceneName) => SCENE_ORDER.indexOf(scene);
 
@@ -305,6 +359,8 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
     let destinationVideoSrcAssigned = false;
     let journeyAssetsRequested = false;
     let journeyVideoSrcAssigned = false;
+    let imaginedAssetsRequested = false;
+    let imaginedVideoSrcAssigned = false;
 
     function clearCompletionTimer() {
       if (completionTimer !== null) {
@@ -361,6 +417,16 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
       journeyVideoEl.pause();
       try {
         journeyVideoEl.currentTime = 0;
+      } catch {
+        // See resetVideo above -- harmless if metadata isn't loaded yet.
+      }
+    }
+
+    function resetImaginedVideo() {
+      if (!imaginedVideoEl) return;
+      imaginedVideoEl.pause();
+      try {
+        imaginedVideoEl.currentTime = 0;
       } catch {
         // See resetVideo above -- harmless if metadata isn't loaded yet.
       }
@@ -427,6 +493,32 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
           journeyVideoEl.preload = 'auto';
           journeyVideoEl.src = src;
           journeyVideoSrcAssigned = true;
+        }
+      }
+    }
+
+    // Same idea as ensureJourneyAssets, one scene later: lazily assigns
+    // transition5.mp4 once JourneyScene is actually reached, so the
+    // imagined-days video has a real head start without ever competing
+    // with the cover's own load. No image asset to assign here -- none
+    // exists yet for this scene either.
+    function ensureImaginedAssets() {
+      if (imaginedAssetsRequested) return;
+      imaginedAssetsRequested = true;
+
+      const frameSrc = imaginedFrameEl?.dataset.bgSrc;
+      if (imaginedFrameEl && frameSrc) {
+        imaginedFrameEl.style.backgroundImage = `url('${frameSrc}')`;
+      }
+
+      // Same reduced-motion exception as the other transition videos:
+      // never loaded as an active part of the experience for those users.
+      if (imaginedVideoEl && !prefersReducedMotion()) {
+        const src = imaginedVideoEl.dataset.videoSrc;
+        if (src) {
+          imaginedVideoEl.preload = 'auto';
+          imaginedVideoEl.src = src;
+          imaginedVideoSrcAssigned = true;
         }
       }
     }
@@ -506,6 +598,7 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
       if (coverPanel) coverPanel.toggleAttribute('inert', scene !== 'cover');
       if (destinationPanel) destinationPanel.toggleAttribute('inert', scene !== 'destination');
       if (journeyPanel) journeyPanel.toggleAttribute('inert', scene !== 'journey');
+      if (imaginedPanel) imaginedPanel.toggleAttribute('inert', scene !== 'imagined');
     }
 
     function focusSceneHeading(scene: SceneName) {
@@ -516,7 +609,9 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
             ? destinationPanel?.querySelector<HTMLElement>('[data-scene-heading]')
             : scene === 'journey'
               ? journeyPanel?.querySelector<HTMLElement>('[data-scene-heading]')
-              : coverPanel?.querySelector<HTMLElement>('.cover__cta');
+              : scene === 'imagined'
+                ? imaginedPanel?.querySelector<HTMLElement>('[data-scene-heading]')
+                : coverPanel?.querySelector<HTMLElement>('.cover__cta');
       target?.focus({ preventScroll: true });
     }
 
@@ -529,22 +624,32 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
         'is-ink-revealing',
         'is-memory-cta-ready',
         'is-destination-revealing',
-        'is-journey-revealing'
+        'is-journey-revealing',
+        'is-imagined-revealing'
       );
-      // memory, destination and journey all sit "past" the cover, so it
-      // stays fully receded for any of them; destination additionally
-      // sits past memory, and journey past destination -- each stays
-      // fully painted (is-revealing-*) but visually receded behind the
-      // next one (is-*-receded) -- same convention as the cover/memory
-      // pair, repeated one level deeper each time.
+      // memory, destination, journey and imagined all sit "past" the
+      // cover, so it stays fully receded for any of them; each further
+      // scene sits past the previous one too -- each stays fully painted
+      // (is-revealing-*) but visually receded behind the next one
+      // (is-*-receded) -- same convention as the cover/memory pair,
+      // repeated one level deeper each time.
       root!.classList.toggle('is-cover-receded', scene !== 'cover');
       root!.classList.toggle('is-revealing-memory', scene !== 'cover');
-      root!.classList.toggle('is-memory-receded', scene === 'destination' || scene === 'journey');
-      root!.classList.toggle('is-revealing-destination', scene === 'destination' || scene === 'journey');
-      root!.classList.toggle('is-destination-revealing', scene === 'destination' || scene === 'journey');
-      root!.classList.toggle('is-destination-receded', scene === 'journey');
-      root!.classList.toggle('is-revealing-journey', scene === 'journey');
-      root!.classList.toggle('is-journey-revealing', scene === 'journey');
+      root!.classList.toggle('is-memory-receded', scene === 'destination' || scene === 'journey' || scene === 'imagined');
+      root!.classList.toggle(
+        'is-revealing-destination',
+        scene === 'destination' || scene === 'journey' || scene === 'imagined'
+      );
+      root!.classList.toggle(
+        'is-destination-revealing',
+        scene === 'destination' || scene === 'journey' || scene === 'imagined'
+      );
+      root!.classList.toggle('is-destination-receded', scene === 'journey' || scene === 'imagined');
+      root!.classList.toggle('is-revealing-journey', scene === 'journey' || scene === 'imagined');
+      root!.classList.toggle('is-journey-revealing', scene === 'journey' || scene === 'imagined');
+      root!.classList.toggle('is-journey-receded', scene === 'imagined');
+      root!.classList.toggle('is-revealing-imagined', scene === 'imagined');
+      root!.classList.toggle('is-imagined-revealing', scene === 'imagined');
       // Defensive: these are only ever set (and cleared) inside
       // runVideoAndReveal's own video->MemoryScene handoff, but an instant
       // scene switch should never risk inheriting a leftover inline value.
@@ -568,12 +673,22 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
         journeyVideoEl.style.opacity = '0';
       }
       resetJourneyVideo();
-      // A direct/instant load landing on memory, destination or journey
-      // should still get the same lazy head start on each scene's own
-      // media as the animated path -- see ensureDestinationAssets/
-      // ensureJourneyAssets.
-      if (scene === 'memory' || scene === 'destination' || scene === 'journey') ensureDestinationAssets();
-      if (scene === 'destination' || scene === 'journey') ensureJourneyAssets();
+      if (imaginedVideoEl) {
+        // Same reasoning as destinationVideoEl/journeyVideoEl above --
+        // instant loads never play transition5.mp4.
+        imaginedVideoEl.style.transition = 'none';
+        imaginedVideoEl.style.opacity = '0';
+      }
+      resetImaginedVideo();
+      // A direct/instant load landing on memory, destination, journey or
+      // imagined should still get the same lazy head start on each
+      // scene's own media as the animated path -- see
+      // ensureDestinationAssets/ensureJourneyAssets/ensureImaginedAssets.
+      if (scene === 'memory' || scene === 'destination' || scene === 'journey' || scene === 'imagined') {
+        ensureDestinationAssets();
+      }
+      if (scene === 'destination' || scene === 'journey' || scene === 'imagined') ensureJourneyAssets();
+      if (scene === 'journey' || scene === 'imagined') ensureImaginedAssets();
       void root!.offsetWidth;
       requestAnimationFrame(() => {
         root?.classList.remove('is-instant');
@@ -916,6 +1031,11 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
     async function runJourneyVideoAndReveal() {
       ensureJourneyAssets();
 
+      // JourneyScene is reached -- give transition5.mp4 a head start now,
+      // well before its own "Imagina esos días" CTA can realistically be
+      // reached/clicked (see ensureImaginedAssets).
+      ensureImaginedAssets();
+
       let ready = false;
       if (journeyVideoEl && journeyVideoSrcAssigned) {
         try {
@@ -998,6 +1118,100 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
       }, JOURNEY_SETTLE_MS);
     }
 
+    // Fase for the journey -> imagined-days forward transition: journey
+    // recedes (is-journey-receded) while the imagined-days panel becomes
+    // visible (is-revealing-imagined) -- same crossfade principle as the
+    // destination->journey pair, one scene deeper. Unlike every scene
+    // before it, is-imagined-revealing (the clock ImaginedDaysScene's own
+    // per-part CSS timings/keyframes are measured against) is deliberately
+    // NOT added at the same moment as the crossfade/video start: per
+    // spec, the video plays out in full first, silently, with no text
+    // over it, and only once it has actually ended (frozen on its last
+    // frame) plus a further ~1.5s pause does the first phrase begin
+    // appearing -- see the IMAGINED_TEXT_DELAY_MS sleep below.
+    async function runImaginedVideoAndReveal() {
+      ensureImaginedAssets();
+
+      let ready = false;
+      if (imaginedVideoEl && imaginedVideoSrcAssigned) {
+        try {
+          imaginedVideoEl.currentTime = 0;
+        } catch {
+          // ignore -- see resetImaginedVideo
+        }
+        imaginedVideoEl.style.transition = '';
+        imaginedVideoEl.style.opacity = '';
+        ready = await waitForVideoReady(imaginedVideoEl, VIDEO_READY_TIMEOUT_MS);
+      }
+
+      // Same paint-before-reveal principle as the journey stage's own
+      // crossfade above -- only start journey receding/imagined-days
+      // revealing once the video is confirmed ready (or the bounded wait
+      // gave up), never earlier, so JourneyScene never finishes fading
+      // out before there is a real frame underneath it.
+      root!.classList.add('is-journey-receded', 'is-revealing-imagined');
+
+      let played = false;
+      if (ready && imaginedVideoEl) {
+        try {
+          await imaginedVideoEl.play();
+          played = true;
+        } catch {
+          played = false;
+        }
+      }
+
+      if (played && imaginedVideoEl) {
+        const finishedOk = await waitForVideoOutcome(imaginedVideoEl, IMAGINED_VIDEO_HARD_CAP_MS);
+        if (finishedOk) {
+          // Clean 'ended': same freeze already used for destination/
+          // journey -- do nothing to the video, it stays painted on its
+          // own last frame, paused, currentTime untouched. Only now does
+          // the deliberate pre-text pause begin.
+          await sleep(IMAGINED_TEXT_DELAY_MS);
+        } else {
+          // Error or hard-cap -- no good frame to freeze on and no
+          // fallback image for this scene, so fade the video out to the
+          // plain paper background exactly like journey's own error
+          // branch, then still give the content its own short pause
+          // before revealing (never instant, kept consistent with the
+          // spec's pacing even in the fallback -- and never blocking
+          // navigation indefinitely either).
+          imaginedVideoEl.style.transition = `opacity ${DESTINATION_VIDEO_FADE_MS}ms ease`;
+          void imaginedVideoEl.offsetWidth;
+          imaginedVideoEl.style.opacity = '0';
+          await waitForTransitionEnd(imaginedVideoEl, 'opacity', DESTINATION_VIDEO_FADE_MS + 200);
+          await sleep(IMAGINED_TEXT_DELAY_MS);
+        }
+      } else {
+        // Never played (readiness timeout/error) -- hide the <video>
+        // element itself outright (it never became visible to begin
+        // with), then the same short pause before revealing the content
+        // over the plain background -- the CTA must never leave the user
+        // stuck on JourneyScene just because this video failed.
+        if (imaginedVideoEl) {
+          imaginedVideoEl.style.transition = 'none';
+          imaginedVideoEl.style.opacity = '0';
+        }
+        await sleep(IMAGINED_TEXT_DELAY_MS);
+      }
+
+      // Only now -- video ended and frozen (or the fallback settled),
+      // plus the pause above -- does ImaginedDaysScene's own text
+      // actually start appearing; see that component's own
+      // [data-imagined-part]/[data-imagined-memory] timings, all
+      // measured from this exact moment.
+      root!.classList.add('is-imagined-revealing');
+
+      completionTimer = window.setTimeout(() => {
+        completionTimer = null;
+        currentScene = 'imagined';
+        isTransitioning = false;
+        root!.classList.remove('is-transitioning');
+        focusSceneHeading('imagined');
+      }, IMAGINED_SETTLE_MS);
+    }
+
     function goToScene(scene: SceneName, options: { pushHistory?: boolean } = {}) {
       const { pushHistory = true } = options;
       if (
@@ -1006,7 +1220,8 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
         !coverPanel ||
         !memoryPanel ||
         !destinationPanel ||
-        !journeyPanel
+        !journeyPanel ||
+        !imaginedPanel
       )
         return;
 
@@ -1127,7 +1342,7 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
         return;
       }
 
-      if (scene === 'journey') {
+      if (scene === 'journey' && currentScene !== 'imagined') {
         // Forward (destination -> journey).
         if (reduced) {
           // Reduced motion: never plays transition4.mp4 -- no static
@@ -1158,6 +1373,69 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
         }
 
         runJourneyVideoAndReveal();
+        return;
+      }
+
+      if (scene === 'journey' && currentScene === 'imagined') {
+        // Back (imagined -> journey): same idea -- no video in reverse,
+        // just a short crossfade. JourneyScene's own panel/content were
+        // never cleared (is-revealing-journey stays set the whole time
+        // once first reached, including its frozen last video frame), so
+        // it simply reappears as-is.
+        root!.classList.remove('is-revealing-imagined', 'is-imagined-revealing', 'is-journey-receded');
+        const duration = reduced ? REDUCED_MOTION_DURATION : BACKWARD_DURATION;
+        completionTimer = window.setTimeout(() => {
+          completionTimer = null;
+          // Only reset (and clear the frozen-frame opacity) now that the
+          // imagined-days panel's own opacity transition (removed above)
+          // has had time to finish and the scene is no longer visible --
+          // same reasoning as the destination->memory/journey->destination
+          // back branches above.
+          resetImaginedVideo();
+          if (imaginedVideoEl) {
+            imaginedVideoEl.style.transition = '';
+            imaginedVideoEl.style.opacity = '';
+          }
+          currentScene = scene;
+          isTransitioning = false;
+          root!.classList.remove('is-transitioning');
+          focusSceneHeading(scene);
+        }, duration);
+        return;
+      }
+
+      if (scene === 'imagined') {
+        // Forward (journey -> imagined days).
+        if (reduced) {
+          // Reduced motion: never plays transition5.mp4 -- no static
+          // fallback image exists for this scene, so the plain paper
+          // background (the imagined frame's own background-color) shows
+          // directly, with a short crossfade into it; ImaginedDaysScene's
+          // own content fades in together, uniformly, no per-part
+          // stagger and no fade-in/fade-out memory cycling (see its
+          // is-reduced-motion CSS) -- same convention as the previous
+          // scenes' reduced-motion paths, no parallel architecture
+          // invented for this.
+          ensureImaginedAssets();
+          if (imaginedVideoEl) {
+            // Never loaded/assigned a src for reduced motion (see
+            // ensureImaginedAssets) -- hidden outright so an empty
+            // <video> box can never paint over the background.
+            imaginedVideoEl.style.transition = 'none';
+            imaginedVideoEl.style.opacity = '0';
+          }
+          root!.classList.add('is-journey-receded', 'is-revealing-imagined', 'is-imagined-revealing');
+          completionTimer = window.setTimeout(() => {
+            completionTimer = null;
+            currentScene = scene;
+            isTransitioning = false;
+            root!.classList.remove('is-transitioning');
+            focusSceneHeading(scene);
+          }, REDUCED_MOTION_DURATION);
+          return;
+        }
+
+        runImaginedVideoAndReveal();
         return;
       }
 
@@ -1225,6 +1503,8 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
       const backToMemoryTrigger = target.closest<HTMLElement>('[data-action="back-to-memory"]');
       const journeyTrigger = target.closest<HTMLElement>('[data-action="go-to-journey"]');
       const backToDestinationTrigger = target.closest<HTMLElement>('[data-action="back-to-destination"]');
+      const imaginedTrigger = target.closest<HTMLElement>('[data-action="go-to-imagined"]');
+      const backToJourneyTrigger = target.closest<HTMLElement>('[data-action="back-to-journey"]');
 
       if (forwardTrigger && root!.contains(forwardTrigger)) {
         event.preventDefault();
@@ -1244,10 +1524,17 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
       } else if (backToDestinationTrigger && root!.contains(backToDestinationTrigger)) {
         event.preventDefault();
         goToScene('destination');
+      } else if (imaginedTrigger && root!.contains(imaginedTrigger)) {
+        event.preventDefault();
+        goToScene('imagined');
+      } else if (backToJourneyTrigger && root!.contains(backToJourneyTrigger)) {
+        event.preventDefault();
+        goToScene('journey');
       }
     });
 
     function sceneFromHash(hash: string): SceneName {
+      if (hash === '#imagina') return 'imagined';
       if (hash === '#viaje') return 'journey';
       if (hash === '#destino') return 'destination';
       if (hash === '#recuerdo') return 'memory';
@@ -1925,6 +2212,152 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
   }
 
   .experience__journey-overlay {
+    position: absolute;
+    inset: 0;
+  }
+
+  /*
+    Imagined-days scene (page 5) -- additive only, same convention as the
+    journey block above, one level deeper: sits below journey in the
+    stacking order (z-index -2, journey -1, destination 0, memory 1, cover
+    2), so the journey -> imagined crossfade is the same "panel above
+    fades out, panel below is already there" pattern, repeated once more.
+  */
+  .experience__scene--imagined {
+    z-index: -2;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .experience[data-scene='imagined'] .experience__scene--imagined {
+    pointer-events: auto;
+  }
+
+  .experience[data-scene='imagined'] .experience__scene--cover,
+  .experience[data-scene='imagined'] .experience__scene--memory,
+  .experience[data-scene='imagined'] .experience__scene--destination,
+  .experience[data-scene='imagined'] .experience__scene--journey {
+    pointer-events: none;
+  }
+
+  .experience[data-scene='imagined']:not(.is-transitioning) .experience__scene--cover,
+  .experience[data-scene='imagined']:not(.is-transitioning) .experience__scene--memory,
+  .experience[data-scene='imagined']:not(.is-transitioning) .experience__scene--destination,
+  .experience[data-scene='imagined']:not(.is-transitioning) .experience__scene--journey {
+    visibility: hidden;
+  }
+
+  .experience.is-transitioning :global(.journey__cta--primary),
+  .experience.is-transitioning :global([data-action='back-to-journey']) {
+    pointer-events: none;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .experience:not(.is-instant) .experience__scene--imagined {
+      transition: opacity 360ms ease;
+    }
+
+    .experience.is-revealing-imagined .experience__scene--imagined {
+      opacity: 1;
+    }
+
+    /* Journey recedes while .is-journey-receded is present -- defined
+       after the existing ".is-revealing-journey .experience__scene--journey
+       {opacity:1}" rule above so it wins on the (otherwise equal)
+       specificity, same trick as .is-destination-receded overriding
+       destination's own opacity. Plain baseline duration (matches
+       destination's own back/forward panel fade) -- no bespoke extended
+       timing invented here, per "mantén el patrón existente". */
+    .experience.is-journey-receded .experience__scene--journey {
+      transition: opacity 360ms ease;
+      opacity: 0;
+    }
+
+    .experience[data-transition-direction='back'].is-transitioning .experience__scene--imagined {
+      transition-duration: 850ms;
+    }
+  }
+
+  .experience.is-reduced-motion .experience__scene--imagined {
+    transition: opacity 260ms ease !important;
+    transform: none !important;
+  }
+
+  .experience.is-reduced-motion.is-revealing-imagined .experience__scene--imagined {
+    opacity: 1;
+  }
+
+  .experience.is-reduced-motion[data-scene='imagined'] .experience__scene--journey {
+    opacity: 0;
+  }
+
+  .experience.is-instant .experience__scene--imagined,
+  .experience.is-instant .experience__imagined-video,
+  .experience.is-instant :global(.journey__cta--primary) {
+    transition: none !important;
+  }
+
+  /*
+    Imagined-days stage -- same fixed 390x844 canvas convention as the
+    journey stage above. Same freeze-on-'ended' principle too (see
+    runImaginedVideoAndReveal), just with its own text deliberately
+    delayed until well after that freeze -- see ImaginedDaysScene.astro's
+    own comment. The plain paper background-color on
+    .experience__imagined-frame is what shows through only if the video
+    never plays at all (readiness/error) or for reduced motion.
+  */
+  .experience__imagined-frame {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background-color: var(--color-bg);
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-position: 60% top;
+  }
+
+  .experience__imagined-canvas {
+    position: relative;
+    width: 390px;
+    height: 844px;
+    flex-shrink: 0;
+    overflow: hidden;
+    transform-origin: center center;
+    transform: scale(var(--cover-scale, 1));
+  }
+
+  :global(html.is-fill-viewport) .experience__imagined-canvas {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(var(--cover-scale-x, 1), var(--cover-scale-y, 1));
+  }
+
+  /* Same 1% overscan as .experience__video above, and for the same reason
+     -- a fractional --cover-scale can otherwise leave a hairline seam on
+     one edge exposing whatever sits behind the video's own GPU layer. */
+  .experience__imagined-video {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 101%;
+    height: 101%;
+    transform: translate(-50%, -50%);
+    object-fit: cover;
+    object-position: 50% 50%;
+    display: block;
+    /* Same explicit, no-op guarantee as .experience__journey-video above:
+       nothing here applies a filter, blend mode or semi-transparent scrim
+       over the video -- legibility comes entirely from the local ivory
+       halos behind the text (see ImaginedDaysScene.astro's own
+       .imagined__halo), never from darkening the footage itself. */
+    filter: none;
+  }
+
+  .experience__imagined-overlay {
     position: absolute;
     inset: 0;
   }
