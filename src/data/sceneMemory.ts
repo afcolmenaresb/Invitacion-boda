@@ -16,7 +16,7 @@ export const memoryScene = {
   body: [
     'Una tarde tibia en Bahía.',
     'La arena bajo los pies.',
-    'Las personas que amamos reunidas.',
+    'Las personas que amamos.',
     'Nosotros diciendo que sí.',
   ],
   // The final line depends on Guest.addressing -- see getMemorySceneFinalLine.

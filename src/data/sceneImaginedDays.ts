@@ -1,3 +1,5 @@
+import type { Guest } from './guests';
+
 /**
  * Single source of truth for the fifth scene's copy ("imagina esos días",
  * reached from JourneyScene's own primary CTA). ImaginedDaysScene.astro
@@ -5,12 +7,17 @@
  * InvitationExperience.astro or any animation script -- same convention as
  * sceneMemory.ts/sceneDestination.ts/sceneJourney.ts.
  *
- * No Guest.addressing dependency here -- unlike the previous three scenes,
- * none of this copy singles out the guest directly (it's all imagined,
- * shared moments), so there is no singular/plural variant to derive.
+ * The eyebrow depends on Guest.addressing (same convention as
+ * sceneJourney.ts's own ctaPrimary) -- see getImaginedDaysEyebrow. Nothing
+ * else here singles out the guest directly (it's all imagined, shared
+ * moments), so there is no other singular/plural variant to derive.
  */
 export const sceneImaginedDays = {
-  eyebrow: 'Imagina esos días',
+  // The eyebrow depends on Guest.addressing too -- see getImaginedDaysEyebrow.
+  eyebrow: {
+    singular: 'Imagina esos días',
+    plural: 'Imaginen esos días',
+  },
   // Shown one at a time, each fading in, holding, then fading out again --
   // never all three at once (see ImaginedDaysScene's own [data-imagined-
   // memory] keyframe animations). A '\n' inside an entry is a deliberate,
@@ -27,3 +34,8 @@ export const sceneImaginedDays = {
   backLabel: 'Volver al viaje',
   backVisibleLabel: 'Viaje',
 };
+
+/** Derives ImaginedDaysScene's dynamic eyebrow from Guest.addressing alone. */
+export function getImaginedDaysEyebrow(addressing: Guest['addressing']): string {
+  return sceneImaginedDays.eyebrow[addressing];
+}

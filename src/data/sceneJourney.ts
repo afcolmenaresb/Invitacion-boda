@@ -18,7 +18,11 @@ export const sceneJourney = {
     plural: 'Queremos compartir con ustedes unos días que merezcan ser recordados.',
   },
   closing: 'Antes del “sí”, está el viaje.',
-  ctaPrimary: 'Imagina esos días',
+  // The primary CTA depends on Guest.addressing too -- see getJourneyCtaPrimary.
+  ctaPrimary: {
+    singular: 'Imagina esos días',
+    plural: 'Imaginen esos días',
+  },
   ctaSecondary: 'Un poco de nosotros',
   backLabel: 'Volver al destino',
   backVisibleLabel: 'Destino',
@@ -32,4 +36,9 @@ export function getJourneyIntroLine(addressing: Guest['addressing']): string {
 /** Derives JourneyScene's dynamic second block from Guest.addressing alone. */
 export function getJourneyBodyLine(addressing: Guest['addressing']): string {
   return sceneJourney.body[addressing];
+}
+
+/** Derives JourneyScene's dynamic primary CTA from Guest.addressing alone. */
+export function getJourneyCtaPrimary(addressing: Guest['addressing']): string {
+  return sceneJourney.ctaPrimary[addressing];
 }
