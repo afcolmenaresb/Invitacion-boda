@@ -1,11 +1,24 @@
 ---
-import { sceneImaginedDays } from '../data/sceneImaginedDays';
+import { sceneImaginedDays, getImaginedDaysEyebrow } from '../data/sceneImaginedDays';
+import type { Guest } from '../data/guests';
 
+interface Props {
+  /** Drives the eyebrow ("Imagina esos días" / "Imaginen esos días"). */
+  addressing?: Guest['addressing'];
+}
+
+// 'plural' is the safer neutral default if this were ever rendered without
+// a guest context -- in practice InvitationExperience always passes the
+// real guest.addressing through (same convention as JourneyScene/MemoryScene/
+// DestinationScene).
+const { addressing = 'plural' } = Astro.props;
+
+const eyebrow = getImaginedDaysEyebrow(addressing);
 const memoryLines = sceneImaginedDays.memories.map((m) => m.split('\n'));
 const closingLines = sceneImaginedDays.closing.split('\n');
 ---
 
-<div class="imagined" data-scene-panel-content aria-label={sceneImaginedDays.eyebrow}>
+<div class="imagined" data-scene-panel-content aria-label={eyebrow}>
   <button type="button" class="imagined__back" data-action="back-to-journey" aria-label={sceneImaginedDays.backLabel}>
     <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
       <path d="M15 5 L8 12 L15 19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
@@ -16,7 +29,7 @@ const closingLines = sceneImaginedDays.closing.split('\n');
   <div class="imagined__content">
     <p class="imagined__eyebrow" data-scene-heading data-imagined-part="eyebrow" tabindex="-1">
       <span class="imagined__halo" aria-hidden="true"></span>
-      {sceneImaginedDays.eyebrow}
+      {eyebrow}
     </p>
 
     <!--
@@ -261,44 +274,44 @@ const closingLines = sceneImaginedDays.closing.split('\n');
     }
 
     :global(.experience.is-imagined-revealing) .imagined__closing {
-      transition: opacity 3000ms ease, transform 3000ms ease;
-      transition-delay: 24400ms;
+      transition: opacity 900ms ease, transform 900ms ease;
+      transition-delay: 6400ms;
       opacity: 1;
       transform: translateY(0);
     }
 
     :global(.experience.is-imagined-revealing) .imagined__cta {
       transition: opacity 1500ms ease, transform 1500ms ease;
-      transition-delay: 28100ms;
+      transition-delay: 8000ms;
       opacity: 1;
       transform: translateY(0);
     }
 
     /*
-      Each memory: fade in slowly, hold long enough to actually read it,
-      fade back out -- "contemplativa, como recuerdos que aparecen y se
-      desvanecen", never all three at once. All measured from
-      is-imagined-revealing itself being added -- which happens 1.5s
-      after transition5.mp4 actually starts playing (see
-      runImaginedVideoAndReveal's own comment), over the still-playing
-      video. The fade-in/hold/fade-out rhythm and each animation's own
-      duration are exactly as before -- only the gap between one phrase
-      and the next was trimmed (by 500ms each) so the sequence keeps
-      moving without a long silent pause between phrases, and starts
-      early enough that it's well underway before the ~10s video ends.
+      Each memory: a much quicker fade in/out and a shorter hold than
+      before -- "haz más rápida la entrada y salida... reduce también el
+      tiempo que cada frase permanece completamente visible" -- chained
+      almost back to back (only a small breathing gap, no long pause), so
+      the whole sequence, including the closing line, has fully appeared
+      by ~6.4-7.3s after is-imagined-revealing is added. Since that class
+      is itself added 1.5s after transition5.mp4 starts playing (see
+      runImaginedVideoAndReveal's own comment), the closing line is fully
+      visible by roughly the video's own 8-9s mark, well before its
+      ~10s natural end -- so it's already there, settled, for the video's
+      last moment rather than racing to catch up after it freezes.
     */
     :global(.experience.is-imagined-revealing) .imagined__memory--1 {
-      animation: imaginedMemoryShort 8000ms ease 0ms 1 both;
+      animation: imaginedMemoryShort 1800ms ease 0ms 1 both;
     }
 
     :global(.experience.is-imagined-revealing) .imagined__memory--2 {
-      animation: imaginedMemoryShort 8000ms ease 7800ms 1 both;
+      animation: imaginedMemoryShort 1800ms ease 1950ms 1 both;
     }
 
-    /* Slightly longer hold -- it's the one two-line phrase, and needs a
-       touch more time to read. */
+    /* Slightly longer -- it's the one two-line phrase, and needs a touch
+       more time to read even at this faster pace. */
     :global(.experience.is-imagined-revealing) .imagined__memory--3 {
-      animation: imaginedMemoryLong 8500ms ease 15600ms 1 both;
+      animation: imaginedMemoryLong 2200ms ease 3900ms 1 both;
     }
   }
 
