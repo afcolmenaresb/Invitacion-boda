@@ -170,6 +170,7 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
           disablepictureinpicture
           disableremoteplayback
         ></video>
+        <div class="experience__journey-veil" aria-hidden="true"></div>
         <div class="experience__journey-overlay">
           <JourneyScene addressing={addressing} />
         </div>
@@ -180,10 +181,10 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
   <!--
     Imagined-days stage (page 5, "Imagina esos días"): same fixed 390x844
     logical canvas as everything above. ImaginedDaysScene's own text
-    begins appearing once transition5.mp4 reaches roughly its halfway
-    point, over the still-playing video, while the video itself keeps
-    playing undisturbed toward its own natural end and freeze on its own
-    last frame (see runImaginedVideoAndReveal's own comment for how). No
+    begins appearing 1.5s after transition5.mp4 actually starts playing,
+    over the still-playing video, while the video itself keeps playing
+    undisturbed toward its own natural end and freeze on its own last
+    frame (see runImaginedVideoAndReveal's own comment for how). No
     static fallback image exists for this scene either -- same reasoning
     as the journey stage, see its own comment above. The video's own src
     is intentionally left unset here (data-video-src only) and assigned
@@ -203,6 +204,7 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
           disablepictureinpicture
           disableremoteplayback
         ></video>
+        <div class="experience__imagined-veil" aria-hidden="true"></div>
         <div class="experience__imagined-overlay">
           <ImaginedDaysScene />
         </div>
@@ -296,16 +298,15 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
     const JOURNEY_BACKWARD_DURATION = 3850;
 
     // Forward (journey -> imagined days) phase timings. Text now starts
-    // appearing once transition5.mp4 reaches roughly its halfway point
-    // (see waitForImaginedHalfway), while the video itself keeps playing
-    // undisturbed at normal speed toward its own natural end and freeze
-    // -- is-imagined-revealing no longer waits for 'ended'. Its own
-    // per-part fade-in/keyframe timings are pure CSS (see
-    // ImaginedDaysScene.astro), measured from that same moment, and are
-    // otherwise unchanged.
+    // appearing 1.5s after transition5.mp4 actually begins playing (not
+    // proportional to its duration, not waiting for it to end), while
+    // the video itself keeps playing undisturbed at normal speed toward
+    // its own natural end and freeze -- is-imagined-revealing no longer
+    // waits for 'ended'. Its own per-part fade-in/keyframe timings are
+    // pure CSS (see ImaginedDaysScene.astro), measured from that same
+    // moment, and are otherwise unchanged.
     const IMAGINED_VIDEO_HARD_CAP_MS = 14000; // transition5.mp4 runs ~10s; generous safety net
-    const IMAGINED_TEXT_DELAY_MS = 1500; // fallback-only pause before revealing when the video never actually played (readiness timeout/error) -- there is no video timeline to key the halfway point off of in that case
-    const IMAGINED_HALFWAY_FALLBACK_MS = 5000; // transition5.mp4 runs ~10s; used only if duration metadata/timeupdate never resolves, so the reveal can never be stuck waiting indefinitely
+    const IMAGINED_TEXT_DELAY_MS = 1500; // "la primera frase empiece a aparecer a los 1.5s de iniciado" the video -- also reused, unchanged, as the fallback pause before revealing when the video never actually played (readiness timeout/error), since there is no video timeline to key off of in that case either
     const IMAGINED_SETTLE_MS = 200;
 
     // MemoryScene's own content choreography, once Fase D begins -- title
@@ -566,31 +567,6 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
         video.addEventListener('ended', onEnded, { once: true });
         video.addEventListener('error', onError, { once: true });
         window.setTimeout(() => finish(false), hardCapMs);
-      });
-    }
-
-    // Resolves once `video` has played roughly past the halfway point of
-    // its own duration -- used to start ImaginedDaysScene's text partway
-    // through transition5.mp4 instead of waiting for it to end, without
-    // touching the video's own playback in any way (no rate change, no
-    // seeking). Falls back to a fixed timer if duration metadata never
-    // resolves, so this can never hang the reveal indefinitely.
-    function waitForImaginedHalfway(video: HTMLVideoElement): Promise<void> {
-      return new Promise((resolve) => {
-        let settled = false;
-        const finish = () => {
-          if (settled) return;
-          settled = true;
-          video.removeEventListener('timeupdate', onTimeUpdate);
-          window.clearTimeout(fallbackTimer);
-          resolve();
-        };
-        const onTimeUpdate = () => {
-          const half = Number.isFinite(video.duration) && video.duration > 0 ? video.duration / 2 : null;
-          if (half !== null && video.currentTime >= half) finish();
-        };
-        video.addEventListener('timeupdate', onTimeUpdate);
-        const fallbackTimer = window.setTimeout(finish, IMAGINED_HALFWAY_FALLBACK_MS);
       });
     }
 
@@ -1147,8 +1123,8 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
     // visible (is-revealing-imagined) -- same crossfade principle as the
     // destination->journey pair, one scene deeper. is-imagined-revealing
     // (the clock ImaginedDaysScene's own per-part CSS timings/keyframes
-    // are measured against) is added once the video reaches roughly its
-    // own halfway point (see waitForImaginedHalfway/revealImaginedText
+    // are measured against) is added 1.5s after the video actually
+    // begins playing (see IMAGINED_TEXT_DELAY_MS/revealImaginedText
     // below), not once it ends -- the video itself keeps playing,
     // untouched, at normal speed all the way to its natural end and
     // freeze, exactly as before.
@@ -1184,8 +1160,8 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
         }
       }
 
-      // Guards against adding is-imagined-revealing twice (the halfway
-      // watcher and the post-outcome fallback below can both fire).
+      // Guards against adding is-imagined-revealing twice (the 1.5s timer
+      // and the post-outcome fallback below can both fire).
       let textRevealed = false;
       const revealImaginedText = () => {
         if (textRevealed) return;
@@ -1195,17 +1171,17 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
 
       if (played && imaginedVideoEl) {
         // Runs in parallel with the freeze/outcome handling below --
-        // decides only *when* the text starts, never gates or alters the
-        // video's own playback (no rate change, no seeking, no early
-        // pause).
-        void waitForImaginedHalfway(imaginedVideoEl).then(revealImaginedText);
+        // decides only *when* the text starts (1.5s after playback
+        // actually began), never gates or alters the video's own
+        // playback (no rate change, no seeking).
+        void sleep(IMAGINED_TEXT_DELAY_MS).then(revealImaginedText);
 
         const finishedOk = await waitForVideoOutcome(imaginedVideoEl, IMAGINED_VIDEO_HARD_CAP_MS);
         if (finishedOk) {
           // Clean 'ended': same freeze already used for destination/
           // journey -- do nothing to the video, it stays painted on its
           // own last frame, paused, currentTime untouched. Text has
-          // normally already started at the halfway point above; this is
+          // normally already started 1.5s in, well before this; this is
           // just a safety net so it's never left waiting past the
           // video's own natural end.
           revealImaginedText();
@@ -1213,7 +1189,7 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
           // Error or hard-cap -- no good frame to freeze on and no
           // fallback image for this scene, so fade the video out to the
           // plain paper background exactly like journey's own error
-          // branch. Text may already be showing (halfway point reached
+          // branch. Text may already be showing (1.5s already elapsed
           // before the failure) or may only start now -- either way it's
           // never left stuck.
           imaginedVideoEl.style.transition = `opacity ${DESTINATION_VIDEO_FADE_MS}ms ease`;
@@ -1225,11 +1201,11 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
       } else {
         // Never played (readiness timeout/error) -- hide the <video>
         // element itself outright (it never became visible to begin
-        // with), then a short pause before revealing the content over
-        // the plain background -- there is no video timeline to key a
-        // halfway point off of here, so this fallback keeps its own
-        // fixed pause. The CTA must never leave the user stuck on
-        // JourneyScene just because this video failed.
+        // with), then the same 1.5s pause before revealing the content
+        // over the plain background -- there is no video timeline to key
+        // off of here, so this fallback keeps its own fixed pause. The
+        // CTA must never leave the user stuck on JourneyScene just
+        // because this video failed.
         if (imaginedVideoEl) {
           imaginedVideoEl.style.transition = 'none';
           imaginedVideoEl.style.opacity = '0';
@@ -2246,6 +2222,23 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
     filter: none;
   }
 
+  /*
+    Very faint global ivory veil over the video -- same rgba(255,254,248,…)
+    ink as the local halos behind the text, just spread thin across the
+    whole frame instead of pooled locally. Meant to lift the footage only
+    a touch, never to whiten or read as a visible overlay: no filter/
+    brightness anywhere (see the explicit guarantee on
+    .experience__journey-video above), just a plain, low-opacity flat
+    layer, sitting behind the text/CTA (DOM order: video, then this veil,
+    then .experience__journey-overlay).
+  */
+  .experience__journey-veil {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: rgba(255, 254, 248, 0.09);
+  }
+
   .experience__journey-overlay {
     position: absolute;
     inset: 0;
@@ -2335,8 +2328,8 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
   /*
     Imagined-days stage -- same fixed 390x844 canvas convention as the
     journey stage above. Same freeze-on-'ended' principle too (see
-    runImaginedVideoAndReveal), but its own text now begins at roughly
-    the video's halfway point, over the still-playing video -- see
+    runImaginedVideoAndReveal), but its own text now begins 1.5s after
+    the video starts playing, over the still-playing video -- see
     ImaginedDaysScene.astro's own comment. The plain paper
     background-color on .experience__imagined-frame is what shows through
     only if the video never plays at all (readiness/error) or for reduced
@@ -2386,11 +2379,19 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
     object-position: 50% 50%;
     display: block;
     /* Same explicit, no-op guarantee as .experience__journey-video above:
-       nothing here applies a filter, blend mode or semi-transparent scrim
-       over the video -- legibility comes entirely from the local ivory
-       halos behind the text (see ImaginedDaysScene.astro's own
-       .imagined__halo), never from darkening the footage itself. */
+       nothing here applies a filter, blend mode or brightness adjustment
+       to the video itself -- the only lightening is the plain flat veil
+       layer below, never a filter on the footage. */
     filter: none;
+  }
+
+  /* Same very faint global ivory veil as .experience__journey-veil above
+     -- see its own comment. */
+  .experience__imagined-veil {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background: rgba(255, 254, 248, 0.09);
   }
 
   .experience__imagined-overlay {

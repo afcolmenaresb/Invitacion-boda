@@ -262,14 +262,14 @@ const closingLines = sceneImaginedDays.closing.split('\n');
 
     :global(.experience.is-imagined-revealing) .imagined__closing {
       transition: opacity 3000ms ease, transform 3000ms ease;
-      transition-delay: 25900ms;
+      transition-delay: 24400ms;
       opacity: 1;
       transform: translateY(0);
     }
 
     :global(.experience.is-imagined-revealing) .imagined__cta {
       transition: opacity 1500ms ease, transform 1500ms ease;
-      transition-delay: 30100ms;
+      transition-delay: 28100ms;
       opacity: 1;
       transform: translateY(0);
     }
@@ -277,26 +277,28 @@ const closingLines = sceneImaginedDays.closing.split('\n');
     /*
       Each memory: fade in slowly, hold long enough to actually read it,
       fade back out -- "contemplativa, como recuerdos que aparecen y se
-      desvanecen", never all three at once. Delays are chained so each
-      one starts only once the previous has fully finished (plus a small
-      breathing gap), all measured from is-imagined-revealing itself
-      being added -- which happens once transition5.mp4 reaches roughly
-      its own halfway point (see runImaginedVideoAndReveal's own
-      comment), over the still-playing video; the fade-in/hold/fade-out
-      rhythm below is unchanged, only its start moved earlier.
+      desvanecen", never all three at once. All measured from
+      is-imagined-revealing itself being added -- which happens 1.5s
+      after transition5.mp4 actually starts playing (see
+      runImaginedVideoAndReveal's own comment), over the still-playing
+      video. The fade-in/hold/fade-out rhythm and each animation's own
+      duration are exactly as before -- only the gap between one phrase
+      and the next was trimmed (by 500ms each) so the sequence keeps
+      moving without a long silent pause between phrases, and starts
+      early enough that it's well underway before the ~10s video ends.
     */
     :global(.experience.is-imagined-revealing) .imagined__memory--1 {
       animation: imaginedMemoryShort 8000ms ease 0ms 1 both;
     }
 
     :global(.experience.is-imagined-revealing) .imagined__memory--2 {
-      animation: imaginedMemoryShort 8000ms ease 8300ms 1 both;
+      animation: imaginedMemoryShort 8000ms ease 7800ms 1 both;
     }
 
     /* Slightly longer hold -- it's the one two-line phrase, and needs a
        touch more time to read. */
     :global(.experience.is-imagined-revealing) .imagined__memory--3 {
-      animation: imaginedMemoryLong 8500ms ease 16600ms 1 both;
+      animation: imaginedMemoryLong 8500ms ease 15600ms 1 both;
     }
   }
 
