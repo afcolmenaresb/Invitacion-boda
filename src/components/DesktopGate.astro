@@ -52,35 +52,23 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   })();
 </script>
 
-<div class="desktop-gate" style={`background-image: url('${base}/images/textura_vertical_2.png')`}>
-  <div class="desktop-gate__content">
-    <p class="desktop-gate__title">Esta historia se vive mejor en vertical.</p>
-    <p class="desktop-gate__subtitle">Ábreme desde tu celular o tablet.</p>
+<!--
+  Reuses Cover.astro's own .orientation-lock/-content/-text rules verbatim
+  (declared :global() there for exactly this purpose) instead of a second,
+  duplicate stylesheet -- same composition, texture, alignment and
+  Homemade Apple typography as the existing rotate-device notice, just
+  with this file's own copy and its own trigger class (is-desktop-gated
+  instead of is-landscape-locked, set by the script above). No icon: the
+  rotate-device glyph is specific to that other notice's own message.
+-->
+<div class="orientation-lock desktop-gate" style={`background-image: url('${base}/images/textura_vertical_2.png')`}>
+  <div class="orientation-lock__content">
+    <p class="orientation-lock__text">Esta historia se vive mejor en vertical.</p>
+    <p class="orientation-lock__text">Ábreme desde tu celular o tablet.</p>
   </div>
 </div>
 
 <style>
-  /*
-    Desktop/laptop gate: covers the entire visible viewport, hidden unless
-    <html> carries is-desktop-gated (set by the inline script above).
-    Never shown on phones/tablets. Same paper texture/z-index/fixed-inset
-    convention as Cover.astro's own .orientation-lock, so it reads as part
-    of the same object language rather than a generic error screen.
-  */
-  .desktop-gate {
-    display: none;
-    position: fixed;
-    inset: 0;
-    z-index: 9999;
-    align-items: center;
-    justify-content: center;
-    background-color: var(--color-bg);
-    background-size: cover;
-    background-repeat: no-repeat;
-    background-position: 60% top;
-    overflow: hidden;
-  }
-
   :global(html.is-desktop-gated) .desktop-gate {
     display: flex;
   }
@@ -89,30 +77,5 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
      no scene, no video, nothing. */
   :global(html.is-desktop-gated) :global(#invitation-experience) {
     display: none;
-  }
-
-  .desktop-gate__content {
-    max-width: 420px;
-    padding: 0 32px;
-    text-align: center;
-  }
-
-  .desktop-gate__title {
-    margin: 0 0 14px;
-    font-family: var(--font-serif);
-    font-weight: 400;
-    font-style: italic;
-    font-size: 1.6rem;
-    line-height: 1.4;
-    color: #3a3128;
-  }
-
-  .desktop-gate__subtitle {
-    margin: 0;
-    font-family: var(--font-sans);
-    text-transform: uppercase;
-    letter-spacing: 0.14em;
-    font-size: 0.78rem;
-    color: #6f6350;
   }
 </style>
