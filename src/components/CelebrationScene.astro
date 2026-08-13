@@ -112,9 +112,13 @@ const finalLine = getCelebrationFinalLine(addressing);
   /*
     Same fixed 390x844 canvas convention as every other scene. Content
     sits low, over the video's own quieter lower register, same
-    composition logic as the previous scenes.
+    composition logic as the previous scenes -- nudged up a bit further
+    than the other scenes' own 108px (readability pass: several lines
+    were landing right over the table/flowers/candles in the footage), so
+    it has more room to breathe over the video's calmer upper area.
   */
   .celebration__content {
+    position: relative;
     margin-top: auto;
     width: 100%;
     max-width: 358.8px;
@@ -122,7 +126,36 @@ const finalLine = getCelebrationFinalLine(addressing);
     flex-direction: column;
     align-items: flex-start;
     text-align: left;
-    padding: 0 28px 108px;
+    padding: 0 28px 134px;
+  }
+
+  /*
+    Readability veil -- a single, very soft, wide radial glow sitting
+    behind the whole text block (eyebrow through cta), not just the
+    tight local halos each part already has. Same warm ivory ink as
+    those halos, just spread much wider and fainter -- never a solid
+    panel/card (no flat color, no border, no edge) and kept narrower
+    than the canvas itself so it never touches the frame's own borders
+    or reads as a rectangle.
+  */
+  .celebration__content::before {
+    content: '';
+    position: absolute;
+    z-index: -2;
+    pointer-events: none;
+    inset: -34px -10px -14px -10px;
+    /* No explicit size keyword/percentage here on purpose: the default
+       "farthest-corner" sizing makes the 0-100% stops below relative to
+       the distance from the center to this box's own farthest corner, so
+       ending at 66% guarantees full transparency well *inside* the box
+       -- never a visible edge right at its boundary (which is what an
+       explicit oversized ellipse was doing before). */
+    background: radial-gradient(
+      ellipse at 50% 40%,
+      rgba(255, 253, 246, 0.46) 0%,
+      rgba(255, 253, 246, 0.2) 38%,
+      rgba(255, 253, 246, 0) 66%
+    );
   }
 
   /*
@@ -150,14 +183,18 @@ const finalLine = getCelebrationFinalLine(addressing);
     text-transform: uppercase;
     letter-spacing: 0.22em;
     font-size: 0.68rem;
-    color: #8c7f6a;
+    /* Slightly deepened from #8c7f6a for the same readability pass as
+       the rest of this scene's text -- still a quiet, muted label. */
+    color: #6f6350;
   }
 
   /*
-    Title -- large, editorial serif, in the warm accent ink (same
-    rgba(173,138,88...) already used for the emotional beats on the
-    previous scenes' own closings/final lines) so the page reads warmer
-    than the ceremony before it, without introducing a new color.
+    Title -- large, editorial serif. Warm gold, same family as
+    var(--color-accent) but a shade deeper (kept local to this scene,
+    the shared token itself is untouched) so it reads warmer than the
+    ceremony before it while still having enough contrast against the
+    video -- "no negro puro agresivo", just a richer version of the same
+    warmth.
   */
   .celebration__title {
     position: relative;
@@ -167,7 +204,7 @@ const finalLine = getCelebrationFinalLine(addressing);
     font-weight: 400;
     font-size: 1.85rem;
     line-height: 1.35;
-    color: var(--color-accent);
+    color: #8a6b40;
   }
 
   /*
@@ -189,18 +226,21 @@ const finalLine = getCelebrationFinalLine(addressing);
     font-weight: 400;
     font-size: 1.18rem;
     line-height: 1.5;
-    color: #4a3f35;
+    /* Deepened from #4a3f35 for the same readability pass -- still a
+       warm ink, not pure black. */
+    color: #3a2f25;
   }
 
   .celebration__final {
-    color: #4a3f35;
+    color: #3a2f25;
   }
 
   /*
     Closing statement ("remate") -- upright (not italic, unlike the body
-    above), warm accent ink, deliberately separated from the body with
-    more room -- emotional, but "no más dominante que el título" so it
-    stays at the title's own size, not larger.
+    above), same deepened warm gold as the title (see its own comment),
+    deliberately separated from the body with more room -- emotional, but
+    "no más dominante que el título" so it stays at the title's own size,
+    not larger.
   */
   .celebration__closing {
     position: relative;
@@ -210,7 +250,7 @@ const finalLine = getCelebrationFinalLine(addressing);
     font-weight: 400;
     font-size: 1.2rem;
     line-height: 1.5;
-    color: var(--color-accent);
+    color: #8a6b40;
   }
 
   /*
@@ -228,16 +268,25 @@ const finalLine = getCelebrationFinalLine(addressing);
     letter-spacing: 0.14em;
     text-transform: uppercase;
     font-size: 0.92rem;
-    color: #3a332b;
+    /* Deepened from #3a332b -- "el CTA debe ganar un poco de presencia". */
+    color: #2f2820;
   }
 
+  /* Same halo language as every other CTA, just a touch larger/more
+     opaque so it reads clearly as its own gesture over the video --
+     still soft-edged, never a hard box. */
   .celebration__cta::before {
     content: '';
     position: absolute;
     z-index: -1;
-    inset: -8px -14px;
+    inset: -11px -18px;
     pointer-events: none;
-    background: radial-gradient(ellipse at center, rgba(255, 254, 248, 1), rgba(255, 254, 248, 0) 80%);
+    background: radial-gradient(
+      ellipse at center,
+      rgba(255, 254, 248, 1) 0%,
+      rgba(255, 254, 248, 0.9) 50%,
+      rgba(255, 254, 248, 0) 85%
+    );
   }
 
   .celebration__cta::after {
