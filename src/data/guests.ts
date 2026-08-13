@@ -34,6 +34,14 @@ export interface Guest {
    * the override for those.
    */
   dedication: string;
+  /**
+   * Expected number of people traveling under this invitation -- used
+   * only for the RSVP record saved on page 9 (StayScene.astro). Optional:
+   * defaults to 1 for 'singular' guests and 2 for 'plural' ones (see
+   * getGuestPartySize) when not set explicitly, so existing entries don't
+   * need to be filled in immediately.
+   */
+  partySize?: number;
 }
 
 /**
@@ -87,6 +95,12 @@ export const guests: Guest[] = [
 
 export function getGuestBySlug(slug: string): Guest | undefined {
   return guests.find((guest) => guest.slug === slug);
+}
+
+/** Resolves Guest.partySize, falling back by addressing when unset. */
+export function getGuestPartySize(guest: Guest): number {
+  if (typeof guest.partySize === 'number') return guest.partySize;
+  return guest.addressing === 'singular' ? 1 : 2;
 }
 
 // Runs at module load, i.e. every `astro dev`/`astro build` -- this module

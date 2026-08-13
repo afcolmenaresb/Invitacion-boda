@@ -12,7 +12,7 @@ import type { Guest } from './guests';
  */
 export const sceneKeepsake = {
   eyebrow: 'El recuerdo',
-  title: 'Y después, lo inolvidable.',
+  title: 'Lo que queda.',
   // Three shared lines -- each its own DOM node inside .keepsake__body
   // (see KeepsakeScene.astro) but written to read as one continuous
   // thought; the final, guest-dependent line is appended after them.

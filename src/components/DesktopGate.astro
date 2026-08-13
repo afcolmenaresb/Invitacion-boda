@@ -1,0 +1,81 @@
+---
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+---
+
+<script is:inline>
+  // Same "input capability, not just width" formula Cover.astro's own
+  // script already uses for isMobileOrTablet -- deliberately duplicated
+  // (not imported -- is:inline scripts can't) rather than refactored out,
+  // so this file stays self-contained and Cover.astro's own script is
+  // never touched. Desktop/laptop here is simply "not mobile/tablet": a
+  // touch-capable device (coarse pointer or touch points) whose short
+  // viewport side is 1024px or less. Any device that fails either check
+  // -- no touch, or a short side over 1024px -- counts as desktop/laptop
+  // and gets this gate; anything the existing formula already treats as
+  // mobile/tablet (portrait or landscape) never does, so a landscape
+  // tablet keeps using the existing rotate-device notice untouched, exactly
+  // as specified.
+  (function () {
+    var TOUCH_SHORT_SIDE_MAX = 1024;
+    var root = document.documentElement;
+    var scheduled = false;
+
+    function getViewportWidth() {
+      return (window.visualViewport && window.visualViewport.width) || document.documentElement.clientWidth;
+    }
+    function getViewportHeight() {
+      return (window.visualViewport && window.visualViewport.height) || document.documentElement.clientHeight;
+    }
+
+    function update() {
+      scheduled = false;
+      var viewportWidth = getViewportWidth();
+      var viewportHeight = getViewportHeight();
+      var isTouchDevice = window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
+      var shortSide = Math.min(viewportWidth, viewportHeight);
+      var isMobileOrTablet = isTouchDevice && shortSide <= TOUCH_SHORT_SIDE_MAX;
+      root.classList.toggle('is-desktop-gated', !isMobileOrTablet);
+    }
+
+    function scheduleUpdate() {
+      if (scheduled) return;
+      scheduled = true;
+      requestAnimationFrame(update);
+    }
+
+    update();
+    window.addEventListener('resize', scheduleUpdate);
+    window.addEventListener('orientationchange', scheduleUpdate);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', scheduleUpdate);
+    }
+  })();
+</script>
+
+<!--
+  Reuses Cover.astro's own .orientation-lock/-content/-text rules verbatim
+  (declared :global() there for exactly this purpose) instead of a second,
+  duplicate stylesheet -- same composition, texture, alignment and
+  Homemade Apple typography as the existing rotate-device notice, just
+  with this file's own copy and its own trigger class (is-desktop-gated
+  instead of is-landscape-locked, set by the script above). No icon: the
+  rotate-device glyph is specific to that other notice's own message.
+-->
+<div class="orientation-lock desktop-gate" style={`background-image: url('${base}/images/textura_vertical_2.png')`}>
+  <div class="orientation-lock__content">
+    <p class="orientation-lock__text">Esta historia se vive mejor en vertical.</p>
+    <p class="orientation-lock__text">Ábreme desde tu celular o tablet.</p>
+  </div>
+</div>
+
+<style>
+  :global(html.is-desktop-gated) .desktop-gate {
+    display: flex;
+  }
+
+  /* The interactive experience itself is never painted behind this gate --
+     no scene, no video, nothing. */
+  :global(html.is-desktop-gated) :global(#invitation-experience) {
+    display: none;
+  }
+</style>

@@ -1,0 +1,584 @@
+---
+import {
+  sceneStay,
+  getStayRsvpQuestion,
+  getStayRsvpOptions,
+  getStayRsvpConfirmations,
+} from '../data/sceneStay';
+import { getGoTravelWhatsAppUrl } from '../data/goTravelConfig';
+import type { Guest } from '../data/guests';
+
+interface Props {
+  addressing?: Guest['addressing'];
+  /** Guest.slug -- the RSVP document id. Empty on the guest-less demo (/) page. */
+  guestId?: string;
+  guestName?: string;
+  partySize?: number;
+  /**
+   * Lets a second entry point (the page-3 "VER INFORMACIÓN DEL VIAJE"
+   * shortcut in InvitationExperience.astro) reuse this same component with
+   * a different back destination, instead of duplicating its markup --
+   * defaults match the normal page-9 flow (back to KeepsakeScene)
+   * unchanged.
+   */
+  backAction?: string;
+  backLabel?: string;
+  backVisibleLabel?: string;
+}
+
+// 'plural' is the safer neutral default if this were ever rendered without
+// a guest context -- in practice InvitationExperience always passes the
+// real guest.addressing through (same convention as every previous scene).
+const {
+  addressing = 'plural',
+  guestId = '',
+  guestName = '',
+  partySize = 1,
+  backAction = 'back-to-keepsake',
+  backLabel = sceneStay.backLabel,
+  backVisibleLabel = sceneStay.backVisibleLabel,
+} = Astro.props;
+
+const rsvpQuestion = getStayRsvpQuestion(addressing);
+const rsvpOptions = getStayRsvpOptions(addressing);
+const rsvpConfirmations = getStayRsvpConfirmations(addressing);
+const whatsAppUrl = getGoTravelWhatsAppUrl(guestName || 'invitado');
+---
+
+<div class="stay" data-scene-panel-content aria-label={sceneStay.eyebrow}>
+  <span class="stay__wash" aria-hidden="true"></span>
+  <button type="button" class="stay__back" data-action={backAction} aria-label={backLabel}>
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
+      <path d="M15 5 L8 12 L15 19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
+    <span>{backVisibleLabel}</span>
+  </button>
+
+  <div class="stay__content">
+    <p class="stay__eyebrow" data-stay-part="eyebrow">
+      <span class="stay__halo" aria-hidden="true"></span>
+      {sceneStay.eyebrow}
+    </p>
+    <h2 class="stay__title" data-scene-heading data-stay-part="title" tabindex="-1">
+      <span class="stay__halo stay__halo--wide" aria-hidden="true"></span>
+      {sceneStay.title}
+    </h2>
+    <div class="stay__body" data-stay-part="body">
+      <span class="stay__halo stay__halo--wide" aria-hidden="true"></span>
+      {sceneStay.body.map((line) => (
+        <p>{line}</p>
+      ))}
+    </div>
+
+    <ul class="stay__highlights" data-stay-part="highlights" aria-label="Highlights">
+      {sceneStay.highlights.map((item) => (
+        <li>{item}</li>
+      ))}
+    </ul>
+
+    <a
+      class="stay__cta"
+      data-stay-part="cta"
+      href={whatsAppUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      {sceneStay.ctaGoTravel}
+    </a>
+
+    <div
+      class="stay__rsvp"
+      data-stay-part="rsvp"
+      data-guest-id={guestId}
+      data-guest-name={guestName}
+      data-party-size={partySize}
+    >
+      <span class="stay__halo stay__halo--wide" aria-hidden="true"></span>
+      <p class="stay__rsvp-question">{rsvpQuestion}</p>
+      <div class="stay__rsvp-options" role="group" aria-label={rsvpQuestion}>
+        <button type="button" class="stay__rsvp-option" data-rsvp-status="attending">
+          {rsvpOptions.attending}
+        </button>
+        <button type="button" class="stay__rsvp-option" data-rsvp-status="maybe">
+          {rsvpOptions.maybe}
+        </button>
+        <button type="button" class="stay__rsvp-option" data-rsvp-status="not_attending">
+          {rsvpOptions.not_attending}
+        </button>
+      </div>
+      <p class="stay__rsvp-feedback" data-rsvp-feedback aria-live="polite">
+        <span data-rsvp-message="saving" hidden>Guardando tu respuesta…</span>
+        <span data-rsvp-message="attending" hidden>{rsvpConfirmations.attending}</span>
+        <span data-rsvp-message="maybe" hidden>{rsvpConfirmations.maybe}</span>
+        <span data-rsvp-message="not_attending" hidden>{rsvpConfirmations.not_attending}</span>
+        <span data-rsvp-message="error" hidden>{sceneStay.rsvpError}</span>
+      </p>
+    </div>
+  </div>
+</div>
+
+<script>
+  import { saveRsvpResponse, type AttendanceStatus } from '../lib/rsvp';
+
+  // Runs once per page load, same as every other lightweight client
+  // script in this project (see Cover.astro) -- .stay__rsvp only exists
+  // once per page, but this is written to be safe if that ever changes.
+  document.querySelectorAll<HTMLElement>('.stay__rsvp').forEach((rsvpEl) => {
+    const guestId = rsvpEl.dataset.guestId ?? '';
+    const guestName = rsvpEl.dataset.guestName ?? '';
+    const partySize = Number(rsvpEl.dataset.partySize) || 1;
+
+    const feedback = rsvpEl.querySelector<HTMLElement>('[data-rsvp-feedback]');
+    const messages = feedback ? Array.from(feedback.querySelectorAll<HTMLElement>('[data-rsvp-message]')) : [];
+    const buttons = Array.from(rsvpEl.querySelectorAll<HTMLButtonElement>('.stay__rsvp-option'));
+
+    function showMessage(key: string) {
+      if (!feedback) return;
+      messages.forEach((el) => {
+        el.hidden = el.dataset.rsvpMessage !== key;
+      });
+      feedback.classList.add('is-visible');
+    }
+
+    buttons.forEach((button) => {
+      button.addEventListener('click', () => {
+        const status = button.dataset.rsvpStatus as AttendanceStatus | undefined;
+        if (!status) return;
+
+        // Selecting again later (see spec: "permitir modificarla
+        // después") just re-runs this same handler -- nothing here ever
+        // disables the buttons or navigates away.
+        buttons.forEach((b) => b.classList.toggle('is-selected', b === button));
+        showMessage('saving');
+
+        void saveRsvpResponse({ guestId, guestName, attendanceStatus: status, partySize }).then((ok) => {
+          showMessage(ok ? status : 'error');
+        });
+      });
+    });
+  });
+</script>
+
+<style>
+  .stay {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    isolation: isolate;
+  }
+
+  /* Same control as every previous scene's own back button -- identical
+     position, type treatment and icon, just pointing one scene back. */
+  .stay__back {
+    position: absolute;
+    top: max(18px, env(safe-area-inset-top));
+    left: max(18px, env(safe-area-inset-left));
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: none;
+    border: none;
+    padding: 0.4rem 0.2rem;
+    cursor: pointer;
+    font-family: var(--font-sans);
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #3a332b;
+    opacity: 0;
+  }
+
+  .stay__back::before {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    inset: -6px -10px;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, rgba(255, 254, 248, 0.95), rgba(255, 254, 248, 0) 80%);
+  }
+
+  :global(.experience.is-revealing-stay) .stay__back,
+  :global(.experience.is-travel-info-revealing) .stay__back {
+    opacity: 1;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    :global(.experience:not(.is-instant)) .stay__back {
+      transition: opacity 320ms ease, color 0.2s ease, transform 0.2s ease;
+    }
+
+    .stay__back:hover,
+    .stay__back:focus-visible {
+      color: var(--color-accent);
+      transform: translateX(-2px);
+    }
+  }
+
+  :global(.experience.is-instant) .stay__back {
+    transition: none !important;
+  }
+
+  /*
+    Same fixed 390x844 canvas convention as every other scene. Content
+    sits low, over the photo's own quieter lower register, sitting inside
+    .stay__wash's own quiet reading column below.
+  */
+  .stay__content {
+    position: relative;
+    margin-top: auto;
+    width: 100%;
+    max-width: 358.8px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    text-align: left;
+    padding: 0 28px 96px;
+  }
+
+  /*
+    Reading column -- same wide, soft "wash" of warm ivory light as
+    JourneyScene/ImaginedDaysScene/CeremonyScene/CelebrationScene/
+    KeepsakeScene's own .X__wash, but sized wider/taller than their shared
+    recipe: this scene's own content block (eyebrow through the RSVP
+    options) is taller and reaches further right than any previous scene's,
+    so the wash's spatial reach is widened to actually sit behind all of
+    it -- peak opacity values are intentionally unchanged from the shared
+    recipe (still 0.26/0.55 at their strongest), only the area they cover
+    is larger, per spec ("ampliar el área antes que hacerla más blanca").
+  */
+  .stay__wash {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse 82% 62% at 32% 60%, rgba(255, 251, 244, 0.26) 0%, rgba(255, 251, 244, 0) 80%),
+      linear-gradient(
+        to right,
+        rgba(255, 251, 244, 0.55) 0%,
+        rgba(255, 251, 244, 0.4) 42%,
+        rgba(255, 251, 244, 0.2) 70%,
+        rgba(255, 251, 244, 0) 98%
+      );
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent 0%,
+      rgba(0, 0, 0, 0.55) 14%,
+      rgba(0, 0, 0, 1) 26%,
+      rgba(0, 0, 0, 1) 100%
+    );
+    mask-image: linear-gradient(
+      to bottom,
+      transparent 0%,
+      rgba(0, 0, 0, 0.55) 14%,
+      rgba(0, 0, 0, 1) 26%,
+      rgba(0, 0, 0, 1) 100%
+    );
+  }
+
+  /*
+    Same halo language already approved on pages 2-8: a soft, local
+    opening of ivory light behind text, never a card/pill (no
+    border-radius, no solid fill, no visible edge).
+  */
+  .stay__halo {
+    position: absolute;
+    z-index: -1;
+    pointer-events: none;
+    inset: -10px -18px;
+    background: radial-gradient(ellipse at center, rgba(255, 254, 248, 0.9) 0%, rgba(255, 254, 248, 0) 72%);
+  }
+
+  .stay__halo--wide {
+    inset: -14px -24px;
+  }
+
+  .stay__eyebrow {
+    position: relative;
+    margin: 0 0 18px;
+    font-family: var(--font-sans);
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    font-size: 0.68rem;
+    color: #6f6350;
+  }
+
+  .stay__title {
+    position: relative;
+    margin: 0 0 22px;
+    font-family: var(--font-serif);
+    font-style: normal;
+    font-weight: 400;
+    font-size: 1.7rem;
+    line-height: 1.32;
+    color: #4a3a28;
+  }
+
+  .stay__body {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  .stay__body p {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-weight: 400;
+    font-size: 1.08rem;
+    line-height: 1.5;
+    color: #241a12;
+  }
+
+  /*
+    Highlights -- "sin cajas pesadas": plain uppercase labels in a row,
+    separated by a thin middot, never pills/chips with a background or
+    border. Wraps naturally on narrow screens.
+  */
+  .stay__highlights {
+    position: relative;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5em;
+    margin: 20px 0 0;
+    padding: 0;
+    list-style: none;
+    font-family: var(--font-sans);
+    font-size: 0.72rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #4a3a28;
+  }
+
+  .stay__highlights li {
+    position: relative;
+  }
+
+  .stay__highlights li + li::before {
+    content: '·';
+    margin-right: 0.5em;
+    color: #8c7f6a;
+  }
+
+  /*
+    CTA -- real <a> (opens WhatsApp in a new tab), same editorial
+    sans/uppercase/arrow language as every other primary CTA in the
+    experience. No individual halo/patch behind it -- reads off
+    .stay__wash above plus its own dark, high-contrast ink.
+  */
+  .stay__cta {
+    position: relative;
+    display: inline-block;
+    margin: 34px 0 0;
+    font-family: var(--font-sans);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-size: 0.92rem;
+    color: #221a10;
+    text-decoration: none;
+  }
+
+  .stay__cta::after {
+    content: ' →';
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    :global(.experience:not(.is-instant)) .stay__cta {
+      transition: color 0.2s ease;
+    }
+
+    .stay__cta:hover,
+    .stay__cta:focus-visible {
+      color: var(--color-accent);
+    }
+  }
+
+  /*
+    RSVP block -- "separado visualmente" from the GoTravel CTA above via
+    extra margin, its own halo and a hairline-free visual pause; never a
+    modal, never a hard card.
+  */
+  .stay__rsvp {
+    position: relative;
+    margin: 40px 0 0;
+    width: 100%;
+  }
+
+  .stay__rsvp-question {
+    margin: 0 0 12px;
+    font-family: var(--font-serif);
+    font-style: normal;
+    font-weight: 400;
+    font-size: 1.05rem;
+    line-height: 1.4;
+    color: #241a12;
+  }
+
+  .stay__rsvp-options {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+
+  /*
+    Each option reads as a clear, tappable control -- underline + arrow,
+    same family as every other CTA -- without becoming a heavy button
+    (no fill, no border, no shadow). .is-selected marks the guest's
+    current choice once they've picked one.
+  */
+  .stay__rsvp-option {
+    position: relative;
+    display: inline-block;
+    background: none;
+    border: none;
+    padding: 0.2rem 0;
+    margin: 0;
+    cursor: pointer;
+    font-family: var(--font-sans);
+    font-size: 0.85rem;
+    letter-spacing: 0.04em;
+    color: #4a3a28;
+    text-decoration: underline;
+    text-decoration-color: rgba(74, 58, 40, 0.35);
+    text-underline-offset: 3px;
+  }
+
+  .stay__rsvp-option::before {
+    content: '○ ';
+  }
+
+  .stay__rsvp-option.is-selected {
+    color: #221a10;
+    font-weight: 600;
+    text-decoration-color: currentColor;
+  }
+
+  .stay__rsvp-option.is-selected::before {
+    content: '● ';
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .stay__rsvp-option {
+      transition: color 0.2s ease;
+    }
+
+    .stay__rsvp-option:hover,
+    .stay__rsvp-option:focus-visible {
+      color: var(--color-accent);
+    }
+  }
+
+  .stay__rsvp-feedback {
+    margin: 14px 0 0;
+    min-height: 1.4em;
+    font-family: var(--font-sans);
+    font-size: 0.78rem;
+    font-style: italic;
+    line-height: 1.5;
+    color: #4a3a28;
+    opacity: 0;
+  }
+
+  .stay__rsvp-feedback.is-visible {
+    opacity: 1;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .stay__rsvp-feedback {
+      transition: opacity 260ms ease;
+    }
+  }
+
+  /*
+    Entrance: plain, quiet opacity + small translateY -- never the
+    handwritten ink sweep MemoryScene uses. Hidden by default; each part
+    becomes visible once InvitationExperience.astro's script adds
+    is-stay-revealing to the shared .experience root -- the moment the
+    stay panel itself starts crossfading in, since there is no video to
+    key this scene's entrance against (see the script's own stay branch
+    in goToScene). Highlights/cta/rsvp settle quickly after the text
+    above so the whole scene feels ready almost immediately -- this page
+    is meant to be read and acted on, not watched.
+  */
+  [data-stay-part] {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    :global(.experience.is-stay-revealing) [data-stay-part] {
+      transition: opacity 900ms ease, transform 900ms ease;
+    }
+
+    :global(.experience.is-stay-revealing) [data-stay-part='eyebrow'] {
+      opacity: 1;
+      transform: translateY(0);
+      transition-delay: 200ms;
+    }
+
+    :global(.experience.is-stay-revealing) [data-stay-part='title'] {
+      opacity: 1;
+      transform: translateY(0);
+      transition-delay: 500ms;
+    }
+
+    :global(.experience.is-stay-revealing) [data-stay-part='body'] {
+      opacity: 1;
+      transform: translateY(0);
+      transition-delay: 900ms;
+    }
+
+    :global(.experience.is-stay-revealing) [data-stay-part='highlights'] {
+      opacity: 1;
+      transform: translateY(0);
+      transition-delay: 1300ms;
+    }
+
+    :global(.experience.is-stay-revealing) [data-stay-part='cta'] {
+      opacity: 1;
+      transform: translateY(0);
+      transition-delay: 1600ms;
+    }
+
+    :global(.experience.is-stay-revealing) [data-stay-part='rsvp'] {
+      opacity: 1;
+      transform: translateY(0);
+      transition-delay: 1900ms;
+    }
+  }
+
+  /*
+    Reduced motion / instant loads: no per-part stagger, no delays -- one
+    short, uniform fade so the whole scene settles as a single quiet
+    crossfade, same convention as every previous scene's own reduced-
+    motion path.
+  */
+  :global(.experience.is-reduced-motion.is-stay-revealing) [data-stay-part],
+  :global(.experience.is-instant) [data-stay-part] {
+    transition: opacity 260ms ease !important;
+    transform: none !important;
+    transition-delay: 0ms !important;
+  }
+
+  :global(.experience.is-reduced-motion.is-stay-revealing) [data-stay-part],
+  :global(.experience[data-scene='stay'].is-instant) [data-stay-part] {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  /*
+    Page-3 shortcut instance (see backAction/backLabel/backVisibleLabel
+    above): always an instant cut, never the staged reveal above -- its
+    content is simply visible right away, matching a "practical shortcut"
+    rather than another cinematic entrance.
+  */
+  :global(.experience.is-travel-info-revealing) [data-stay-part] {
+    opacity: 1;
+    transform: translateY(0);
+    transition: none !important;
+  }
+</style>

@@ -40,9 +40,14 @@ const finalLine = getKeepsakeFinalLine(addressing);
       ))}
       <p class="keepsake__final">{finalLine}</p>
     </div>
-    <p class="keepsake__cta" data-keepsake-part="cta">
+    <button
+      type="button"
+      class="keepsake__cta"
+      data-keepsake-part="cta"
+      data-action="go-to-stay"
+    >
       {sceneKeepsake.ctaPrimary}
-    </p>
+    </button>
   </div>
 </div>
 
@@ -225,14 +230,25 @@ const finalLine = getKeepsakeFinalLine(addressing);
   /*
     CTA -- separated clearly from the body as its own later gesture, same
     editorial sans/uppercase/arrow language as every other primary CTA in
-    the experience. Left as a prepared-but-inert label, same convention
-    already used for not-yet-wired CTAs elsewhere (e.g. CeremonyScene's
-    own "Celebremos") -- no further page has been requested yet. No
-    individual halo/patch behind it -- it reads off .keepsake__wash above
-    plus its own dark, high-contrast ink, same as CelebrationScene's CTA.
+    the experience. Now a real <button> (was a plain <p>) so it can
+    trigger the stay transition -- reset to look identical to the old
+    paragraph: no border/background/padding, same cursor affordance the
+    rest of the experience's controls use. Deliberately NOT resetting
+    font/letter-spacing/text-transform to "inherit" here -- see
+    JourneyScene.astro's own .journey__cta--primary comment for why that
+    specific trick silently breaks the uppercase transform instead of
+    fixing anything. No individual halo/patch behind it -- it reads off
+    .keepsake__wash above plus its own dark, high-contrast ink, same as
+    CelebrationScene's CTA.
   */
   .keepsake__cta {
     position: relative;
+    display: block;
+    background: none;
+    border: none;
+    padding: 0;
+    text-align: left;
+    cursor: pointer;
     margin: 44px 0 0;
     font-family: var(--font-sans);
     letter-spacing: 0.14em;

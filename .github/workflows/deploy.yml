@@ -25,6 +25,18 @@ jobs:
         with:
           path: .
           node-version: 22
+        env:
+          # Firebase web app config for the RSVP feature (src/lib/firebase.ts)
+          # -- not secrets per se (safe to ship client-side, see that file's
+          # own comment), but still sourced from repo secrets rather than
+          # hardcoded here. Add these under Settings -> Secrets and
+          # variables -> Actions in the GitHub repo.
+          PUBLIC_FIREBASE_API_KEY: ${{ secrets.PUBLIC_FIREBASE_API_KEY }}
+          PUBLIC_FIREBASE_AUTH_DOMAIN: ${{ secrets.PUBLIC_FIREBASE_AUTH_DOMAIN }}
+          PUBLIC_FIREBASE_PROJECT_ID: ${{ secrets.PUBLIC_FIREBASE_PROJECT_ID }}
+          PUBLIC_FIREBASE_STORAGE_BUCKET: ${{ secrets.PUBLIC_FIREBASE_STORAGE_BUCKET }}
+          PUBLIC_FIREBASE_MESSAGING_SENDER_ID: ${{ secrets.PUBLIC_FIREBASE_MESSAGING_SENDER_ID }}
+          PUBLIC_FIREBASE_APP_ID: ${{ secrets.PUBLIC_FIREBASE_APP_ID }}
 
   deploy:
     needs: build

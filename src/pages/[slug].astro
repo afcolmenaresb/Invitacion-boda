@@ -1,7 +1,7 @@
 ---
 import BaseLayout from '../layouts/BaseLayout.astro';
 import InvitationExperience from '../components/InvitationExperience.astro';
-import { guests } from '../data/guests';
+import { guests, getGuestPartySize } from '../data/guests';
 
 export function getStaticPaths() {
   return guests.map((guest) => ({
@@ -19,6 +19,8 @@ const { guest } = Astro.props;
       displayName={guest.displayName}
       dedication={guest.dedication}
       addressing={guest.addressing}
+      slug={guest.slug}
+      partySize={getGuestPartySize(guest)}
     />
   </main>
 </BaseLayout>

@@ -7,6 +7,8 @@ import ImaginedDaysScene from './ImaginedDaysScene.astro';
 import CeremonyScene from './CeremonyScene.astro';
 import CelebrationScene from './CelebrationScene.astro';
 import KeepsakeScene from './KeepsakeScene.astro';
+import StayScene from './StayScene.astro';
+import DesktopGate from './DesktopGate.astro';
 import { musicPlaylist } from '../data/musicPlaylist';
 import type { Guest } from '../data/guests';
 
@@ -14,9 +16,13 @@ interface Props {
   displayName?: string;
   dedication?: string;
   addressing?: Guest['addressing'];
+  /** Guest.slug -- doubles as the RSVP document id on page 9 (StayScene). */
+  slug?: string;
+  /** Guest.partySize (already resolved via getGuestPartySize) -- see StayScene's own RSVP write. */
+  partySize?: number;
 }
 
-const { displayName, dedication, addressing } = Astro.props;
+const { displayName, dedication, addressing, slug, partySize } = Astro.props;
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 const videoSrc = `${base}/videos/memory-transition2.mp4`;
 const videoSrc2 = `${base}/videos/memory-transition3.mp4`;
@@ -31,12 +37,17 @@ const videoSrc7 = `${base}/videos/memory-transition8.mp4`;
 // whichever of the two videos is adjacent to it pixel-for-pixel.
 const memoryTextureSrc = `${base}/images/textura_vertical_2.1.png`;
 const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
+// Page 9's own static background -- no video, see the markup's own
+// comment below.
+const stayTextureSrc = `${base}/images/textura_vertical_4.png`;
 // Background-music playlist -- see musicPlaylist.ts for the single source
 // of truth (add/reorder tracks there, not here). Serialized into the
 // <audio> element's own data-tracks below; the script shuffles this order
 // once per visit.
 const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
 ---
+
+<DesktopGate />
 
 <div class="experience" id="invitation-experience" data-scene="cover" data-transition-direction="forward">
   <section class="experience__scene experience__scene--cover" data-scene-panel="cover">
@@ -324,6 +335,59 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
   </section>
 
   <!--
+    Stay stage (page 9, "Tu estadía"): same fixed 390x844 logical canvas
+    as everything above, but unlike every scene before it, this one has
+    no video at all -- a single static photo (textura_vertical_4.png)
+    with a very slow, subtle Ken Burns scale (see .experience__stay-image
+    below), never a video crossfade. Its own text begins appearing as
+    soon as the stay panel itself starts revealing (see the script's own
+    `scene === 'stay'` branch in goToScene) -- there is no video to key
+    the entrance against. The image is intentionally left unset here
+    (data-bg-src only) and assigned lazily once KeepsakeScene is actually
+    reached, same convention as ensureKeepsakeAssets.
+  -->
+  <section class="experience__scene experience__scene--stay" data-scene-panel="stay" inert>
+    <div class="experience__stay-frame">
+      <div class="experience__stay-canvas">
+        <div class="experience__stay-image" data-bg-src={stayTextureSrc} aria-hidden="true"></div>
+        <div class="experience__stay-overlay">
+          <StayScene addressing={addressing} guestId={slug} guestName={displayName} partySize={partySize} />
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!--
+    Travel-info stage: the page-3 "VER INFORMACIÓN DEL VIAJE" shortcut --
+    visually identical to the stay stage above (same StayScene component,
+    same textura_vertical_4 background, same RSVP/Firestore doc), reused
+    here rather than duplicated, but reached and left independently of the
+    main cover->...->stay sequence (own hash, always an instant cut, back
+    goes to destination -- see goToScene/applySceneInstantly/StayScene's
+    own backAction prop). Deliberately left out of SCENE_ORDER so it's
+    never treated as "adjacent" to anything and never plays transition
+    videos 4-8.
+  -->
+  <section class="experience__scene experience__scene--travel-info" data-scene-panel="travelInfo" inert>
+    <div class="experience__stay-frame">
+      <div class="experience__stay-canvas">
+        <div class="experience__stay-image" data-bg-src={stayTextureSrc} aria-hidden="true"></div>
+        <div class="experience__stay-overlay">
+          <StayScene
+            addressing={addressing}
+            guestId={slug}
+            guestName={displayName}
+            partySize={partySize}
+            backAction="back-to-destination"
+            backLabel="Volver al destino"
+            backVisibleLabel="Destino"
+          />
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!--
     Persistent background music -- a single <audio> element living outside
     every scene section, so nothing about scene transitions (panel
     opacity, inert, DOM order) ever touches it: it is the one piece of
@@ -384,6 +448,14 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     const keepsakePanel = root.querySelector<HTMLElement>('[data-scene-panel="keepsake"]');
     const keepsakeFrameEl = root.querySelector<HTMLElement>('.experience__keepsake-frame');
     const keepsakeVideoEl = root.querySelector<HTMLVideoElement>('.experience__keepsake-video');
+    const stayPanel = root.querySelector<HTMLElement>('[data-scene-panel="stay"]');
+    // Scoped to stayPanel (not root) because the page-3 shortcut panel
+    // below reuses the same .experience__stay-image class on its own,
+    // separate element -- an unscoped query would still resolve
+    // correctly by DOM order today, but scoping removes the ambiguity.
+    const stayImageEl = stayPanel?.querySelector<HTMLElement>('.experience__stay-image');
+    const travelInfoPanel = root.querySelector<HTMLElement>('[data-scene-panel="travelInfo"]');
+    const travelInfoImageEl = travelInfoPanel?.querySelector<HTMLElement>('.experience__stay-image');
     const musicEl = root.querySelector<HTMLAudioElement>('.experience__music');
 
     // Forward (cover -> memory) phase timings.
@@ -495,6 +567,14 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     // convention as CELEBRATION_FALLBACK_HOLD_MS above.
     const KEEPSAKE_FALLBACK_HOLD_MS = 5900;
 
+    // Forward (keepsake -> stay) phase timing. No video at all on this
+    // scene (see the markup's own comment), so there is no readiness
+    // wait/outcome to settle after -- StayScene's own content starts
+    // revealing the moment the crossfade itself starts, and the whole
+    // transition settles quickly, same short baseline as every other
+    // scene's own settle constant.
+    const STAY_SETTLE_MS = 200;
+
     // --- Persistent background music ---
     //
     // One <audio> element (see the markup above), never paused/reset by
@@ -581,6 +661,23 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       return result;
     }
 
+    // Reshuffles for a new cycle, retrying (bounded) if the very first
+    // track would repeat whatever just finished playing -- "evita que la
+    // última canción del ciclo anterior sea también la primera del nuevo
+    // ciclo". With one track (or none) this can never be satisfied, so it
+    // falls back to a plain shuffle -- still simple, still bounded, never
+    // hangs.
+    function shuffleAvoidingFirst<T>(items: T[], avoid: T | undefined): T[] {
+      if (items.length <= 1 || avoid === undefined) return shuffle(items);
+      let result = shuffle(items);
+      let guard = 0;
+      while (result[0] === avoid && guard < 10) {
+        result = shuffle(items);
+        guard += 1;
+      }
+      return result;
+    }
+
     function playMusicTrack(index: number) {
       if (!musicEl || musicOrder.length === 0) return;
       musicEl.src = musicOrder[index];
@@ -592,13 +689,20 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       });
     }
 
-    // Advances to the next track, looping back to the very first once the
-    // playlist is exhausted ("al terminar la playlist, volver a empezar
-    // desde la primera"). Current volume (normal or ducked) is left
-    // untouched -- only which track is playing changes.
+    // Advances to the next track in the current shuffled order; once it's
+    // exhausted, reshuffles for a new cycle (never picking a fresh random
+    // track after every single one -- that would risk repeats within a
+    // cycle) rather than replaying the same fixed order forever. Current
+    // volume (normal or ducked) is left untouched -- only which track is
+    // playing changes.
     function advanceMusicTrack() {
       if (musicOrder.length === 0) return;
-      musicIndex = (musicIndex + 1) % musicOrder.length;
+      const justPlayed = musicOrder[musicIndex];
+      musicIndex += 1;
+      if (musicIndex >= musicOrder.length) {
+        musicOrder = shuffleAvoidingFirst(musicOrder, justPlayed);
+        musicIndex = 0;
+      }
       playMusicTrack(musicIndex);
     }
 
@@ -664,13 +768,18 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       | 'imagined'
       | 'ceremony'
       | 'celebration'
-      | 'keepsake';
+      | 'keepsake'
+      | 'stay'
+      | 'travelInfo';
     // Single source of truth for scene order/hash -- both goToScene's
     // adjacency check (only cover<->memory, memory<->destination,
     // destination<->journey, journey<->imagined, imagined<->ceremony,
-    // ceremony<->celebration and celebration<->keepsake have a defined
-    // animated path) and the hash routing below read from this instead of
-    // hand-repeating the mapping.
+    // ceremony<->celebration, celebration<->keepsake and keepsake<->stay
+    // have a defined animated path) and the hash routing below read from
+    // this instead of hand-repeating the mapping. 'travelInfo' is
+    // deliberately NOT listed here -- see sceneIndex/the adjacency check
+    // in goToScene, which treats anything missing from this array as
+    // never adjacent to anything, always landing via an instant cut.
     const SCENE_ORDER: SceneName[] = [
       'cover',
       'memory',
@@ -680,6 +789,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       'ceremony',
       'celebration',
       'keepsake',
+      'stay',
     ];
     const SCENE_HASH: Record<SceneName, string> = {
       cover: '#portada',
@@ -696,6 +806,8 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       // '#recuerdo' is already memory's own hash (page 2) -- '#inolvidable'
       // matches this page's own title ("...lo inolvidable.") instead.
       keepsake: '#inolvidable',
+      stay: '#estadia',
+      travelInfo: '#informacion-viaje',
     };
     const sceneIndex = (scene: SceneName) => SCENE_ORDER.indexOf(scene);
 
@@ -714,6 +826,8 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     let celebrationVideoSrcAssigned = false;
     let keepsakeAssetsRequested = false;
     let keepsakeVideoSrcAssigned = false;
+    let stayAssetsRequested = false;
+    let travelInfoAssetsRequested = false;
 
     function clearCompletionTimer() {
       if (completionTimer !== null) {
@@ -876,10 +990,13 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     // Idempotent (guarded by destinationAssetsRequested) so it's safe to
     // call from every place that can land on memory/destination (the
     // animated reveal, reduced motion, and instant/direct-hash loads).
-    function ensureDestinationAssets() {
-      if (destinationAssetsRequested) return;
-      destinationAssetsRequested = true;
-
+    // Background image only -- cheap (a static png the browser caches
+    // normally), unlike the transition video below, so this is safe to
+    // call for every "past" scene on an instant/direct load (see
+    // applySceneInstantly) without triggering any video download. Kept
+    // separate from ensureDestinationAssets so the two costs (image vs.
+    // video) can be requested independently.
+    function ensureDestinationBackground() {
       const frameSrc = destinationFrameEl?.dataset.bgSrc;
       if (destinationFrameEl && frameSrc) {
         destinationFrameEl.style.backgroundImage = `url('${frameSrc}')`;
@@ -888,6 +1005,13 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       if (destinationImageEl && imageSrc) {
         destinationImageEl.style.backgroundImage = `url('${imageSrc}')`;
       }
+    }
+
+    function ensureDestinationAssets() {
+      if (destinationAssetsRequested) return;
+      destinationAssetsRequested = true;
+
+      ensureDestinationBackground();
 
       // Same reduced-motion exception as the cover->memory video: never
       // loaded as an active part of the experience for those users, who
@@ -910,14 +1034,19 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     // the journey video has a real head start without ever competing with
     // the cover's own load. No image asset to assign here -- none exists
     // yet for this scene (see the markup's own comment).
-    function ensureJourneyAssets() {
-      if (journeyAssetsRequested) return;
-      journeyAssetsRequested = true;
-
+    // See ensureDestinationBackground's own comment above.
+    function ensureJourneyBackground() {
       const frameSrc = journeyFrameEl?.dataset.bgSrc;
       if (journeyFrameEl && frameSrc) {
         journeyFrameEl.style.backgroundImage = `url('${frameSrc}')`;
       }
+    }
+
+    function ensureJourneyAssets() {
+      if (journeyAssetsRequested) return;
+      journeyAssetsRequested = true;
+
+      ensureJourneyBackground();
 
       // Same reduced-motion exception as the other transition videos:
       // never loaded as an active part of the experience for those users.
@@ -937,14 +1066,19 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     // imagined-days video has a real head start without ever competing
     // with the cover's own load. No image asset to assign here -- none
     // exists yet for this scene either.
-    function ensureImaginedAssets() {
-      if (imaginedAssetsRequested) return;
-      imaginedAssetsRequested = true;
-
+    // See ensureDestinationBackground's own comment above.
+    function ensureImaginedBackground() {
       const frameSrc = imaginedFrameEl?.dataset.bgSrc;
       if (imaginedFrameEl && frameSrc) {
         imaginedFrameEl.style.backgroundImage = `url('${frameSrc}')`;
       }
+    }
+
+    function ensureImaginedAssets() {
+      if (imaginedAssetsRequested) return;
+      imaginedAssetsRequested = true;
+
+      ensureImaginedBackground();
 
       // Same reduced-motion exception as the other transition videos:
       // never loaded as an active part of the experience for those users.
@@ -964,14 +1098,19 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     // ceremony video has a real head start without ever competing with
     // the cover's own load. No image asset to assign here -- none exists
     // yet for this scene either.
-    function ensureCeremonyAssets() {
-      if (ceremonyAssetsRequested) return;
-      ceremonyAssetsRequested = true;
-
+    // See ensureDestinationBackground's own comment above.
+    function ensureCeremonyBackground() {
       const frameSrc = ceremonyFrameEl?.dataset.bgSrc;
       if (ceremonyFrameEl && frameSrc) {
         ceremonyFrameEl.style.backgroundImage = `url('${frameSrc}')`;
       }
+    }
+
+    function ensureCeremonyAssets() {
+      if (ceremonyAssetsRequested) return;
+      ceremonyAssetsRequested = true;
+
+      ensureCeremonyBackground();
 
       // Same reduced-motion exception as the other transition videos:
       // never loaded as an active part of the experience for those users.
@@ -991,14 +1130,19 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     // celebration video has a real head start without ever competing
     // with the cover's own load. No image asset to assign here -- none
     // exists yet for this scene either.
-    function ensureCelebrationAssets() {
-      if (celebrationAssetsRequested) return;
-      celebrationAssetsRequested = true;
-
+    // See ensureDestinationBackground's own comment above.
+    function ensureCelebrationBackground() {
       const frameSrc = celebrationFrameEl?.dataset.bgSrc;
       if (celebrationFrameEl && frameSrc) {
         celebrationFrameEl.style.backgroundImage = `url('${frameSrc}')`;
       }
+    }
+
+    function ensureCelebrationAssets() {
+      if (celebrationAssetsRequested) return;
+      celebrationAssetsRequested = true;
+
+      ensureCelebrationBackground();
 
       // Same reduced-motion exception as the other transition videos:
       // never loaded as an active part of the experience for those users.
@@ -1018,14 +1162,19 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     // so the keepsake video has a real head start without ever competing
     // with the cover's own load. No image asset to assign here -- none
     // exists yet for this scene either.
-    function ensureKeepsakeAssets() {
-      if (keepsakeAssetsRequested) return;
-      keepsakeAssetsRequested = true;
-
+    // See ensureDestinationBackground's own comment above.
+    function ensureKeepsakeBackground() {
       const frameSrc = keepsakeFrameEl?.dataset.bgSrc;
       if (keepsakeFrameEl && frameSrc) {
         keepsakeFrameEl.style.backgroundImage = `url('${frameSrc}')`;
       }
+    }
+
+    function ensureKeepsakeAssets() {
+      if (keepsakeAssetsRequested) return;
+      keepsakeAssetsRequested = true;
+
+      ensureKeepsakeBackground();
 
       // Same reduced-motion exception as the other transition videos:
       // never loaded as an active part of the experience for those users.
@@ -1037,6 +1186,35 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
           keepsakeVideoSrcAssigned = true;
           attachVideoAudioFadeOut(keepsakeVideoEl);
         }
+      }
+    }
+
+    // Same idea as ensureKeepsakeAssets, one scene later, but simpler --
+    // page 9 has no video at all, just textura_vertical_4.png (see
+    // .experience__stay-image's own comment in the markup above), so
+    // there is nothing to preload/play, only the background-image to
+    // assign once KeepsakeScene is actually reached.
+    function ensureStayAssets() {
+      if (stayAssetsRequested) return;
+      stayAssetsRequested = true;
+
+      const imageSrc = stayImageEl?.dataset.bgSrc;
+      if (stayImageEl && imageSrc) {
+        stayImageEl.style.backgroundImage = `url('${imageSrc}')`;
+      }
+    }
+
+    // Same idea, for the page-3 shortcut's own separate image element
+    // (see travelInfoImageEl above) -- independent of ensureStayAssets
+    // since the two panels never share DOM, even though they share a
+    // texture file and a component.
+    function ensureTravelInfoAssets() {
+      if (travelInfoAssetsRequested) return;
+      travelInfoAssetsRequested = true;
+
+      const imageSrc = travelInfoImageEl?.dataset.bgSrc;
+      if (travelInfoImageEl && imageSrc) {
+        travelInfoImageEl.style.backgroundImage = `url('${imageSrc}')`;
       }
     }
 
@@ -1157,6 +1335,8 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       if (ceremonyPanel) ceremonyPanel.toggleAttribute('inert', scene !== 'ceremony');
       if (celebrationPanel) celebrationPanel.toggleAttribute('inert', scene !== 'celebration');
       if (keepsakePanel) keepsakePanel.toggleAttribute('inert', scene !== 'keepsake');
+      if (stayPanel) stayPanel.toggleAttribute('inert', scene !== 'stay');
+      if (travelInfoPanel) travelInfoPanel.toggleAttribute('inert', scene !== 'travelInfo');
     }
 
     function focusSceneHeading(scene: SceneName) {
@@ -1175,7 +1355,11 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
                     ? celebrationPanel?.querySelector<HTMLElement>('[data-scene-heading]')
                     : scene === 'keepsake'
                       ? keepsakePanel?.querySelector<HTMLElement>('[data-scene-heading]')
-                      : coverPanel?.querySelector<HTMLElement>('.cover__cta');
+                      : scene === 'stay'
+                        ? stayPanel?.querySelector<HTMLElement>('[data-scene-heading]')
+                        : scene === 'travelInfo'
+                          ? travelInfoPanel?.querySelector<HTMLElement>('[data-scene-heading]')
+                          : coverPanel?.querySelector<HTMLElement>('.cover__cta');
       target?.focus({ preventScroll: true });
     }
 
@@ -1192,31 +1376,41 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
         'is-imagined-revealing',
         'is-ceremony-revealing',
         'is-celebration-revealing',
-        'is-keepsake-revealing'
+        'is-keepsake-revealing',
+        'is-stay-revealing'
       );
-      // memory, destination, journey, imagined, ceremony, celebration and
-      // keepsake all sit "past" the cover, so it stays fully receded for
-      // any of them; each further scene sits past the previous one too --
-      // each stays fully painted (is-revealing-*) but visually receded
-      // behind the next one (is-*-receded) -- same convention as the
-      // cover/memory pair, repeated one level deeper each time.
+      // memory, destination, journey, imagined, ceremony, celebration,
+      // keepsake and stay all sit "past" the cover, so it stays fully
+      // receded for any of them; each further scene sits past the
+      // previous one too -- each stays fully painted (is-revealing-*) but
+      // visually receded behind the next one (is-*-receded) -- same
+      // convention as the cover/memory pair, repeated one level deeper
+      // each time.
       const pastDestination =
         scene === 'destination' ||
         scene === 'journey' ||
         scene === 'imagined' ||
         scene === 'ceremony' ||
         scene === 'celebration' ||
-        scene === 'keepsake';
+        scene === 'keepsake' ||
+        scene === 'stay';
       const pastJourney =
         scene === 'journey' ||
         scene === 'imagined' ||
         scene === 'ceremony' ||
         scene === 'celebration' ||
-        scene === 'keepsake';
+        scene === 'keepsake' ||
+        scene === 'stay';
       const pastImagined =
-        scene === 'imagined' || scene === 'ceremony' || scene === 'celebration' || scene === 'keepsake';
-      const pastCeremony = scene === 'ceremony' || scene === 'celebration' || scene === 'keepsake';
-      const pastCelebration = scene === 'celebration' || scene === 'keepsake';
+        scene === 'imagined' ||
+        scene === 'ceremony' ||
+        scene === 'celebration' ||
+        scene === 'keepsake' ||
+        scene === 'stay';
+      const pastCeremony =
+        scene === 'ceremony' || scene === 'celebration' || scene === 'keepsake' || scene === 'stay';
+      const pastCelebration = scene === 'celebration' || scene === 'keepsake' || scene === 'stay';
+      const pastKeepsake = scene === 'keepsake' || scene === 'stay';
       root!.classList.toggle('is-cover-receded', scene !== 'cover');
       root!.classList.toggle('is-revealing-memory', scene !== 'cover');
       root!.classList.toggle('is-memory-receded', pastDestination);
@@ -1234,9 +1428,16 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       root!.classList.toggle('is-ceremony-receded', pastCelebration);
       root!.classList.toggle('is-revealing-celebration', pastCelebration);
       root!.classList.toggle('is-celebration-revealing', pastCelebration);
-      root!.classList.toggle('is-celebration-receded', scene === 'keepsake');
-      root!.classList.toggle('is-revealing-keepsake', scene === 'keepsake');
-      root!.classList.toggle('is-keepsake-revealing', scene === 'keepsake');
+      root!.classList.toggle('is-celebration-receded', pastKeepsake);
+      root!.classList.toggle('is-revealing-keepsake', pastKeepsake);
+      root!.classList.toggle('is-keepsake-revealing', pastKeepsake);
+      root!.classList.toggle('is-keepsake-receded', scene === 'stay');
+      root!.classList.toggle('is-revealing-stay', scene === 'stay');
+      root!.classList.toggle('is-stay-revealing', scene === 'stay');
+      // Travel-info is an isolated island, not part of the cover->...
+      // ->stay "past" cascade above -- it doesn't recede/reveal anything
+      // else, it's just shown or hidden outright (see its own CSS block).
+      root!.classList.toggle('is-travel-info-revealing', scene === 'travelInfo');
       // Defensive: these are only ever set (and cleared) inside
       // runVideoAndReveal's own video->MemoryScene handoff, but an instant
       // scene switch should never risk inheriting a leftover inline value.
@@ -1292,19 +1493,39 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       }
       resetKeepsakeVideo();
       // A direct/instant load landing on memory, destination, journey,
-      // imagined, ceremony, celebration or keepsake should still get the
-      // same lazy head start on each scene's own media as the animated
-      // path -- see ensureDestinationAssets/ensureJourneyAssets/
-      // ensureImaginedAssets/ensureCeremonyAssets/ensureCelebrationAssets/
-      // ensureKeepsakeAssets.
-      if (scene === 'memory' || pastDestination) {
-        ensureDestinationAssets();
-      }
-      if (pastDestination) ensureJourneyAssets();
-      if (pastJourney) ensureImaginedAssets();
-      if (pastImagined) ensureCeremonyAssets();
-      if (pastCeremony) ensureCelebrationAssets();
-      if (pastCelebration) ensureKeepsakeAssets();
+      // imagined, ceremony, celebration, keepsake or stay needs every
+      // "past" scene's own static background ready (so an instant
+      // back-navigation from here never shows a blank/flashed panel) --
+      // but never their transition videos: instant loads never play those
+      // (see the video resets above), and downloading every remaining
+      // transitionN.mp4 at once on a direct/deep link is exactly the
+      // "carga anticipada" this is meant to avoid. Background images are
+      // cheap static files, safe to request for the whole past chain.
+      if (scene === 'memory' || pastDestination) ensureDestinationBackground();
+      if (pastDestination) ensureJourneyBackground();
+      if (pastJourney) ensureImaginedBackground();
+      if (pastImagined) ensureCeremonyBackground();
+      if (pastCeremony) ensureCelebrationBackground();
+      if (pastCelebration) ensureKeepsakeBackground();
+      // ensureStayAssets has no video at all (page 9 is a static photo,
+      // see its own comment) -- as cheap as the background-only helpers
+      // above, so (like before) it's still safe to call for the whole
+      // pastKeepsake range (scene is 'keepsake' or 'stay').
+      if (pastKeepsake) ensureStayAssets();
+
+      // Video preload is the one exception: only the single scene right
+      // after the one just landed on gets its full assets (background +
+      // video), exactly mirroring the same "current scene preloads the
+      // next one" pattern the real forward click-through path already
+      // uses (see runDestinationVideoAndReveal's own ensureJourneyAssets()
+      // call, etc.) -- never the whole remaining chain at once.
+      if (scene === 'memory') ensureDestinationAssets();
+      else if (scene === 'destination') ensureJourneyAssets();
+      else if (scene === 'journey') ensureImaginedAssets();
+      else if (scene === 'imagined') ensureCeremonyAssets();
+      else if (scene === 'ceremony') ensureCelebrationAssets();
+      else if (scene === 'celebration') ensureKeepsakeAssets();
+      if (scene === 'travelInfo') ensureTravelInfoAssets();
       void root!.offsetWidth;
       requestAnimationFrame(() => {
         root?.classList.remove('is-instant');
@@ -2070,6 +2291,11 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     async function runKeepsakeVideoAndReveal() {
       ensureKeepsakeAssets();
 
+      // KeepsakeScene is reached -- give page 9's own static image a head
+      // start now, well before its own "Ver información del viaje" CTA
+      // can realistically be reached/clicked (see ensureStayAssets).
+      ensureStayAssets();
+
       let ready = false;
       if (keepsakeVideoEl && keepsakeVideoSrcAssigned) {
         try {
@@ -2161,13 +2387,20 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
         !imaginedPanel ||
         !ceremonyPanel ||
         !celebrationPanel ||
-        !keepsakePanel
+        !keepsakePanel ||
+        !stayPanel ||
+        !travelInfoPanel
       )
         return;
 
       const fromIndex = sceneIndex(currentScene);
       const toIndex = sceneIndex(scene);
-      const adjacent = Math.abs(fromIndex - toIndex) === 1;
+      // 'travelInfo' is never in SCENE_ORDER (see its own comment above),
+      // so either index is -1 whenever it's involved -- guarding on that
+      // here means every transition into or out of it always falls
+      // through to the "not adjacent" instant-cut branch below, exactly
+      // as intended, regardless of which scene it's coming from/going to.
+      const adjacent = fromIndex !== -1 && toIndex !== -1 && Math.abs(fromIndex - toIndex) === 1;
 
       if (!adjacent) {
         // No defined animated path between these two scenes (e.g. a
@@ -2430,7 +2663,44 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
         return;
       }
 
-      if (scene === 'keepsake') {
+      if (scene === 'keepsake' && currentScene === 'stay') {
+        // Back (stay -> keepsake): same idea -- no video in reverse, just
+        // a short crossfade. KeepsakeScene's own panel/content were never
+        // cleared (is-revealing-keepsake stays set the whole time once
+        // first reached, including its frozen last video frame), so it
+        // simply reappears as-is.
+        root!.classList.remove('is-revealing-stay', 'is-stay-revealing', 'is-keepsake-receded');
+        const duration = reduced ? REDUCED_MOTION_DURATION : BACKWARD_DURATION;
+        completionTimer = window.setTimeout(() => {
+          completionTimer = null;
+          currentScene = scene;
+          isTransitioning = false;
+          root!.classList.remove('is-transitioning');
+          focusSceneHeading(scene);
+        }, duration);
+        return;
+      }
+
+      if (scene === 'stay') {
+        // Forward (keepsake -> stay). No video at all on this scene (see
+        // .experience__stay-image's own comment) -- the reduced/full
+        // motion paths only differ in how long the crossfade/settle
+        // takes, same as every other scene's own reduced-motion branch,
+        // just without a video-readiness wait since there's no video to
+        // wait for.
+        ensureStayAssets();
+        root!.classList.add('is-keepsake-receded', 'is-revealing-stay', 'is-stay-revealing');
+        completionTimer = window.setTimeout(() => {
+          completionTimer = null;
+          currentScene = scene;
+          isTransitioning = false;
+          root!.classList.remove('is-transitioning');
+          focusSceneHeading(scene);
+        }, reduced ? REDUCED_MOTION_DURATION : STAY_SETTLE_MS);
+        return;
+      }
+
+      if (scene === 'keepsake' && currentScene !== 'stay') {
         // Forward (celebration -> keepsake).
         if (reduced) {
           // Reduced motion: never plays transition8.mp4 -- no static
@@ -2639,6 +2909,9 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       const backToCeremonyTrigger = target.closest<HTMLElement>('[data-action="back-to-ceremony"]');
       const keepsakeTrigger = target.closest<HTMLElement>('[data-action="go-to-keepsake"]');
       const backToCelebrationTrigger = target.closest<HTMLElement>('[data-action="back-to-celebration"]');
+      const stayTrigger = target.closest<HTMLElement>('[data-action="go-to-stay"]');
+      const backToKeepsakeTrigger = target.closest<HTMLElement>('[data-action="back-to-keepsake"]');
+      const travelInfoTrigger = target.closest<HTMLElement>('[data-action="go-to-travel-info"]');
 
       if (forwardTrigger && root!.contains(forwardTrigger)) {
         event.preventDefault();
@@ -2683,10 +2956,26 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       } else if (backToCelebrationTrigger && root!.contains(backToCelebrationTrigger)) {
         event.preventDefault();
         goToScene('celebration');
+      } else if (stayTrigger && root!.contains(stayTrigger)) {
+        event.preventDefault();
+        goToScene('stay');
+      } else if (backToKeepsakeTrigger && root!.contains(backToKeepsakeTrigger)) {
+        event.preventDefault();
+        goToScene('keepsake');
+      } else if (travelInfoTrigger && root!.contains(travelInfoTrigger)) {
+        // Page 3's own shortcut -- always the "not adjacent" instant-cut
+        // path (see goToScene's own adjacency check), never the animated
+        // keepsake<->stay crossfade. Its own back button reuses the
+        // existing back-to-destination action/branch above (StayScene's
+        // backAction prop), so no new back-navigation code is needed.
+        event.preventDefault();
+        goToScene('travelInfo');
       }
     });
 
     function sceneFromHash(hash: string): SceneName {
+      if (hash === '#informacion-viaje') return 'travelInfo';
+      if (hash === '#estadia') return 'stay';
       if (hash === '#inolvidable') return 'keepsake';
       if (hash === '#fiesta') return 'celebration';
       if (hash === '#celebracion') return 'ceremony';
@@ -3593,6 +3882,11 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     pointer-events: none;
   }
 
+  .experience.is-transitioning :global(.keepsake__cta),
+  .experience.is-transitioning :global([data-action='back-to-keepsake']) {
+    pointer-events: none;
+  }
+
   @media (prefers-reduced-motion: no-preference) {
     .experience:not(.is-instant) .experience__scene--ceremony {
       transition: opacity 360ms ease;
@@ -4006,5 +4300,206 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
   .experience__keepsake-overlay {
     position: absolute;
     inset: 0;
+  }
+
+  /*
+    Stay scene (page 9) -- additive only, same convention as the keepsake
+    block above, one level deeper: sits below keepsake in the stacking
+    order (z-index -6, keepsake -5, celebration -4, ceremony -3, imagined
+    -2, journey -1, destination 0, memory 1, cover 2), so the keepsake ->
+    stay crossfade is the same "panel above fades out, panel below is
+    already there" pattern, repeated once more -- the last time, this is
+    the final scene.
+  */
+  .experience__scene--stay {
+    z-index: -6;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .experience[data-scene='stay'] .experience__scene--stay {
+    pointer-events: auto;
+  }
+
+  .experience[data-scene='stay'] .experience__scene--cover,
+  .experience[data-scene='stay'] .experience__scene--memory,
+  .experience[data-scene='stay'] .experience__scene--destination,
+  .experience[data-scene='stay'] .experience__scene--journey,
+  .experience[data-scene='stay'] .experience__scene--imagined,
+  .experience[data-scene='stay'] .experience__scene--ceremony,
+  .experience[data-scene='stay'] .experience__scene--celebration,
+  .experience[data-scene='stay'] .experience__scene--keepsake {
+    pointer-events: none;
+  }
+
+  .experience[data-scene='stay']:not(.is-transitioning) .experience__scene--cover,
+  .experience[data-scene='stay']:not(.is-transitioning) .experience__scene--memory,
+  .experience[data-scene='stay']:not(.is-transitioning) .experience__scene--destination,
+  .experience[data-scene='stay']:not(.is-transitioning) .experience__scene--journey,
+  .experience[data-scene='stay']:not(.is-transitioning) .experience__scene--imagined,
+  .experience[data-scene='stay']:not(.is-transitioning) .experience__scene--ceremony,
+  .experience[data-scene='stay']:not(.is-transitioning) .experience__scene--celebration,
+  .experience[data-scene='stay']:not(.is-transitioning) .experience__scene--keepsake {
+    visibility: hidden;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .experience:not(.is-instant) .experience__scene--stay {
+      transition: opacity 360ms ease;
+    }
+
+    .experience.is-revealing-stay .experience__scene--stay {
+      opacity: 1;
+    }
+
+    /* Keepsake recedes while .is-keepsake-receded is present -- defined
+       after the existing ".is-revealing-keepsake .experience__scene--keepsake
+       {opacity:1}" rule above so it wins on the (otherwise equal)
+       specificity, same trick as .is-celebration-receded overriding
+       celebration's own opacity. Plain baseline duration (matches every
+       previous stage's own back/forward panel fade) -- no bespoke
+       extended timing invented here, per "mantén el patrón existente". */
+    .experience.is-keepsake-receded .experience__scene--keepsake {
+      transition: opacity 360ms ease;
+      opacity: 0;
+    }
+
+    .experience[data-transition-direction='back'].is-transitioning .experience__scene--stay {
+      transition-duration: 850ms;
+    }
+  }
+
+  .experience.is-reduced-motion .experience__scene--stay {
+    transition: opacity 260ms ease !important;
+    transform: none !important;
+  }
+
+  .experience.is-reduced-motion.is-revealing-stay .experience__scene--stay {
+    opacity: 1;
+  }
+
+  .experience.is-reduced-motion[data-scene='stay'] .experience__scene--keepsake {
+    opacity: 0;
+  }
+
+  .experience.is-instant .experience__scene--stay,
+  .experience.is-instant .experience__stay-image,
+  .experience.is-instant :global(.keepsake__cta) {
+    transition: none !important;
+  }
+
+  /*
+    Stay stage -- same fixed 390x844 canvas convention as every scene
+    above, but no video/freeze logic at all: textura_vertical_4.png is
+    the whole background, always. Legibility comes from StayScene's own
+    local halos plus its own reading-column wash (same device as pages
+    4-8), never a global darkening filter over the photo -- "mantener
+    visible la fotografía".
+  */
+  .experience__stay-frame {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background-color: var(--color-bg);
+  }
+
+  .experience__stay-canvas {
+    position: relative;
+    width: 390px;
+    height: 844px;
+    flex-shrink: 0;
+    overflow: hidden;
+    transform-origin: center center;
+    transform: scale(var(--cover-scale, 1));
+  }
+
+  :global(html.is-fill-viewport) .experience__stay-canvas {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(var(--cover-scale-x, 1), var(--cover-scale-y, 1));
+  }
+
+  /*
+    The photo itself -- absolute-fill, same 1% overscan as every video
+    crop elsewhere in this file (a fractional --cover-scale can otherwise
+    leave a hairline seam on one edge). A very slow, subtle "Ken Burns"
+    scale gives it a touch of life without ever feeling like a slideshow
+    effect -- max ~2.5% growth (well inside the "~2-3%" asked for) over a
+    long, slow 48s breath, eased both ways so it never has a visible
+    start/end snap. Gated behind is-revealing-stay so it only ever runs
+    while this is actually the foreground scene, and fully disabled under
+    reduced motion (see below) -- a static, sharp last frame is used
+    there instead, same principle as every other scene's own
+    reduced-motion fallback.
+  */
+  .experience__stay-image {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 101%;
+    height: 101%;
+    transform: translate(-50%, -50%);
+    background-size: cover;
+    background-position: 50% 50%;
+    background-repeat: no-repeat;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    :global(.experience.is-revealing-stay) .experience__stay-image,
+    :global(.experience.is-travel-info-revealing) .experience__stay-image {
+      animation: stayKenBurns 48s ease-in-out infinite alternate;
+    }
+  }
+
+  @keyframes stayKenBurns {
+    from {
+      transform: translate(-50%, -50%) scale(1);
+    }
+    to {
+      transform: translate(-50%, -50%) scale(1.025);
+    }
+  }
+
+  .experience__stay-overlay {
+    position: absolute;
+    inset: 0;
+  }
+
+  /*
+    Travel-info scene (page-3 shortcut) -- an isolated island, not another
+    step in the cover->...->stay depth chain above, so it doesn't need
+    that chain's z-index/receding choreography: shown outright whenever
+    it's the active scene, hidden outright otherwise, always an instant
+    cut (see goToScene/applySceneInstantly), so no transition/duration is
+    declared here at all. Structural sizing/background/Ken Burns all come
+    from .experience__stay-frame/-canvas/-image/-overlay above, reused
+    as-is (see the markup's own comment).
+  */
+  .experience__scene--travel-info {
+    z-index: -8;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .experience[data-scene='travelInfo'] .experience__scene--travel-info {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .experience[data-scene='travelInfo'] .experience__scene--cover,
+  .experience[data-scene='travelInfo'] .experience__scene--memory,
+  .experience[data-scene='travelInfo'] .experience__scene--destination,
+  .experience[data-scene='travelInfo'] .experience__scene--journey,
+  .experience[data-scene='travelInfo'] .experience__scene--imagined,
+  .experience[data-scene='travelInfo'] .experience__scene--ceremony,
+  .experience[data-scene='travelInfo'] .experience__scene--celebration,
+  .experience[data-scene='travelInfo'] .experience__scene--keepsake,
+  .experience[data-scene='travelInfo'] .experience__scene--stay {
+    pointer-events: none;
+    visibility: hidden;
   }
 </style>
