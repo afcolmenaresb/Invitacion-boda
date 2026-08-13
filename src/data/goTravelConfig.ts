@@ -6,7 +6,7 @@
  * The number must be in international format, digits only (no "+", no
  * spaces, no dashes) -- that's what wa.me expects.
  */
-export const GOTRAVEL_WHATSAPP_NUMBER = '573000000000';
+export const GOTRAVEL_WHATSAPP_NUMBER = '595971570172';
 
 /**
  * Builds the pre-filled WhatsApp message, personalized with the guest's
@@ -14,7 +14,7 @@ export const GOTRAVEL_WHATSAPP_NUMBER = '573000000000';
  * greeting always matches whoever is actually looking at the page.
  */
 export function getGoTravelWhatsAppMessage(guestName: string): string {
-  return `Hola GoTravel, soy ${guestName}. Quisiera más información sobre la estadía para la boda.`;
+  return `Hola, soy ${guestName}. Estoy viendo la invitación de la boda de Fátima y Andrés y me gustaría conocer las opciones para hospedarme en el Grand Palladium Imbassaí y organizar el viaje con ustedes. ¿Podrían ayudarme? Muchas gracias.`;
 }
 
 /** Full wa.me URL, ready to use as an <a href>. */

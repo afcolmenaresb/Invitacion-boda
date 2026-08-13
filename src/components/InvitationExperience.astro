@@ -8,6 +8,7 @@ import CeremonyScene from './CeremonyScene.astro';
 import CelebrationScene from './CelebrationScene.astro';
 import KeepsakeScene from './KeepsakeScene.astro';
 import StayScene from './StayScene.astro';
+import DesktopGate from './DesktopGate.astro';
 import { musicPlaylist } from '../data/musicPlaylist';
 import type { Guest } from '../data/guests';
 
@@ -45,6 +46,8 @@ const stayTextureSrc = `${base}/images/textura_vertical_4.png`;
 // once per visit.
 const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
 ---
+
+<DesktopGate />
 
 <div class="experience" id="invitation-experience" data-scene="cover" data-transition-direction="forward">
   <section class="experience__scene experience__scene--cover" data-scene-panel="cover">

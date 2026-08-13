@@ -1,0 +1,118 @@
+---
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+---
+
+<script is:inline>
+  // Same "input capability, not just width" formula Cover.astro's own
+  // script already uses for isMobileOrTablet -- deliberately duplicated
+  // (not imported -- is:inline scripts can't) rather than refactored out,
+  // so this file stays self-contained and Cover.astro's own script is
+  // never touched. Desktop/laptop here is simply "not mobile/tablet": a
+  // touch-capable device (coarse pointer or touch points) whose short
+  // viewport side is 1024px or less. Any device that fails either check
+  // -- no touch, or a short side over 1024px -- counts as desktop/laptop
+  // and gets this gate; anything the existing formula already treats as
+  // mobile/tablet (portrait or landscape) never does, so a landscape
+  // tablet keeps using the existing rotate-device notice untouched, exactly
+  // as specified.
+  (function () {
+    var TOUCH_SHORT_SIDE_MAX = 1024;
+    var root = document.documentElement;
+    var scheduled = false;
+
+    function getViewportWidth() {
+      return (window.visualViewport && window.visualViewport.width) || document.documentElement.clientWidth;
+    }
+    function getViewportHeight() {
+      return (window.visualViewport && window.visualViewport.height) || document.documentElement.clientHeight;
+    }
+
+    function update() {
+      scheduled = false;
+      var viewportWidth = getViewportWidth();
+      var viewportHeight = getViewportHeight();
+      var isTouchDevice = window.matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0;
+      var shortSide = Math.min(viewportWidth, viewportHeight);
+      var isMobileOrTablet = isTouchDevice && shortSide <= TOUCH_SHORT_SIDE_MAX;
+      root.classList.toggle('is-desktop-gated', !isMobileOrTablet);
+    }
+
+    function scheduleUpdate() {
+      if (scheduled) return;
+      scheduled = true;
+      requestAnimationFrame(update);
+    }
+
+    update();
+    window.addEventListener('resize', scheduleUpdate);
+    window.addEventListener('orientationchange', scheduleUpdate);
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', scheduleUpdate);
+    }
+  })();
+</script>
+
+<div class="desktop-gate" style={`background-image: url('${base}/images/textura_vertical_2.png')`}>
+  <div class="desktop-gate__content">
+    <p class="desktop-gate__title">Esta historia se vive mejor en vertical.</p>
+    <p class="desktop-gate__subtitle">Ábreme desde tu celular o tablet.</p>
+  </div>
+</div>
+
+<style>
+  /*
+    Desktop/laptop gate: covers the entire visible viewport, hidden unless
+    <html> carries is-desktop-gated (set by the inline script above).
+    Never shown on phones/tablets. Same paper texture/z-index/fixed-inset
+    convention as Cover.astro's own .orientation-lock, so it reads as part
+    of the same object language rather than a generic error screen.
+  */
+  .desktop-gate {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    align-items: center;
+    justify-content: center;
+    background-color: var(--color-bg);
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-position: 60% top;
+    overflow: hidden;
+  }
+
+  :global(html.is-desktop-gated) .desktop-gate {
+    display: flex;
+  }
+
+  /* The interactive experience itself is never painted behind this gate --
+     no scene, no video, nothing. */
+  :global(html.is-desktop-gated) :global(#invitation-experience) {
+    display: none;
+  }
+
+  .desktop-gate__content {
+    max-width: 420px;
+    padding: 0 32px;
+    text-align: center;
+  }
+
+  .desktop-gate__title {
+    margin: 0 0 14px;
+    font-family: var(--font-serif);
+    font-weight: 400;
+    font-style: italic;
+    font-size: 1.6rem;
+    line-height: 1.4;
+    color: #3a3128;
+  }
+
+  .desktop-gate__subtitle {
+    margin: 0;
+    font-family: var(--font-sans);
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    font-size: 0.78rem;
+    color: #6f6350;
+  }
+</style>
