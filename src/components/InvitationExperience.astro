@@ -813,25 +813,39 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
 
     // Fades a transition video's own audio down to 0 over its last
     // ~1.5s, "sin corte brusco" -- driven by the video's own real
-    // playback progress ('timeupdate') rather than a separate timer, so
-    // it can never drift out of sync with the video itself, and never
-    // touches the MP4s or playbackRate. Attached once per video, right
-    // when its src is first assigned (see ensureDestinationAssets/
-    // ensureJourneyAssets/ensureImaginedAssets/ensureCeremonyAssets) --
-    // one shared mechanism reused across every scene with its own real
-    // audio, rather than a parallel per-scene fade. Volume is restored to
-    // full whenever each video is reset back to currentTime 0 (see
-    // resetDestinationVideo/resetJourneyVideo/resetImaginedVideo/
-    // resetCeremonyVideo), so a fresh playthrough never inherits the
-    // previous one's faded-to-0 volume.
+    // playback progress rather than a separate timer, so it can never
+    // drift out of sync with the video itself, and never touches the
+    // MP4s or playbackRate. Attached once per video, right when its src
+    // is first assigned (see ensureDestinationAssets/ensureJourneyAssets/
+    // ensureImaginedAssets/ensureCeremonyAssets) -- one shared mechanism
+    // reused across every scene with its own real audio, rather than a
+    // parallel per-scene fade. Volume is restored to full whenever each
+    // video is reset back to currentTime 0 (see resetDestinationVideo/
+    // resetJourneyVideo/resetImaginedVideo/resetCeremonyVideo), so a
+    // fresh playthrough never inherits the previous one's faded-to-0
+    // volume.
+    //
+    // Re-evaluated on 'timeupdate' (fires continuously during playback)
+    // as well as 'loadedmetadata'/'durationchange': not every one of
+    // these MP4s exposes its duration the instant its src is assigned --
+    // transition3.mp4 in particular stores its moov box after the video
+    // data instead of before, so the browser only learns its duration
+    // partway through loading rather than immediately. Listening on all
+    // three means the very first moment `video.duration` becomes a real,
+    // finite number -- whenever that happens to be -- immediately
+    // reconciles the volume against the actual remaining time, instead of
+    // silently never starting the fade for that video.
     function attachVideoAudioFadeOut(video: HTMLVideoElement) {
-      video.addEventListener('timeupdate', () => {
+      const updateVolumeForFadeOut = () => {
         const duration = video.duration;
         if (!Number.isFinite(duration) || duration <= 0) return;
         const fadeSeconds = VIDEO_AUDIO_FADE_OUT_MS / 1000;
         const remaining = duration - video.currentTime;
         video.volume = remaining <= fadeSeconds ? Math.max(0, Math.min(1, remaining / fadeSeconds)) : 1;
-      });
+      };
+      video.addEventListener('timeupdate', updateVolumeForFadeOut);
+      video.addEventListener('loadedmetadata', updateVolumeForFadeOut);
+      video.addEventListener('durationchange', updateVolumeForFadeOut);
     }
 
     // Waits until the video has enough data to play, or resolves false
