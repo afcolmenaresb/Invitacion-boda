@@ -181,25 +181,12 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   })();
 </script>
 
-<div
-  class="orientation-lock"
-  style={`background-image: url('${base}/images/textura_vertical_2.png')`}
->
-  <div class="orientation-lock__content">
-    <svg
-      class="orientation-lock__icon"
-      viewBox="0 0 48 80"
-      width="48"
-      height="80"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <rect x="4" y="4" width="40" height="72" rx="8" fill="none" stroke="currentColor" stroke-width="3" />
-      <line x1="18" y1="70" x2="30" y2="70" stroke="currentColor" stroke-width="3" stroke-linecap="round" />
-    </svg>
-    <p class="orientation-lock__text">Para vivir esta experiencia,<br />gira tu dispositivo.</p>
-  </div>
-</div>
+<!-- The rotate-device notice's own markup now lives in OrientationGate.astro
+     (rendered globally in InvitationExperience.astro, not nested here) so
+     it works on every scene, not just the cover -- see that file's own
+     comment. The detection script above is untouched: it already toggles
+     html.is-landscape-locked from viewport dimensions alone, independent
+     of where the notice itself is painted. -->
 
 <div class="cover-frame" style={`background-image: url('${base}/images/textura_vertical_2.png')`}>
   <div class="cover-canvas">
@@ -1871,11 +1858,11 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     texture as .cover-frame, set inline the same way, so it reads as part
     of the same object rather than a generic error screen.
 
-    .orientation-lock/-content/-text are declared :global() so
-    DesktopGate.astro can reuse the exact same rules for its own,
-    separate "view on mobile" notice instead of duplicating them -- see
-    that file's own comment. .orientation-lock__icon stays local/scoped:
-    only this file's own rotate-device notice uses it.
+    The markup itself now lives in OrientationGate.astro/DesktopGate.astro
+    (both rendered as global overlays, outside any scene's own stacking
+    context -- see OrientationGate.astro's own comment for why). These
+    rules stay declared :global() here and are shared by both, so nothing
+    is duplicated even though this file no longer renders either element.
   */
   :global(.orientation-lock) {
     display: none;
@@ -1905,10 +1892,6 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     gap: 16px;
     padding: 24px;
     text-align: center;
-  }
-
-  .orientation-lock__icon {
-    color: #7e5e49;
   }
 
   :global(.orientation-lock__text) {

@@ -9,6 +9,7 @@ import CelebrationScene from './CelebrationScene.astro';
 import KeepsakeScene from './KeepsakeScene.astro';
 import StayScene from './StayScene.astro';
 import DesktopGate from './DesktopGate.astro';
+import OrientationGate from './OrientationGate.astro';
 import { musicPlaylist } from '../data/musicPlaylist';
 import type { Guest } from '../data/guests';
 
@@ -48,6 +49,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
 ---
 
 <DesktopGate />
+<OrientationGate />
 
 <div class="experience" id="invitation-experience" data-scene="cover" data-transition-direction="forward">
   <section class="experience__scene experience__scene--cover" data-scene-panel="cover">
