@@ -222,12 +222,12 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
 
   <!--
     Ceremony stage (page 6, "Y entonces, el 'sí'"): same fixed 390x844
-    logical canvas as everything above. CeremonyScene's own text only
-    begins appearing once transition6.mp4 has actually ended and frozen
-    on its own last frame, plus a further deliberate pause -- unlike
-    destination/journey/imagined, nothing here appears while the video is
-    still playing (see runCeremonyVideoAndReveal's own comment for why).
-    No static fallback image exists for this scene either -- same
+    logical canvas as everything above. CeremonyScene's own text begins
+    appearing at the same moment transition6.mp4 starts playing, over the
+    still-playing video -- same convention as destination/journey (see
+    runCeremonyVideoAndReveal's own comment for how). It still freezes on
+    its own last frame once the video actually ends. No static fallback
+    image exists for this scene either -- same
     reasoning as the journey/imagined stages, see their own comments
     above. The video's own src is intentionally left unset here
     (data-video-src only) and assigned lazily once ImaginedDaysScene is
@@ -315,6 +315,11 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     const PHASE_B_CROSSFADE_MS = 320; // duck/elephant + cover recede while the video fades in
     const VIDEO_READY_TIMEOUT_MS = 1200; // max wait for the video to become playable before falling back
     const VIDEO_HARD_CAP_MS = 15000; // safety net against a video that never fires 'ended' or 'error'
+    // Shared across every transition video that has its own real audio
+    // (destination/journey/imagined/ceremony -- never the muted
+    // cover->memory video, and never the separate background-music
+    // track) -- see attachVideoAudioFadeOut below.
+    const VIDEO_AUDIO_FADE_OUT_MS = 1500;
     const POST_VIDEO_HOLD_MS = 180; // hold the video's last frame (plain paper, no animals) before revealing MemoryScene
     const BACKWARD_DURATION = 950;
     const REDUCED_MOTION_DURATION = 280;
@@ -366,17 +371,22 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     const IMAGINED_TEXT_DELAY_MS = 1500; // "la primera frase empiece a aparecer a los 1.5s de iniciado" the video -- also reused, unchanged, as the fallback pause before revealing when the video never actually played (readiness timeout/error), since there is no video timeline to key off of in that case either
     const IMAGINED_SETTLE_MS = 200;
 
-    // Forward (imagined days -> ceremony) phase timings. Unlike
-    // imagined's own text (which starts mid-video), CeremonyScene's
-    // content waits until transition6.mp4 has actually ended and frozen
-    // -- "al terminar, congelar el último frame; después mostrar el
-    // texto sobre ese frame" -- plus a further deliberate pause before
-    // is-ceremony-revealing is added, same "entrada lenta, elegante" idea
-    // as the original imagined-days pacing before that scene's own later
-    // sync-with-video revision (see runCeremonyVideoAndReveal).
+    // Forward (imagined days -> ceremony) phase timings. CeremonyScene's
+    // content starts revealing at the same moment as the crossfade itself
+    // -- "que texto y video comiencen juntos" -- same convention as
+    // destination/journey (see runCeremonyVideoAndReveal). Its own
+    // per-part fade-in timings are pure CSS (see CeremonyScene.astro),
+    // measured from that same moment.
     const CEREMONY_VIDEO_HARD_CAP_MS = 12000; // transition6.mp4 runs ~8s; generous safety net
-    const CEREMONY_TEXT_DELAY_MS = 1500; // deliberate breathing pause before the first line appears -- after the video has already ended (or, in the fallback paths, after settling on the plain background)
     const CEREMONY_SETTLE_MS = 200;
+    // Only used in the "video never actually played" fallback: holds the
+    // transition open for as long as CeremonyScene's own CSS-timed
+    // content takes to finish revealing (heading through cta, see
+    // CeremonyScene.astro) before declaring the scene settled -- same
+    // convention as DESTINATION_FALLBACK_HOLD_MS/JOURNEY_FALLBACK_HOLD_MS,
+    // so back-navigation is never possible while the text is still
+    // visibly mid-reveal.
+    const CEREMONY_FALLBACK_HOLD_MS = 4900;
 
     // --- Persistent background music ---
     //
@@ -616,6 +626,10 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       } catch {
         // See resetVideo above -- harmless if metadata isn't loaded yet.
       }
+      // Undo attachVideoAudioFadeOut's own last-1.5s fade-to-0 -- a fresh
+      // playthrough (re-entry) must start at full volume again, never
+      // inherit the previous one's faded-out level.
+      destinationVideoEl.volume = 1;
       // Defensive: on every normal playthrough this video's own 'ended'/
       // error already un-ducked the music well before back-navigation is
       // even possible (see runDestinationVideoAndReveal), so this is
@@ -632,6 +646,8 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       } catch {
         // See resetVideo above -- harmless if metadata isn't loaded yet.
       }
+      // See resetDestinationVideo above -- undoes the last-1.5s fade-out.
+      journeyVideoEl.volume = 1;
       // Defensive: same reasoning as resetDestinationVideo above.
       unduckBackgroundMusic();
     }
@@ -644,6 +660,8 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       } catch {
         // See resetVideo above -- harmless if metadata isn't loaded yet.
       }
+      // See resetDestinationVideo above -- undoes the last-1.5s fade-out.
+      imaginedVideoEl.volume = 1;
       // Unlike destination/journey, ImaginedDaysScene can settle (and so
       // become back-navigable) while transition5.mp4 is still actually
       // playing -- its own text starts 1.5s in, long before the ~10s
@@ -661,6 +679,8 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       } catch {
         // See resetVideo above -- harmless if metadata isn't loaded yet.
       }
+      // See resetDestinationVideo above -- undoes the last-1.5s fade-out.
+      ceremonyVideoEl.volume = 1;
       // Defensive: like destination/journey (and unlike imagined),
       // CeremonyScene only ever settles (and so becomes back-navigable)
       // after transition6.mp4 has already ended and its own 'ended'/error
@@ -703,6 +723,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
           destinationVideoEl.preload = 'auto';
           destinationVideoEl.src = src;
           destinationVideoSrcAssigned = true;
+          attachVideoAudioFadeOut(destinationVideoEl);
         }
       }
     }
@@ -731,6 +752,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
           journeyVideoEl.preload = 'auto';
           journeyVideoEl.src = src;
           journeyVideoSrcAssigned = true;
+          attachVideoAudioFadeOut(journeyVideoEl);
         }
       }
     }
@@ -757,6 +779,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
           imaginedVideoEl.preload = 'auto';
           imaginedVideoEl.src = src;
           imaginedVideoSrcAssigned = true;
+          attachVideoAudioFadeOut(imaginedVideoEl);
         }
       }
     }
@@ -783,8 +806,32 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
           ceremonyVideoEl.preload = 'auto';
           ceremonyVideoEl.src = src;
           ceremonyVideoSrcAssigned = true;
+          attachVideoAudioFadeOut(ceremonyVideoEl);
         }
       }
+    }
+
+    // Fades a transition video's own audio down to 0 over its last
+    // ~1.5s, "sin corte brusco" -- driven by the video's own real
+    // playback progress ('timeupdate') rather than a separate timer, so
+    // it can never drift out of sync with the video itself, and never
+    // touches the MP4s or playbackRate. Attached once per video, right
+    // when its src is first assigned (see ensureDestinationAssets/
+    // ensureJourneyAssets/ensureImaginedAssets/ensureCeremonyAssets) --
+    // one shared mechanism reused across every scene with its own real
+    // audio, rather than a parallel per-scene fade. Volume is restored to
+    // full whenever each video is reset back to currentTime 0 (see
+    // resetDestinationVideo/resetJourneyVideo/resetImaginedVideo/
+    // resetCeremonyVideo), so a fresh playthrough never inherits the
+    // previous one's faded-to-0 volume.
+    function attachVideoAudioFadeOut(video: HTMLVideoElement) {
+      video.addEventListener('timeupdate', () => {
+        const duration = video.duration;
+        if (!Number.isFinite(duration) || duration <= 0) return;
+        const fadeSeconds = VIDEO_AUDIO_FADE_OUT_MS / 1000;
+        const remaining = duration - video.currentTime;
+        video.volume = remaining <= fadeSeconds ? Math.max(0, Math.min(1, remaining / fadeSeconds)) : 1;
+      });
     }
 
     // Waits until the video has enough data to play, or resolves false
@@ -1534,13 +1581,14 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     // Fase for the imagined-days -> ceremony forward transition: imagined
     // recedes (is-imagined-receded) while the ceremony panel becomes
     // visible (is-revealing-ceremony) -- same crossfade principle as the
-    // journey->imagined pair, one scene deeper. Unlike imagined itself,
-    // is-ceremony-revealing is deliberately NOT added until transition6.mp4
-    // has actually ended and frozen on its own last frame, plus a further
-    // ~1.5s pause -- "al terminar, congelar el último frame; después
-    // mostrar el texto sobre ese frame" -- same sequential video-then-text
-    // idea as every scene before imagined's own later sync-with-video
-    // revision (see CEREMONY_TEXT_DELAY_MS above).
+    // journey->imagined pair, one scene deeper. is-ceremony-revealing (the
+    // clock CeremonyScene's own per-part CSS transition-delays are
+    // measured against) is added at that same moment, together with the
+    // crossfade -- "que texto y video comiencen juntos" -- same
+    // convention as destination/journey's own X-revealing classes, rather
+    // than waiting for transition6.mp4 to end first. Only *when* each
+    // part appears (CeremonyScene's own per-part delays) is unchanged;
+    // only this starting point moved earlier.
     async function runCeremonyVideoAndReveal() {
       ensureCeremonyAssets();
 
@@ -1560,8 +1608,10 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       // crossfade -- only start imagined receding/ceremony revealing once
       // the video is confirmed ready (or the bounded wait gave up), never
       // earlier, so ImaginedDaysScene never finishes fading out before
-      // there is a real frame underneath it.
-      root!.classList.add('is-imagined-receded', 'is-revealing-ceremony');
+      // there is a real frame underneath it. is-ceremony-revealing joins
+      // them here too, so CeremonyScene's own text starts right alongside
+      // the video, not after it.
+      root!.classList.add('is-imagined-receded', 'is-revealing-ceremony', 'is-ceremony-revealing');
 
       let played = false;
       if (ready && ceremonyVideoEl) {
@@ -1585,41 +1635,31 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
         if (finishedOk) {
           // Clean 'ended': same freeze already used for destination/
           // journey/imagined -- do nothing to the video, it stays painted
-          // on its own last frame, paused, currentTime untouched. Only
-          // now does the deliberate pre-text pause begin.
-          await sleep(CEREMONY_TEXT_DELAY_MS);
+          // on its own last frame, paused, currentTime untouched.
         } else {
           // Error or hard-cap -- no good frame to freeze on and no
           // fallback image for this scene, so fade the video out to the
           // plain paper background exactly like the previous stages' own
-          // error branches, then still give the content its own short
-          // pause before revealing (never instant, kept consistent with
-          // the spec's pacing even in the fallback -- and never blocking
-          // navigation indefinitely either).
+          // error branches. Text is already showing by this point either
+          // way.
           ceremonyVideoEl.style.transition = `opacity ${DESTINATION_VIDEO_FADE_MS}ms ease`;
           void ceremonyVideoEl.offsetWidth;
           ceremonyVideoEl.style.opacity = '0';
           await waitForTransitionEnd(ceremonyVideoEl, 'opacity', DESTINATION_VIDEO_FADE_MS + 200);
-          await sleep(CEREMONY_TEXT_DELAY_MS);
         }
       } else {
         // Never played (readiness timeout/error) -- hide the <video>
         // element itself outright (it never became visible to begin
-        // with), then the same short pause before revealing the content
-        // over the plain background -- the CTA must never leave the user
-        // stuck on ImaginedDaysScene just because this video failed.
+        // with) so its own empty/unloaded box can never paint over the
+        // plain background. Text is already showing over that background
+        // either way -- the CTA must never leave the user stuck on
+        // ImaginedDaysScene just because this video failed.
         if (ceremonyVideoEl) {
           ceremonyVideoEl.style.transition = 'none';
           ceremonyVideoEl.style.opacity = '0';
         }
-        await sleep(CEREMONY_TEXT_DELAY_MS);
+        await sleep(CEREMONY_FALLBACK_HOLD_MS);
       }
-
-      // Only now -- video ended and frozen (or the fallback settled),
-      // plus the pause above -- does CeremonyScene's own text actually
-      // start appearing; see that component's own [data-ceremony-part]
-      // timings, all measured from this exact moment.
-      root!.classList.add('is-ceremony-revealing');
 
       completionTimer = window.setTimeout(() => {
         completionTimer = null;
@@ -2966,9 +3006,8 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
   /*
     Ceremony stage -- same fixed 390x844 canvas convention as the
     imagined stage above. Same freeze-on-'ended' principle too (see
-    runCeremonyVideoAndReveal), and unlike imagined's own later
-    sync-with-video revision, its text only begins after the video has
-    actually ended and frozen, plus a deliberate pause -- see
+    runCeremonyVideoAndReveal); its own text begins right alongside the
+    video, same convention as destination/journey -- see
     CeremonyScene.astro's own comment. The plain paper background-color
     on .experience__ceremony-frame is what shows through only if the
     video never plays at all (readiness/error) or for reduced motion. No

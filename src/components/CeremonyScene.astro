@@ -208,10 +208,11 @@ import { sceneCeremony } from '../data/sceneCeremony';
     (never a fade-out keyframe like ImaginedDaysScene's own ephemeral
     memories -- this scene's text is meant to arrive and stay, "aparecer
     con suavidad" and settle) with a generous stagger, measured from
-    is-ceremony-revealing itself being added -- which only happens once
-    transition6.mp4 has actually ended and frozen on its own last frame,
-    plus a further deliberate pause (see runCeremonyVideoAndReveal's own
-    comment), never while it's still playing.
+    is-ceremony-revealing itself being added -- which happens at the same
+    moment transition6.mp4 starts playing, "que texto y video comiencen
+    juntos" (see runCeremonyVideoAndReveal's own comment). The video
+    itself keeps playing normally underneath, all the way to its own
+    natural end and freeze, unaffected by this.
   */
   .ceremony__heading,
   .ceremony__line,
