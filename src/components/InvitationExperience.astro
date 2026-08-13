@@ -4,6 +4,7 @@ import MemoryScene from './MemoryScene.astro';
 import DestinationScene from './DestinationScene.astro';
 import JourneyScene from './JourneyScene.astro';
 import ImaginedDaysScene from './ImaginedDaysScene.astro';
+import CeremonyScene from './CeremonyScene.astro';
 import { musicPlaylist } from '../data/musicPlaylist';
 import type { Guest } from '../data/guests';
 
@@ -19,6 +20,7 @@ const videoSrc = `${base}/videos/memory-transition2.mp4`;
 const videoSrc2 = `${base}/videos/memory-transition3.mp4`;
 const videoSrc3 = `${base}/videos/memory-transition4.mp4`;
 const videoSrc4 = `${base}/videos/memory-transition5.mp4`;
+const videoSrc5 = `${base}/videos/memory-transition6.mp4`;
 // The exact join frame shared by both transition videos -- the last frame
 // of memory-transition2.mp4 and the first frame of memory-transition3.mp4
 // -- so it doubles as MemoryScene's own static background, matching
@@ -219,6 +221,39 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
   </section>
 
   <!--
+    Ceremony stage (page 6, "Y entonces, el 'sí'"): same fixed 390x844
+    logical canvas as everything above. CeremonyScene's own text only
+    begins appearing once transition6.mp4 has actually ended and frozen
+    on its own last frame, plus a further deliberate pause -- unlike
+    destination/journey/imagined, nothing here appears while the video is
+    still playing (see runCeremonyVideoAndReveal's own comment for why).
+    No static fallback image exists for this scene either -- same
+    reasoning as the journey/imagined stages, see their own comments
+    above. The video's own src is intentionally left unset here
+    (data-video-src only) and assigned lazily once ImaginedDaysScene is
+    actually reached, same convention as ensureImaginedAssets.
+  -->
+  <section class="experience__scene experience__scene--ceremony" data-scene-panel="ceremony" inert>
+    <div class="experience__ceremony-frame" data-bg-src={destinationTextureSrc}>
+      <div class="experience__ceremony-canvas">
+        <video
+          class="experience__ceremony-video"
+          data-video-src={videoSrc5}
+          playsinline
+          preload="none"
+          aria-hidden="true"
+          tabindex="-1"
+          disablepictureinpicture
+          disableremoteplayback
+        ></video>
+        <div class="experience__ceremony-overlay">
+          <CeremonyScene />
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!--
     Persistent background music -- a single <audio> element living outside
     every scene section, so nothing about scene transitions (panel
     opacity, inert, DOM order) ever touches it: it is the one piece of
@@ -270,6 +305,9 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     const imaginedPanel = root.querySelector<HTMLElement>('[data-scene-panel="imagined"]');
     const imaginedFrameEl = root.querySelector<HTMLElement>('.experience__imagined-frame');
     const imaginedVideoEl = root.querySelector<HTMLVideoElement>('.experience__imagined-video');
+    const ceremonyPanel = root.querySelector<HTMLElement>('[data-scene-panel="ceremony"]');
+    const ceremonyFrameEl = root.querySelector<HTMLElement>('.experience__ceremony-frame');
+    const ceremonyVideoEl = root.querySelector<HTMLVideoElement>('.experience__ceremony-video');
     const musicEl = root.querySelector<HTMLAudioElement>('.experience__music');
 
     // Forward (cover -> memory) phase timings.
@@ -327,6 +365,18 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     const IMAGINED_VIDEO_HARD_CAP_MS = 14000; // transition5.mp4 runs ~10s; generous safety net
     const IMAGINED_TEXT_DELAY_MS = 1500; // "la primera frase empiece a aparecer a los 1.5s de iniciado" the video -- also reused, unchanged, as the fallback pause before revealing when the video never actually played (readiness timeout/error), since there is no video timeline to key off of in that case either
     const IMAGINED_SETTLE_MS = 200;
+
+    // Forward (imagined days -> ceremony) phase timings. Unlike
+    // imagined's own text (which starts mid-video), CeremonyScene's
+    // content waits until transition6.mp4 has actually ended and frozen
+    // -- "al terminar, congelar el último frame; después mostrar el
+    // texto sobre ese frame" -- plus a further deliberate pause before
+    // is-ceremony-revealing is added, same "entrada lenta, elegante" idea
+    // as the original imagined-days pacing before that scene's own later
+    // sync-with-video revision (see runCeremonyVideoAndReveal).
+    const CEREMONY_VIDEO_HARD_CAP_MS = 12000; // transition6.mp4 runs ~8s; generous safety net
+    const CEREMONY_TEXT_DELAY_MS = 1500; // deliberate breathing pause before the first line appears -- after the video has already ended (or, in the fallback paths, after settling on the plain background)
+    const CEREMONY_SETTLE_MS = 200;
 
     // --- Persistent background music ---
     //
@@ -489,19 +539,20 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     // rather than a hard cut.
     const MEMORY_PHASE_SETTLE_MS = 250;
 
-    type SceneName = 'cover' | 'memory' | 'destination' | 'journey' | 'imagined';
+    type SceneName = 'cover' | 'memory' | 'destination' | 'journey' | 'imagined' | 'ceremony';
     // Single source of truth for scene order/hash -- both goToScene's
     // adjacency check (only cover<->memory, memory<->destination,
-    // destination<->journey and journey<->imagined have a defined
-    // animated path) and the hash routing below read from this instead of
-    // hand-repeating the mapping.
-    const SCENE_ORDER: SceneName[] = ['cover', 'memory', 'destination', 'journey', 'imagined'];
+    // destination<->journey, journey<->imagined and imagined<->ceremony
+    // have a defined animated path) and the hash routing below read from
+    // this instead of hand-repeating the mapping.
+    const SCENE_ORDER: SceneName[] = ['cover', 'memory', 'destination', 'journey', 'imagined', 'ceremony'];
     const SCENE_HASH: Record<SceneName, string> = {
       cover: '#portada',
       memory: '#recuerdo',
       destination: '#destino',
       journey: '#viaje',
       imagined: '#imagina',
+      ceremony: '#celebracion',
     };
     const sceneIndex = (scene: SceneName) => SCENE_ORDER.indexOf(scene);
 
@@ -514,6 +565,8 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     let journeyVideoSrcAssigned = false;
     let imaginedAssetsRequested = false;
     let imaginedVideoSrcAssigned = false;
+    let ceremonyAssetsRequested = false;
+    let ceremonyVideoSrcAssigned = false;
 
     function clearCompletionTimer() {
       if (completionTimer !== null) {
@@ -597,6 +650,23 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       // video ends (see runImaginedVideoAndReveal). So back-navigation
       // pausing it here can genuinely be the first thing to end its
       // audio, not just a defensive no-op like the two resets above.
+      unduckBackgroundMusic();
+    }
+
+    function resetCeremonyVideo() {
+      if (!ceremonyVideoEl) return;
+      ceremonyVideoEl.pause();
+      try {
+        ceremonyVideoEl.currentTime = 0;
+      } catch {
+        // See resetVideo above -- harmless if metadata isn't loaded yet.
+      }
+      // Defensive: like destination/journey (and unlike imagined),
+      // CeremonyScene only ever settles (and so becomes back-navigable)
+      // after transition6.mp4 has already ended and its own 'ended'/error
+      // already un-ducked the music (see runCeremonyVideoAndReveal) -- so
+      // this is normally a no-op, kept only as a safety net;
+      // unduckBackgroundMusic is idempotent either way.
       unduckBackgroundMusic();
     }
 
@@ -691,6 +761,32 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       }
     }
 
+    // Same idea as ensureImaginedAssets, one scene later: lazily assigns
+    // transition6.mp4 once ImaginedDaysScene is actually reached, so the
+    // ceremony video has a real head start without ever competing with
+    // the cover's own load. No image asset to assign here -- none exists
+    // yet for this scene either.
+    function ensureCeremonyAssets() {
+      if (ceremonyAssetsRequested) return;
+      ceremonyAssetsRequested = true;
+
+      const frameSrc = ceremonyFrameEl?.dataset.bgSrc;
+      if (ceremonyFrameEl && frameSrc) {
+        ceremonyFrameEl.style.backgroundImage = `url('${frameSrc}')`;
+      }
+
+      // Same reduced-motion exception as the other transition videos:
+      // never loaded as an active part of the experience for those users.
+      if (ceremonyVideoEl && !prefersReducedMotion()) {
+        const src = ceremonyVideoEl.dataset.videoSrc;
+        if (src) {
+          ceremonyVideoEl.preload = 'auto';
+          ceremonyVideoEl.src = src;
+          ceremonyVideoSrcAssigned = true;
+        }
+      }
+    }
+
     // Waits until the video has enough data to play, or resolves false
     // after a short, bounded wait -- "si está listo, reproduce
     // inmediatamente; si todavía carga, espera solo un tiempo breve y
@@ -767,6 +863,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       if (destinationPanel) destinationPanel.toggleAttribute('inert', scene !== 'destination');
       if (journeyPanel) journeyPanel.toggleAttribute('inert', scene !== 'journey');
       if (imaginedPanel) imaginedPanel.toggleAttribute('inert', scene !== 'imagined');
+      if (ceremonyPanel) ceremonyPanel.toggleAttribute('inert', scene !== 'ceremony');
     }
 
     function focusSceneHeading(scene: SceneName) {
@@ -779,7 +876,9 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
               ? journeyPanel?.querySelector<HTMLElement>('[data-scene-heading]')
               : scene === 'imagined'
                 ? imaginedPanel?.querySelector<HTMLElement>('[data-scene-heading]')
-                : coverPanel?.querySelector<HTMLElement>('.cover__cta');
+                : scene === 'ceremony'
+                  ? ceremonyPanel?.querySelector<HTMLElement>('[data-scene-heading]')
+                  : coverPanel?.querySelector<HTMLElement>('.cover__cta');
       target?.focus({ preventScroll: true });
     }
 
@@ -793,31 +892,32 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
         'is-memory-cta-ready',
         'is-destination-revealing',
         'is-journey-revealing',
-        'is-imagined-revealing'
+        'is-imagined-revealing',
+        'is-ceremony-revealing'
       );
-      // memory, destination, journey and imagined all sit "past" the
-      // cover, so it stays fully receded for any of them; each further
-      // scene sits past the previous one too -- each stays fully painted
-      // (is-revealing-*) but visually receded behind the next one
+      // memory, destination, journey, imagined and ceremony all sit
+      // "past" the cover, so it stays fully receded for any of them; each
+      // further scene sits past the previous one too -- each stays fully
+      // painted (is-revealing-*) but visually receded behind the next one
       // (is-*-receded) -- same convention as the cover/memory pair,
       // repeated one level deeper each time.
+      const pastDestination = scene === 'destination' || scene === 'journey' || scene === 'imagined' || scene === 'ceremony';
+      const pastJourney = scene === 'journey' || scene === 'imagined' || scene === 'ceremony';
+      const pastImagined = scene === 'imagined' || scene === 'ceremony';
       root!.classList.toggle('is-cover-receded', scene !== 'cover');
       root!.classList.toggle('is-revealing-memory', scene !== 'cover');
-      root!.classList.toggle('is-memory-receded', scene === 'destination' || scene === 'journey' || scene === 'imagined');
-      root!.classList.toggle(
-        'is-revealing-destination',
-        scene === 'destination' || scene === 'journey' || scene === 'imagined'
-      );
-      root!.classList.toggle(
-        'is-destination-revealing',
-        scene === 'destination' || scene === 'journey' || scene === 'imagined'
-      );
-      root!.classList.toggle('is-destination-receded', scene === 'journey' || scene === 'imagined');
-      root!.classList.toggle('is-revealing-journey', scene === 'journey' || scene === 'imagined');
-      root!.classList.toggle('is-journey-revealing', scene === 'journey' || scene === 'imagined');
-      root!.classList.toggle('is-journey-receded', scene === 'imagined');
-      root!.classList.toggle('is-revealing-imagined', scene === 'imagined');
-      root!.classList.toggle('is-imagined-revealing', scene === 'imagined');
+      root!.classList.toggle('is-memory-receded', pastDestination);
+      root!.classList.toggle('is-revealing-destination', pastDestination);
+      root!.classList.toggle('is-destination-revealing', pastDestination);
+      root!.classList.toggle('is-destination-receded', pastJourney);
+      root!.classList.toggle('is-revealing-journey', pastJourney);
+      root!.classList.toggle('is-journey-revealing', pastJourney);
+      root!.classList.toggle('is-journey-receded', pastImagined);
+      root!.classList.toggle('is-revealing-imagined', pastImagined);
+      root!.classList.toggle('is-imagined-revealing', pastImagined);
+      root!.classList.toggle('is-imagined-receded', scene === 'ceremony');
+      root!.classList.toggle('is-revealing-ceremony', scene === 'ceremony');
+      root!.classList.toggle('is-ceremony-revealing', scene === 'ceremony');
       // Defensive: these are only ever set (and cleared) inside
       // runVideoAndReveal's own video->MemoryScene handoff, but an instant
       // scene switch should never risk inheriting a leftover inline value.
@@ -848,15 +948,25 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
         imaginedVideoEl.style.opacity = '0';
       }
       resetImaginedVideo();
-      // A direct/instant load landing on memory, destination, journey or
-      // imagined should still get the same lazy head start on each
-      // scene's own media as the animated path -- see
-      // ensureDestinationAssets/ensureJourneyAssets/ensureImaginedAssets.
-      if (scene === 'memory' || scene === 'destination' || scene === 'journey' || scene === 'imagined') {
+      if (ceremonyVideoEl) {
+        // Same reasoning as destinationVideoEl/journeyVideoEl/
+        // imaginedVideoEl above -- instant loads never play
+        // transition6.mp4.
+        ceremonyVideoEl.style.transition = 'none';
+        ceremonyVideoEl.style.opacity = '0';
+      }
+      resetCeremonyVideo();
+      // A direct/instant load landing on memory, destination, journey,
+      // imagined or ceremony should still get the same lazy head start on
+      // each scene's own media as the animated path -- see
+      // ensureDestinationAssets/ensureJourneyAssets/ensureImaginedAssets/
+      // ensureCeremonyAssets.
+      if (scene === 'memory' || pastDestination) {
         ensureDestinationAssets();
       }
-      if (scene === 'destination' || scene === 'journey' || scene === 'imagined') ensureJourneyAssets();
-      if (scene === 'journey' || scene === 'imagined') ensureImaginedAssets();
+      if (pastDestination) ensureJourneyAssets();
+      if (pastJourney) ensureImaginedAssets();
+      if (pastImagined) ensureCeremonyAssets();
       void root!.offsetWidth;
       requestAnimationFrame(() => {
         root?.classList.remove('is-instant');
@@ -1314,6 +1424,11 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     async function runImaginedVideoAndReveal() {
       ensureImaginedAssets();
 
+      // ImaginedDaysScene is reached -- give transition6.mp4 a head start
+      // now, well before its own "Y entonces, el 'sí'" CTA can
+      // realistically be reached/clicked (see ensureCeremonyAssets).
+      ensureCeremonyAssets();
+
       let ready = false;
       if (imaginedVideoEl && imaginedVideoSrcAssigned) {
         try {
@@ -1416,6 +1531,105 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       }, IMAGINED_SETTLE_MS);
     }
 
+    // Fase for the imagined-days -> ceremony forward transition: imagined
+    // recedes (is-imagined-receded) while the ceremony panel becomes
+    // visible (is-revealing-ceremony) -- same crossfade principle as the
+    // journey->imagined pair, one scene deeper. Unlike imagined itself,
+    // is-ceremony-revealing is deliberately NOT added until transition6.mp4
+    // has actually ended and frozen on its own last frame, plus a further
+    // ~1.5s pause -- "al terminar, congelar el último frame; después
+    // mostrar el texto sobre ese frame" -- same sequential video-then-text
+    // idea as every scene before imagined's own later sync-with-video
+    // revision (see CEREMONY_TEXT_DELAY_MS above).
+    async function runCeremonyVideoAndReveal() {
+      ensureCeremonyAssets();
+
+      let ready = false;
+      if (ceremonyVideoEl && ceremonyVideoSrcAssigned) {
+        try {
+          ceremonyVideoEl.currentTime = 0;
+        } catch {
+          // ignore -- see resetCeremonyVideo
+        }
+        ceremonyVideoEl.style.transition = '';
+        ceremonyVideoEl.style.opacity = '';
+        ready = await waitForVideoReady(ceremonyVideoEl, VIDEO_READY_TIMEOUT_MS);
+      }
+
+      // Same paint-before-reveal principle as every previous stage's own
+      // crossfade -- only start imagined receding/ceremony revealing once
+      // the video is confirmed ready (or the bounded wait gave up), never
+      // earlier, so ImaginedDaysScene never finishes fading out before
+      // there is a real frame underneath it.
+      root!.classList.add('is-imagined-receded', 'is-revealing-ceremony');
+
+      let played = false;
+      if (ready && ceremonyVideoEl) {
+        try {
+          await ceremonyVideoEl.play();
+          played = true;
+          // transition6.mp4 has its own real audio -- duck the
+          // background music the moment it actually starts.
+          duckBackgroundMusic();
+        } catch {
+          played = false;
+        }
+      }
+
+      if (played && ceremonyVideoEl) {
+        const finishedOk = await waitForVideoOutcome(ceremonyVideoEl, CEREMONY_VIDEO_HARD_CAP_MS);
+        // Either way -- clean 'ended' or error/hard-cap -- this video's
+        // own audio is done competing for attention, so the background
+        // music can recover its normal volume now.
+        unduckBackgroundMusic();
+        if (finishedOk) {
+          // Clean 'ended': same freeze already used for destination/
+          // journey/imagined -- do nothing to the video, it stays painted
+          // on its own last frame, paused, currentTime untouched. Only
+          // now does the deliberate pre-text pause begin.
+          await sleep(CEREMONY_TEXT_DELAY_MS);
+        } else {
+          // Error or hard-cap -- no good frame to freeze on and no
+          // fallback image for this scene, so fade the video out to the
+          // plain paper background exactly like the previous stages' own
+          // error branches, then still give the content its own short
+          // pause before revealing (never instant, kept consistent with
+          // the spec's pacing even in the fallback -- and never blocking
+          // navigation indefinitely either).
+          ceremonyVideoEl.style.transition = `opacity ${DESTINATION_VIDEO_FADE_MS}ms ease`;
+          void ceremonyVideoEl.offsetWidth;
+          ceremonyVideoEl.style.opacity = '0';
+          await waitForTransitionEnd(ceremonyVideoEl, 'opacity', DESTINATION_VIDEO_FADE_MS + 200);
+          await sleep(CEREMONY_TEXT_DELAY_MS);
+        }
+      } else {
+        // Never played (readiness timeout/error) -- hide the <video>
+        // element itself outright (it never became visible to begin
+        // with), then the same short pause before revealing the content
+        // over the plain background -- the CTA must never leave the user
+        // stuck on ImaginedDaysScene just because this video failed.
+        if (ceremonyVideoEl) {
+          ceremonyVideoEl.style.transition = 'none';
+          ceremonyVideoEl.style.opacity = '0';
+        }
+        await sleep(CEREMONY_TEXT_DELAY_MS);
+      }
+
+      // Only now -- video ended and frozen (or the fallback settled),
+      // plus the pause above -- does CeremonyScene's own text actually
+      // start appearing; see that component's own [data-ceremony-part]
+      // timings, all measured from this exact moment.
+      root!.classList.add('is-ceremony-revealing');
+
+      completionTimer = window.setTimeout(() => {
+        completionTimer = null;
+        currentScene = 'ceremony';
+        isTransitioning = false;
+        root!.classList.remove('is-transitioning');
+        focusSceneHeading('ceremony');
+      }, CEREMONY_SETTLE_MS);
+    }
+
     function goToScene(scene: SceneName, options: { pushHistory?: boolean } = {}) {
       const { pushHistory = true } = options;
       if (
@@ -1425,7 +1639,8 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
         !memoryPanel ||
         !destinationPanel ||
         !journeyPanel ||
-        !imaginedPanel
+        !imaginedPanel ||
+        !ceremonyPanel
       )
         return;
 
@@ -1608,7 +1823,69 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
         return;
       }
 
-      if (scene === 'imagined') {
+      if (scene === 'imagined' && currentScene === 'ceremony') {
+        // Back (ceremony -> imagined days): same idea -- no video in
+        // reverse, just a short crossfade. ImaginedDaysScene's own panel/
+        // content were never cleared (is-revealing-imagined stays set the
+        // whole time once first reached, including its frozen last video
+        // frame), so it simply reappears as-is.
+        root!.classList.remove('is-revealing-ceremony', 'is-ceremony-revealing', 'is-imagined-receded');
+        const duration = reduced ? REDUCED_MOTION_DURATION : BACKWARD_DURATION;
+        completionTimer = window.setTimeout(() => {
+          completionTimer = null;
+          // Only reset (and clear the frozen-frame opacity) now that the
+          // ceremony panel's own opacity transition (removed above) has
+          // had time to finish and the scene is no longer visible -- same
+          // reasoning as the destination->memory/journey->destination/
+          // imagined->journey back branches above.
+          resetCeremonyVideo();
+          if (ceremonyVideoEl) {
+            ceremonyVideoEl.style.transition = '';
+            ceremonyVideoEl.style.opacity = '';
+          }
+          currentScene = scene;
+          isTransitioning = false;
+          root!.classList.remove('is-transitioning');
+          focusSceneHeading(scene);
+        }, duration);
+        return;
+      }
+
+      if (scene === 'ceremony') {
+        // Forward (imagined days -> ceremony).
+        if (reduced) {
+          // Reduced motion: never plays transition6.mp4 -- no static
+          // fallback image exists for this scene, so the plain paper
+          // background (the ceremony frame's own background-color) shows
+          // directly, with a short crossfade into it; CeremonyScene's own
+          // content fades in together, uniformly, no per-part stagger
+          // (see its is-reduced-motion CSS) -- same convention as the
+          // previous scenes' reduced-motion paths, no parallel
+          // architecture invented for this.
+          ensureCeremonyAssets();
+          if (ceremonyVideoEl) {
+            // Never loaded/assigned a src for reduced motion (see
+            // ensureCeremonyAssets) -- hidden outright so an empty
+            // <video> box can never paint over the background.
+            ceremonyVideoEl.style.transition = 'none';
+            ceremonyVideoEl.style.opacity = '0';
+          }
+          root!.classList.add('is-imagined-receded', 'is-revealing-ceremony', 'is-ceremony-revealing');
+          completionTimer = window.setTimeout(() => {
+            completionTimer = null;
+            currentScene = scene;
+            isTransitioning = false;
+            root!.classList.remove('is-transitioning');
+            focusSceneHeading(scene);
+          }, REDUCED_MOTION_DURATION);
+          return;
+        }
+
+        runCeremonyVideoAndReveal();
+        return;
+      }
+
+      if (scene === 'imagined' && currentScene !== 'ceremony') {
         // Forward (journey -> imagined days).
         if (reduced) {
           // Reduced motion: never plays transition5.mp4 -- no static
@@ -1709,6 +1986,8 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       const backToDestinationTrigger = target.closest<HTMLElement>('[data-action="back-to-destination"]');
       const imaginedTrigger = target.closest<HTMLElement>('[data-action="go-to-imagined"]');
       const backToJourneyTrigger = target.closest<HTMLElement>('[data-action="back-to-journey"]');
+      const ceremonyTrigger = target.closest<HTMLElement>('[data-action="go-to-ceremony"]');
+      const backToImaginedTrigger = target.closest<HTMLElement>('[data-action="back-to-imagined"]');
 
       if (forwardTrigger && root!.contains(forwardTrigger)) {
         event.preventDefault();
@@ -1735,10 +2014,17 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       } else if (backToJourneyTrigger && root!.contains(backToJourneyTrigger)) {
         event.preventDefault();
         goToScene('journey');
+      } else if (ceremonyTrigger && root!.contains(ceremonyTrigger)) {
+        event.preventDefault();
+        goToScene('ceremony');
+      } else if (backToImaginedTrigger && root!.contains(backToImaginedTrigger)) {
+        event.preventDefault();
+        goToScene('imagined');
       }
     });
 
     function sceneFromHash(hash: string): SceneName {
+      if (hash === '#celebracion') return 'ceremony';
       if (hash === '#imagina') return 'imagined';
       if (hash === '#viaje') return 'journey';
       if (hash === '#destino') return 'destination';
@@ -2589,6 +2875,159 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
   }
 
   .experience__imagined-overlay {
+    position: absolute;
+    inset: 0;
+  }
+
+  /*
+    Ceremony scene (page 6) -- additive only, same convention as the
+    imagined block above, one level deeper: sits below imagined in the
+    stacking order (z-index -3, imagined -2, journey -1, destination 0,
+    memory 1, cover 2), so the imagined -> ceremony crossfade is the same
+    "panel above fades out, panel below is already there" pattern,
+    repeated once more.
+  */
+  .experience__scene--ceremony {
+    z-index: -3;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .experience[data-scene='ceremony'] .experience__scene--ceremony {
+    pointer-events: auto;
+  }
+
+  .experience[data-scene='ceremony'] .experience__scene--cover,
+  .experience[data-scene='ceremony'] .experience__scene--memory,
+  .experience[data-scene='ceremony'] .experience__scene--destination,
+  .experience[data-scene='ceremony'] .experience__scene--journey,
+  .experience[data-scene='ceremony'] .experience__scene--imagined {
+    pointer-events: none;
+  }
+
+  .experience[data-scene='ceremony']:not(.is-transitioning) .experience__scene--cover,
+  .experience[data-scene='ceremony']:not(.is-transitioning) .experience__scene--memory,
+  .experience[data-scene='ceremony']:not(.is-transitioning) .experience__scene--destination,
+  .experience[data-scene='ceremony']:not(.is-transitioning) .experience__scene--journey,
+  .experience[data-scene='ceremony']:not(.is-transitioning) .experience__scene--imagined {
+    visibility: hidden;
+  }
+
+  .experience.is-transitioning :global(.imagined__cta),
+  .experience.is-transitioning :global([data-action='back-to-imagined']) {
+    pointer-events: none;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .experience:not(.is-instant) .experience__scene--ceremony {
+      transition: opacity 360ms ease;
+    }
+
+    .experience.is-revealing-ceremony .experience__scene--ceremony {
+      opacity: 1;
+    }
+
+    /* Imagined recedes while .is-imagined-receded is present -- defined
+       after the existing ".is-revealing-imagined .experience__scene--imagined
+       {opacity:1}" rule above so it wins on the (otherwise equal)
+       specificity, same trick as .is-journey-receded overriding journey's
+       own opacity. Plain baseline duration (matches every previous
+       stage's own back/forward panel fade) -- no bespoke extended timing
+       invented here, per "mantén el patrón existente". */
+    .experience.is-imagined-receded .experience__scene--imagined {
+      transition: opacity 360ms ease;
+      opacity: 0;
+    }
+
+    .experience[data-transition-direction='back'].is-transitioning .experience__scene--ceremony {
+      transition-duration: 850ms;
+    }
+  }
+
+  .experience.is-reduced-motion .experience__scene--ceremony {
+    transition: opacity 260ms ease !important;
+    transform: none !important;
+  }
+
+  .experience.is-reduced-motion.is-revealing-ceremony .experience__scene--ceremony {
+    opacity: 1;
+  }
+
+  .experience.is-reduced-motion[data-scene='ceremony'] .experience__scene--imagined {
+    opacity: 0;
+  }
+
+  .experience.is-instant .experience__scene--ceremony,
+  .experience.is-instant .experience__ceremony-video,
+  .experience.is-instant :global(.imagined__cta) {
+    transition: none !important;
+  }
+
+  /*
+    Ceremony stage -- same fixed 390x844 canvas convention as the
+    imagined stage above. Same freeze-on-'ended' principle too (see
+    runCeremonyVideoAndReveal), and unlike imagined's own later
+    sync-with-video revision, its text only begins after the video has
+    actually ended and frozen, plus a deliberate pause -- see
+    CeremonyScene.astro's own comment. The plain paper background-color
+    on .experience__ceremony-frame is what shows through only if the
+    video never plays at all (readiness/error) or for reduced motion. No
+    global veil here (unlike the journey/imagined stages) -- not part of
+    this scene's spec, legibility comes entirely from CeremonyScene's own
+    local, very faint halos.
+  */
+  .experience__ceremony-frame {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background-color: var(--color-bg);
+    background-size: cover;
+    background-repeat: no-repeat;
+    background-position: 60% top;
+  }
+
+  .experience__ceremony-canvas {
+    position: relative;
+    width: 390px;
+    height: 844px;
+    flex-shrink: 0;
+    overflow: hidden;
+    transform-origin: center center;
+    transform: scale(var(--cover-scale, 1));
+  }
+
+  :global(html.is-fill-viewport) .experience__ceremony-canvas {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(var(--cover-scale-x, 1), var(--cover-scale-y, 1));
+  }
+
+  /* Same 1% overscan as .experience__video above, and for the same reason
+     -- a fractional --cover-scale can otherwise leave a hairline seam on
+     one edge exposing whatever sits behind the video's own GPU layer. */
+  .experience__ceremony-video {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 101%;
+    height: 101%;
+    transform: translate(-50%, -50%);
+    object-fit: cover;
+    object-position: 50% 50%;
+    display: block;
+    /* Same explicit, no-op guarantee as .experience__imagined-video above:
+       nothing here applies a filter, blend mode or brightness adjustment,
+       and no veil layer either -- the video is never globally darkened
+       or lightened, only CeremonyScene's own local text halos lift
+       legibility where needed. */
+    filter: none;
+  }
+
+  .experience__ceremony-overlay {
     position: absolute;
     inset: 0;
   }

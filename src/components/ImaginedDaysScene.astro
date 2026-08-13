@@ -64,9 +64,14 @@ const closingLines = sceneImaginedDays.closing.split('\n');
       ))}
     </p>
 
-    <p class="imagined__cta" data-imagined-part="cta" data-action="imagined-cta-primary">
+    <button
+      type="button"
+      class="imagined__cta"
+      data-imagined-part="cta"
+      data-action="go-to-ceremony"
+    >
       {sceneImaginedDays.ctaPrimary}
-    </p>
+    </button>
   </div>
 </div>
 
@@ -234,10 +239,24 @@ const closingLines = sceneImaginedDays.closing.split('\n');
     CTA -- separated clearly from the closing as its own later gesture
     (not too close to it, not too close to the bottom edge), same
     editorial sans/uppercase/arrow language as every other primary CTA in
-    the experience.
+    the experience. Now a real <button> (was a plain <p>) so it can
+    trigger the ceremony transition -- reset to look identical to the old
+    paragraph: no border/background/padding, same cursor affordance the
+    rest of the experience's controls use. Deliberately NOT resetting
+    font/letter-spacing/text-transform to "inherit" here -- see
+    JourneyScene.astro's own .journey__cta--primary comment (and
+    DestinationScene.astro's .destination__cta--primary before it) for
+    why that specific trick silently breaks the uppercase transform
+    instead of fixing anything.
   */
   .imagined__cta {
     position: relative;
+    display: block;
+    background: none;
+    border: none;
+    padding: 0;
+    text-align: left;
+    cursor: pointer;
     margin: 46px 0 0;
     font-family: var(--font-sans);
     letter-spacing: 0.14em;
