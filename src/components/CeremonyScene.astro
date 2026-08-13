@@ -30,9 +30,14 @@ import { sceneCeremony } from '../data/sceneCeremony';
       {sceneCeremony.date}
     </p>
 
-    <p class="ceremony__cta" data-ceremony-part="cta">
+    <button
+      type="button"
+      class="ceremony__cta"
+      data-ceremony-part="cta"
+      data-action="go-to-celebration"
+    >
       {sceneCeremony.cta}
-    </p>
+    </button>
   </div>
 </div>
 
@@ -175,13 +180,23 @@ import { sceneCeremony } from '../data/sceneCeremony';
     CTA -- clearly separated from the text block above (not immediately
     following the date, not too close to the bottom edge), same
     editorial sans/uppercase/arrow language as every other primary CTA in
-    the experience. Left as a prepared-but-inert label, same convention
-    already used for not-yet-wired secondary CTAs elsewhere (e.g.
-    JourneyScene's "Un poco de nosotros") -- nothing beyond this scene has
-    been requested yet.
+    the experience. Now a real <button> (was a plain <p>) so it can
+    trigger the celebration transition -- reset to look identical to the
+    old paragraph: no border/background/padding, same cursor affordance
+    the rest of the experience's controls use. Deliberately NOT resetting
+    font/letter-spacing/text-transform to "inherit" here -- see
+    JourneyScene.astro's own .journey__cta--primary comment for why that
+    specific trick silently breaks the uppercase transform instead of
+    fixing anything.
   */
   .ceremony__cta {
     position: relative;
+    display: block;
+    background: none;
+    border: none;
+    padding: 0;
+    text-align: left;
+    cursor: pointer;
     margin: 52px 0 0;
     font-family: var(--font-sans);
     letter-spacing: 0.14em;
