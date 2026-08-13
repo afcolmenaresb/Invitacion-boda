@@ -1,18 +1,5 @@
 ---
-import { sceneCelebration, getCelebrationFinalLine } from '../data/sceneCelebration';
-import type { Guest } from '../data/guests';
-
-interface Props {
-  /** Drives the dynamic final line ("...contigo." / "...con ustedes."). */
-  addressing?: Guest['addressing'];
-}
-
-// 'plural' is the safer neutral default if this were ever rendered without
-// a guest context -- in practice InvitationExperience always passes the
-// real guest.addressing through (same convention as every previous scene).
-const { addressing = 'plural' } = Astro.props;
-
-const finalLine = getCelebrationFinalLine(addressing);
+import { sceneCelebration } from '../data/sceneCelebration';
 ---
 
 <div class="celebration" data-scene-panel-content aria-label={sceneCelebration.eyebrow}>
@@ -38,15 +25,19 @@ const finalLine = getCelebrationFinalLine(addressing);
       {sceneCelebration.body.map((line) => (
         <p>{line}</p>
       ))}
-      <p class="celebration__final">{finalLine}</p>
     </div>
     <p class="celebration__closing" data-celebration-part="closing">
       <span class="celebration__halo celebration__halo--wide" aria-hidden="true"></span>
       {sceneCelebration.closing}
     </p>
-    <p class="celebration__cta" data-celebration-part="cta">
+    <button
+      type="button"
+      class="celebration__cta"
+      data-celebration-part="cta"
+      data-action="go-to-keepsake"
+    >
       {sceneCelebration.ctaPrimary}
-    </p>
+    </button>
   </div>
 </div>
 
@@ -273,18 +264,28 @@ const finalLine = getCelebrationFinalLine(addressing);
   /*
     CTA -- separated clearly from the closing as its own later gesture,
     same editorial sans/uppercase/arrow language as every other primary
-    CTA in the experience. Left as a prepared-but-inert label, same
-    convention already used for not-yet-wired CTAs elsewhere (e.g.
-    CeremonyScene's own "Celebremos") -- nothing beyond this scene has
-    been requested yet.
+    CTA in the experience. Now a real <button> (was a plain <p>) so it
+    can trigger the keepsake transition -- reset to look identical to the
+    old paragraph: no border/background/padding, same cursor affordance
+    the rest of the experience's controls use. Deliberately NOT resetting
+    font/letter-spacing/text-transform to "inherit" here -- see
+    JourneyScene.astro's own .journey__cta--primary comment for why that
+    specific trick silently breaks the uppercase transform instead of
+    fixing anything.
 
-    No individual halo/patch behind it anymore (the previous round's own
-    large ::before was read as too heavy, its own separate "block") --
-    it now reads purely off .celebration__wash above (it already sits
-    well inside that wash's reach) plus its own dark, high-contrast ink.
+    No individual halo/patch behind it (the previous round's own large
+    ::before was read as too heavy, its own separate "block") -- it reads
+    purely off .celebration__wash above (it already sits well inside
+    that wash's reach) plus its own dark, high-contrast ink.
   */
   .celebration__cta {
     position: relative;
+    display: block;
+    background: none;
+    border: none;
+    padding: 0;
+    text-align: left;
+    cursor: pointer;
     margin: 44px 0 0;
     font-family: var(--font-sans);
     letter-spacing: 0.14em;
