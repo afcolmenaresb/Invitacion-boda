@@ -4,6 +4,7 @@ import MemoryScene from './MemoryScene.astro';
 import DestinationScene from './DestinationScene.astro';
 import JourneyScene from './JourneyScene.astro';
 import ImaginedDaysScene from './ImaginedDaysScene.astro';
+import { musicPlaylist } from '../data/musicPlaylist';
 import type { Guest } from '../data/guests';
 
 interface Props {
@@ -24,6 +25,11 @@ const videoSrc4 = `${base}/videos/memory-transition5.mp4`;
 // whichever of the two videos is adjacent to it pixel-for-pixel.
 const memoryTextureSrc = `${base}/images/textura_vertical_2.1.png`;
 const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
+// Background-music playlist -- see musicPlaylist.ts for the single source
+// of truth (add/reorder tracks there, not here). Serialized into the
+// <audio> element's own data-tracks below; the script shuffles this order
+// once per visit.
+const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
 ---
 
 <div class="experience" id="invitation-experience" data-scene="cover" data-transition-direction="forward">
@@ -211,6 +217,18 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
       </div>
     </div>
   </section>
+
+  <!--
+    Persistent background music -- a single <audio> element living outside
+    every scene section, so nothing about scene transitions (panel
+    opacity, inert, DOM order) ever touches it: it is the one piece of
+    this experience that must NOT reset/pause/restart as the visitor moves
+    between scenes. No src/autoplay here -- per spec nothing plays until
+    "Comenzar el viaje" is actually clicked (see the script's own
+    startBackgroundMusic). data-tracks carries the playlist (see
+    musicPlaylist.ts), shuffled once per visit by the script below.
+  -->
+  <audio class="experience__music" data-tracks={JSON.stringify(musicSrcs)} preload="none" playsinline></audio>
 </div>
 
 <script>
@@ -252,6 +270,7 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
     const imaginedPanel = root.querySelector<HTMLElement>('[data-scene-panel="imagined"]');
     const imaginedFrameEl = root.querySelector<HTMLElement>('.experience__imagined-frame');
     const imaginedVideoEl = root.querySelector<HTMLVideoElement>('.experience__imagined-video');
+    const musicEl = root.querySelector<HTMLAudioElement>('.experience__music');
 
     // Forward (cover -> memory) phase timings.
     const PHASE_A_MS = 380; // cover's own text (name/dedication/signature/location/cta) fades out
@@ -308,6 +327,140 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
     const IMAGINED_VIDEO_HARD_CAP_MS = 14000; // transition5.mp4 runs ~10s; generous safety net
     const IMAGINED_TEXT_DELAY_MS = 1500; // "la primera frase empiece a aparecer a los 1.5s de iniciado" the video -- also reused, unchanged, as the fallback pause before revealing when the video never actually played (readiness timeout/error), since there is no video timeline to key off of in that case either
     const IMAGINED_SETTLE_MS = 200;
+
+    // --- Persistent background music ---
+    //
+    // One <audio> element (see the markup above), never paused/reset by
+    // scene transitions -- only this block ever touches it. Silent until
+    // "Comenzar el viaje" is clicked (startBackgroundMusic, wired below
+    // alongside the existing forward-trigger click handler); once started
+    // it keeps playing across every scene, advancing to the next track on
+    // 'ended' and looping back to the first once the playlist is
+    // exhausted. Ducks (and un-ducks) around whichever transition video is
+    // currently playing its own real audio -- destination/journey/
+    // imagined's -- by hooking the exact points those scenes' own
+    // runXVideoAndReveal functions already call video.play()/already
+    // learn the outcome, rather than adding a second, parallel set of
+    // 'play'/'ended' listeners on those videos.
+    const MUSIC_VOLUME_NORMAL = 0.32;
+    const MUSIC_VOLUME_DUCKED = 0.08;
+    const MUSIC_VOLUME_RAMP_MS = 900; // smooth, never an abrupt jump/pause -- used both for ducking and un-ducking
+
+    let musicStarted = false;
+    let musicDucked = false;
+    let musicOrder: string[] = [];
+    let musicIndex = 0;
+    let musicVolumeRaf: number | null = null;
+
+    function rampMusicVolumeTo(target: number) {
+      if (!musicEl) return;
+      if (musicVolumeRaf !== null) {
+        cancelAnimationFrame(musicVolumeRaf);
+        musicVolumeRaf = null;
+      }
+      if (prefersReducedMotion()) {
+        // Not a motion preference in the visual sense, but the same
+        // instant/no-ramp fallback principle applies -- a volume "tween"
+        // driven by requestAnimationFrame is still a kind of animation.
+        musicEl.volume = target;
+        return;
+      }
+      const start = musicEl.volume;
+      const startTime = performance.now();
+      const step = (now: number) => {
+        if (!musicEl) return;
+        const t = Math.min(1, (now - startTime) / MUSIC_VOLUME_RAMP_MS);
+        musicEl.volume = start + (target - start) * t;
+        if (t < 1) {
+          musicVolumeRaf = requestAnimationFrame(step);
+        } else {
+          musicVolumeRaf = null;
+        }
+      };
+      musicVolumeRaf = requestAnimationFrame(step);
+    }
+
+    // Called right after a transition video with its own real audio
+    // (destination/journey/imagined -- never the muted cover->memory one)
+    // actually starts playing. Idempotent: safe to call even if already
+    // ducked.
+    function duckBackgroundMusic() {
+      if (musicDucked) return;
+      musicDucked = true;
+      rampMusicVolumeTo(MUSIC_VOLUME_DUCKED);
+    }
+
+    // Called once that video's own audio is done competing for
+    // attention -- a clean 'ended', an error/hard-cap fallback, or (for
+    // the imagined stage only, since it can settle and become
+    // back-navigable while its video is still playing) a back-navigation
+    // that pauses it early. Idempotent for the same reason as above, so
+    // it is always safe to call defensively from more than one place.
+    function unduckBackgroundMusic() {
+      if (!musicDucked) return;
+      musicDucked = false;
+      rampMusicVolumeTo(MUSIC_VOLUME_NORMAL);
+    }
+
+    // Fisher-Yates -- a fresh shuffle each time someone lands on the
+    // invitation, per spec ("quiero que se abran de manera random cada
+    // vez que entren a la invitación").
+    function shuffle<T>(items: T[]): T[] {
+      const result = items.slice();
+      for (let i = result.length - 1; i > 0; i -= 1) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [result[i], result[j]] = [result[j], result[i]];
+      }
+      return result;
+    }
+
+    function playMusicTrack(index: number) {
+      if (!musicEl || musicOrder.length === 0) return;
+      musicEl.src = musicOrder[index];
+      void musicEl.play().catch(() => {
+        // Playback can legitimately fail (autoplay policy edge cases,
+        // browser tab backgrounded, etc.) -- there is nothing meaningful
+        // to fall back to for background music, so this is left silent
+        // rather than blocking or retrying indefinitely.
+      });
+    }
+
+    // Advances to the next track, looping back to the very first once the
+    // playlist is exhausted ("al terminar la playlist, volver a empezar
+    // desde la primera"). Current volume (normal or ducked) is left
+    // untouched -- only which track is playing changes.
+    function advanceMusicTrack() {
+      if (musicOrder.length === 0) return;
+      musicIndex = (musicIndex + 1) % musicOrder.length;
+      playMusicTrack(musicIndex);
+    }
+
+    if (musicEl) {
+      musicEl.addEventListener('ended', advanceMusicTrack);
+    }
+
+    // Wired to the same forward-trigger (.cover__cta / "Comenzar el
+    // viaje") click handler as the rest of the cover -> memory
+    // transition, below -- never on page load, per spec ("no reproducir
+    // música al cargar la web"). Starts once per visit.
+    function startBackgroundMusic() {
+      if (musicStarted || !musicEl) return;
+      const raw = musicEl.dataset.tracks;
+      if (!raw) return;
+      let tracks: string[] = [];
+      try {
+        tracks = JSON.parse(raw);
+      } catch {
+        tracks = [];
+      }
+      if (tracks.length === 0) return;
+      musicStarted = true;
+      musicOrder = shuffle(tracks);
+      musicIndex = 0;
+      musicEl.volume = MUSIC_VOLUME_NORMAL;
+      musicDucked = false;
+      playMusicTrack(musicIndex);
+    }
 
     // MemoryScene's own content choreography, once Fase D begins -- title
     // first and longest, then the four secondary lines as one continuous
@@ -410,6 +563,12 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
       } catch {
         // See resetVideo above -- harmless if metadata isn't loaded yet.
       }
+      // Defensive: on every normal playthrough this video's own 'ended'/
+      // error already un-ducked the music well before back-navigation is
+      // even possible (see runDestinationVideoAndReveal), so this is
+      // normally a no-op -- it only matters as a safety net, and
+      // unduckBackgroundMusic is idempotent either way.
+      unduckBackgroundMusic();
     }
 
     function resetJourneyVideo() {
@@ -420,6 +579,8 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
       } catch {
         // See resetVideo above -- harmless if metadata isn't loaded yet.
       }
+      // Defensive: same reasoning as resetDestinationVideo above.
+      unduckBackgroundMusic();
     }
 
     function resetImaginedVideo() {
@@ -430,6 +591,13 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
       } catch {
         // See resetVideo above -- harmless if metadata isn't loaded yet.
       }
+      // Unlike destination/journey, ImaginedDaysScene can settle (and so
+      // become back-navigable) while transition5.mp4 is still actually
+      // playing -- its own text starts 1.5s in, long before the ~10s
+      // video ends (see runImaginedVideoAndReveal). So back-navigation
+      // pausing it here can genuinely be the first thing to end its
+      // audio, not just a defensive no-op like the two resets above.
+      unduckBackgroundMusic();
     }
 
     // Lazily assigns transition3.mp4 and textura_vertical_3.png -- both
@@ -966,6 +1134,10 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
           try {
             await destinationVideoEl.play();
             played = true;
+            // transition3.mp4 has its own real audio (unlike the muted
+            // cover->memory video) -- duck the background music the
+            // moment it actually starts.
+            duckBackgroundMusic();
           } catch {
             played = false;
           }
@@ -974,6 +1146,10 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
 
       if (played && destinationVideoEl) {
         const finishedOk = await waitForVideoOutcome(destinationVideoEl, DESTINATION_VIDEO_HARD_CAP_MS);
+        // Either way -- clean 'ended' or error/hard-cap -- this video's
+        // own audio is done competing for attention, so the background
+        // music can recover its normal volume now.
+        unduckBackgroundMusic();
         if (finishedOk) {
           // Clean 'ended': deliberately do nothing here. A <video> that
           // reaches the end of its own playback naturally stays painted
@@ -1066,6 +1242,9 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
         try {
           await journeyVideoEl.play();
           played = true;
+          // transition4.mp4 has its own real audio -- duck the
+          // background music the moment it actually starts.
+          duckBackgroundMusic();
         } catch {
           played = false;
         }
@@ -1073,6 +1252,10 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
 
       if (played && journeyVideoEl) {
         const finishedOk = await waitForVideoOutcome(journeyVideoEl, JOURNEY_VIDEO_HARD_CAP_MS);
+        // Either way -- clean 'ended' or error/hard-cap -- this video's
+        // own audio is done competing for attention, so the background
+        // music can recover its normal volume now.
+        unduckBackgroundMusic();
         if (finishedOk) {
           // Clean 'ended': deliberately do nothing here, same principle
           // as the destination stage's own freeze -- a <video> that
@@ -1155,6 +1338,9 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
         try {
           await imaginedVideoEl.play();
           played = true;
+          // transition5.mp4 has its own real audio -- duck the
+          // background music the moment it actually starts.
+          duckBackgroundMusic();
         } catch {
           played = false;
         }
@@ -1177,6 +1363,13 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
         void sleep(IMAGINED_TEXT_DELAY_MS).then(revealImaginedText);
 
         const finishedOk = await waitForVideoOutcome(imaginedVideoEl, IMAGINED_VIDEO_HARD_CAP_MS);
+        // Either way -- clean 'ended' or error/hard-cap -- this video's
+        // own audio is done competing for attention, so the background
+        // music can recover its normal volume now. (If back-navigation
+        // already paused it and un-ducked first -- see resetImaginedVideo
+        // -- this is a harmless no-op, unduckBackgroundMusic is
+        // idempotent.)
+        unduckBackgroundMusic();
         if (finishedOk) {
           // Clean 'ended': same freeze already used for destination/
           // journey -- do nothing to the video, it stays painted on its
@@ -1519,6 +1712,7 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
 
       if (forwardTrigger && root!.contains(forwardTrigger)) {
         event.preventDefault();
+        startBackgroundMusic();
         goToScene('memory');
       } else if (backTrigger && root!.contains(backTrigger)) {
         event.preventDefault();
