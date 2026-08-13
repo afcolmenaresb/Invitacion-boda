@@ -661,6 +661,23 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       return result;
     }
 
+    // Reshuffles for a new cycle, retrying (bounded) if the very first
+    // track would repeat whatever just finished playing -- "evita que la
+    // última canción del ciclo anterior sea también la primera del nuevo
+    // ciclo". With one track (or none) this can never be satisfied, so it
+    // falls back to a plain shuffle -- still simple, still bounded, never
+    // hangs.
+    function shuffleAvoidingFirst<T>(items: T[], avoid: T | undefined): T[] {
+      if (items.length <= 1 || avoid === undefined) return shuffle(items);
+      let result = shuffle(items);
+      let guard = 0;
+      while (result[0] === avoid && guard < 10) {
+        result = shuffle(items);
+        guard += 1;
+      }
+      return result;
+    }
+
     function playMusicTrack(index: number) {
       if (!musicEl || musicOrder.length === 0) return;
       musicEl.src = musicOrder[index];
@@ -672,13 +689,20 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       });
     }
 
-    // Advances to the next track, looping back to the very first once the
-    // playlist is exhausted ("al terminar la playlist, volver a empezar
-    // desde la primera"). Current volume (normal or ducked) is left
-    // untouched -- only which track is playing changes.
+    // Advances to the next track in the current shuffled order; once it's
+    // exhausted, reshuffles for a new cycle (never picking a fresh random
+    // track after every single one -- that would risk repeats within a
+    // cycle) rather than replaying the same fixed order forever. Current
+    // volume (normal or ducked) is left untouched -- only which track is
+    // playing changes.
     function advanceMusicTrack() {
       if (musicOrder.length === 0) return;
-      musicIndex = (musicIndex + 1) % musicOrder.length;
+      const justPlayed = musicOrder[musicIndex];
+      musicIndex += 1;
+      if (musicIndex >= musicOrder.length) {
+        musicOrder = shuffleAvoidingFirst(musicOrder, justPlayed);
+        musicIndex = 0;
+      }
       playMusicTrack(musicIndex);
     }
 
@@ -966,10 +990,13 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     // Idempotent (guarded by destinationAssetsRequested) so it's safe to
     // call from every place that can land on memory/destination (the
     // animated reveal, reduced motion, and instant/direct-hash loads).
-    function ensureDestinationAssets() {
-      if (destinationAssetsRequested) return;
-      destinationAssetsRequested = true;
-
+    // Background image only -- cheap (a static png the browser caches
+    // normally), unlike the transition video below, so this is safe to
+    // call for every "past" scene on an instant/direct load (see
+    // applySceneInstantly) without triggering any video download. Kept
+    // separate from ensureDestinationAssets so the two costs (image vs.
+    // video) can be requested independently.
+    function ensureDestinationBackground() {
       const frameSrc = destinationFrameEl?.dataset.bgSrc;
       if (destinationFrameEl && frameSrc) {
         destinationFrameEl.style.backgroundImage = `url('${frameSrc}')`;
@@ -978,6 +1005,13 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       if (destinationImageEl && imageSrc) {
         destinationImageEl.style.backgroundImage = `url('${imageSrc}')`;
       }
+    }
+
+    function ensureDestinationAssets() {
+      if (destinationAssetsRequested) return;
+      destinationAssetsRequested = true;
+
+      ensureDestinationBackground();
 
       // Same reduced-motion exception as the cover->memory video: never
       // loaded as an active part of the experience for those users, who
@@ -1000,14 +1034,19 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     // the journey video has a real head start without ever competing with
     // the cover's own load. No image asset to assign here -- none exists
     // yet for this scene (see the markup's own comment).
-    function ensureJourneyAssets() {
-      if (journeyAssetsRequested) return;
-      journeyAssetsRequested = true;
-
+    // See ensureDestinationBackground's own comment above.
+    function ensureJourneyBackground() {
       const frameSrc = journeyFrameEl?.dataset.bgSrc;
       if (journeyFrameEl && frameSrc) {
         journeyFrameEl.style.backgroundImage = `url('${frameSrc}')`;
       }
+    }
+
+    function ensureJourneyAssets() {
+      if (journeyAssetsRequested) return;
+      journeyAssetsRequested = true;
+
+      ensureJourneyBackground();
 
       // Same reduced-motion exception as the other transition videos:
       // never loaded as an active part of the experience for those users.
@@ -1027,14 +1066,19 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     // imagined-days video has a real head start without ever competing
     // with the cover's own load. No image asset to assign here -- none
     // exists yet for this scene either.
-    function ensureImaginedAssets() {
-      if (imaginedAssetsRequested) return;
-      imaginedAssetsRequested = true;
-
+    // See ensureDestinationBackground's own comment above.
+    function ensureImaginedBackground() {
       const frameSrc = imaginedFrameEl?.dataset.bgSrc;
       if (imaginedFrameEl && frameSrc) {
         imaginedFrameEl.style.backgroundImage = `url('${frameSrc}')`;
       }
+    }
+
+    function ensureImaginedAssets() {
+      if (imaginedAssetsRequested) return;
+      imaginedAssetsRequested = true;
+
+      ensureImaginedBackground();
 
       // Same reduced-motion exception as the other transition videos:
       // never loaded as an active part of the experience for those users.
@@ -1054,14 +1098,19 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     // ceremony video has a real head start without ever competing with
     // the cover's own load. No image asset to assign here -- none exists
     // yet for this scene either.
-    function ensureCeremonyAssets() {
-      if (ceremonyAssetsRequested) return;
-      ceremonyAssetsRequested = true;
-
+    // See ensureDestinationBackground's own comment above.
+    function ensureCeremonyBackground() {
       const frameSrc = ceremonyFrameEl?.dataset.bgSrc;
       if (ceremonyFrameEl && frameSrc) {
         ceremonyFrameEl.style.backgroundImage = `url('${frameSrc}')`;
       }
+    }
+
+    function ensureCeremonyAssets() {
+      if (ceremonyAssetsRequested) return;
+      ceremonyAssetsRequested = true;
+
+      ensureCeremonyBackground();
 
       // Same reduced-motion exception as the other transition videos:
       // never loaded as an active part of the experience for those users.
@@ -1081,14 +1130,19 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     // celebration video has a real head start without ever competing
     // with the cover's own load. No image asset to assign here -- none
     // exists yet for this scene either.
-    function ensureCelebrationAssets() {
-      if (celebrationAssetsRequested) return;
-      celebrationAssetsRequested = true;
-
+    // See ensureDestinationBackground's own comment above.
+    function ensureCelebrationBackground() {
       const frameSrc = celebrationFrameEl?.dataset.bgSrc;
       if (celebrationFrameEl && frameSrc) {
         celebrationFrameEl.style.backgroundImage = `url('${frameSrc}')`;
       }
+    }
+
+    function ensureCelebrationAssets() {
+      if (celebrationAssetsRequested) return;
+      celebrationAssetsRequested = true;
+
+      ensureCelebrationBackground();
 
       // Same reduced-motion exception as the other transition videos:
       // never loaded as an active part of the experience for those users.
@@ -1108,14 +1162,19 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     // so the keepsake video has a real head start without ever competing
     // with the cover's own load. No image asset to assign here -- none
     // exists yet for this scene either.
-    function ensureKeepsakeAssets() {
-      if (keepsakeAssetsRequested) return;
-      keepsakeAssetsRequested = true;
-
+    // See ensureDestinationBackground's own comment above.
+    function ensureKeepsakeBackground() {
       const frameSrc = keepsakeFrameEl?.dataset.bgSrc;
       if (keepsakeFrameEl && frameSrc) {
         keepsakeFrameEl.style.backgroundImage = `url('${frameSrc}')`;
       }
+    }
+
+    function ensureKeepsakeAssets() {
+      if (keepsakeAssetsRequested) return;
+      keepsakeAssetsRequested = true;
+
+      ensureKeepsakeBackground();
 
       // Same reduced-motion exception as the other transition videos:
       // never loaded as an active part of the experience for those users.
@@ -1434,21 +1493,38 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       }
       resetKeepsakeVideo();
       // A direct/instant load landing on memory, destination, journey,
-      // imagined, ceremony, celebration, keepsake or stay should still get
-      // the same lazy head start on each scene's own media as the animated
-      // path -- see ensureDestinationAssets/ensureJourneyAssets/
-      // ensureImaginedAssets/ensureCeremonyAssets/ensureCelebrationAssets/
-      // ensureKeepsakeAssets/ensureStayAssets. Stay has no video to reset,
-      // just its own static image (see ensureStayAssets).
-      if (scene === 'memory' || pastDestination) {
-        ensureDestinationAssets();
-      }
-      if (pastDestination) ensureJourneyAssets();
-      if (pastJourney) ensureImaginedAssets();
-      if (pastImagined) ensureCeremonyAssets();
-      if (pastCeremony) ensureCelebrationAssets();
-      if (pastCelebration) ensureKeepsakeAssets();
+      // imagined, ceremony, celebration, keepsake or stay needs every
+      // "past" scene's own static background ready (so an instant
+      // back-navigation from here never shows a blank/flashed panel) --
+      // but never their transition videos: instant loads never play those
+      // (see the video resets above), and downloading every remaining
+      // transitionN.mp4 at once on a direct/deep link is exactly the
+      // "carga anticipada" this is meant to avoid. Background images are
+      // cheap static files, safe to request for the whole past chain.
+      if (scene === 'memory' || pastDestination) ensureDestinationBackground();
+      if (pastDestination) ensureJourneyBackground();
+      if (pastJourney) ensureImaginedBackground();
+      if (pastImagined) ensureCeremonyBackground();
+      if (pastCeremony) ensureCelebrationBackground();
+      if (pastCelebration) ensureKeepsakeBackground();
+      // ensureStayAssets has no video at all (page 9 is a static photo,
+      // see its own comment) -- as cheap as the background-only helpers
+      // above, so (like before) it's still safe to call for the whole
+      // pastKeepsake range (scene is 'keepsake' or 'stay').
       if (pastKeepsake) ensureStayAssets();
+
+      // Video preload is the one exception: only the single scene right
+      // after the one just landed on gets its full assets (background +
+      // video), exactly mirroring the same "current scene preloads the
+      // next one" pattern the real forward click-through path already
+      // uses (see runDestinationVideoAndReveal's own ensureJourneyAssets()
+      // call, etc.) -- never the whole remaining chain at once.
+      if (scene === 'memory') ensureDestinationAssets();
+      else if (scene === 'destination') ensureJourneyAssets();
+      else if (scene === 'journey') ensureImaginedAssets();
+      else if (scene === 'imagined') ensureCeremonyAssets();
+      else if (scene === 'ceremony') ensureCelebrationAssets();
+      else if (scene === 'celebration') ensureKeepsakeAssets();
       if (scene === 'travelInfo') ensureTravelInfoAssets();
       void root!.offsetWidth;
       requestAnimationFrame(() => {
