@@ -3,6 +3,7 @@ import { sceneCeremony } from '../data/sceneCeremony';
 ---
 
 <div class="ceremony" data-scene-panel-content aria-label={sceneCeremony.heading}>
+  <span class="ceremony__wash" aria-hidden="true"></span>
   <button type="button" class="ceremony__back" data-action="back-to-imagined" aria-label={sceneCeremony.backLabel}>
     <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
       <path d="M15 5 L8 12 L15 19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
@@ -116,6 +117,32 @@ import { sceneCeremony } from '../data/sceneCeremony';
     align-items: flex-start;
     text-align: left;
     padding: 0 28px 108px;
+  }
+
+  /*
+    Reading column -- same wide, soft "wash" of warm ivory light living
+    behind the entire text block as JourneyScene/ImaginedDaysScene/
+    CelebrationScene's own .X__wash (identical values, kept consistent
+    across every scene that uses this device). Covers roughly the left
+    55-60% of the canvas and dissolves toward the right, quieting the
+    video underneath just enough to read clearly without a flat panel
+    anywhere.
+  */
+  .ceremony__wash {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse 60% 44% at 26% 66%, rgba(255, 251, 244, 0.26) 0%, rgba(255, 251, 244, 0) 78%),
+      linear-gradient(
+        to right,
+        rgba(255, 251, 244, 0.55) 0%,
+        rgba(255, 251, 244, 0.38) 36%,
+        rgba(255, 251, 244, 0.14) 60%,
+        rgba(255, 251, 244, 0) 88%
+      );
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 1) 38%, rgba(0, 0, 0, 1) 100%);
+    mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 1) 38%, rgba(0, 0, 0, 1) 100%);
   }
 
   /*

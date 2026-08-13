@@ -150,22 +150,28 @@ const finalLine = getCelebrationFinalLine(addressing);
     where the content begins, so there is no horizontal seam where the
     wash "starts" -- it simply grows out of nothing, the same soft way
     the local halos already do.
+
+    Toned down a further round from the first pass (was reading as too
+    opaque/present) -- same shape and reach, lower alpha throughout, kept
+    identical to JourneyScene/ImaginedDaysScene/CeremonyScene's own
+    .X__wash so the system reads as one consistent device across every
+    scene that uses it, not a one-off.
   */
   .celebration__wash {
     position: absolute;
     inset: 0;
     pointer-events: none;
     background:
-      radial-gradient(ellipse 60% 44% at 26% 66%, rgba(255, 251, 244, 0.4) 0%, rgba(255, 251, 244, 0) 78%),
+      radial-gradient(ellipse 60% 44% at 26% 66%, rgba(255, 251, 244, 0.26) 0%, rgba(255, 251, 244, 0) 78%),
       linear-gradient(
         to right,
-        rgba(255, 251, 244, 0.8) 0%,
-        rgba(255, 251, 244, 0.6) 36%,
-        rgba(255, 251, 244, 0.24) 60%,
+        rgba(255, 251, 244, 0.55) 0%,
+        rgba(255, 251, 244, 0.38) 36%,
+        rgba(255, 251, 244, 0.14) 60%,
         rgba(255, 251, 244, 0) 88%
       );
-    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 1) 40%, rgba(0, 0, 0, 1) 100%);
-    mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 1) 40%, rgba(0, 0, 0, 1) 100%);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 1) 38%, rgba(0, 0, 0, 1) 100%);
+    mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 1) 38%, rgba(0, 0, 0, 1) 100%);
   }
 
   /*
@@ -271,6 +277,11 @@ const finalLine = getCelebrationFinalLine(addressing);
     convention already used for not-yet-wired CTAs elsewhere (e.g.
     CeremonyScene's own "Celebremos") -- nothing beyond this scene has
     been requested yet.
+
+    No individual halo/patch behind it anymore (the previous round's own
+    large ::before was read as too heavy, its own separate "block") --
+    it now reads purely off .celebration__wash above (it already sits
+    well inside that wash's reach) plus its own dark, high-contrast ink.
   */
   .celebration__cta {
     position: relative;
@@ -282,26 +293,6 @@ const finalLine = getCelebrationFinalLine(addressing);
     /* Deepened further -- "asegúrate de que el contraste del texto sea
        alto". */
     color: #221a10;
-  }
-
-  /* Same halo language as every other CTA, made clearly more evident
-     this round -- wider reach and a longer opaque plateau before it
-     fades -- so the CTA reads immediately as its own gesture even
-     against a busy frame, while the edge itself stays soft, never a
-     hard box. */
-  .celebration__cta::before {
-    content: '';
-    position: absolute;
-    z-index: -1;
-    inset: -16px -26px;
-    pointer-events: none;
-    background: radial-gradient(
-      ellipse at center,
-      rgba(255, 254, 248, 1) 0%,
-      rgba(255, 254, 248, 0.96) 45%,
-      rgba(255, 254, 248, 0.5) 72%,
-      rgba(255, 254, 248, 0) 100%
-    );
   }
 
   .celebration__cta::after {
