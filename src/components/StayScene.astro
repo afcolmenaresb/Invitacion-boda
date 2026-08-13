@@ -14,12 +14,30 @@ interface Props {
   guestId?: string;
   guestName?: string;
   partySize?: number;
+  /**
+   * Lets a second entry point (the page-3 "VER INFORMACIÓN DEL VIAJE"
+   * shortcut in InvitationExperience.astro) reuse this same component with
+   * a different back destination, instead of duplicating its markup --
+   * defaults match the normal page-9 flow (back to KeepsakeScene)
+   * unchanged.
+   */
+  backAction?: string;
+  backLabel?: string;
+  backVisibleLabel?: string;
 }
 
 // 'plural' is the safer neutral default if this were ever rendered without
 // a guest context -- in practice InvitationExperience always passes the
 // real guest.addressing through (same convention as every previous scene).
-const { addressing = 'plural', guestId = '', guestName = '', partySize = 1 } = Astro.props;
+const {
+  addressing = 'plural',
+  guestId = '',
+  guestName = '',
+  partySize = 1,
+  backAction = 'back-to-keepsake',
+  backLabel = sceneStay.backLabel,
+  backVisibleLabel = sceneStay.backVisibleLabel,
+} = Astro.props;
 
 const rsvpQuestion = getStayRsvpQuestion(addressing);
 const rsvpOptions = getStayRsvpOptions(addressing);
@@ -29,11 +47,11 @@ const whatsAppUrl = getGoTravelWhatsAppUrl(guestName || 'invitado');
 
 <div class="stay" data-scene-panel-content aria-label={sceneStay.eyebrow}>
   <span class="stay__wash" aria-hidden="true"></span>
-  <button type="button" class="stay__back" data-action="back-to-keepsake" aria-label={sceneStay.backLabel}>
+  <button type="button" class="stay__back" data-action={backAction} aria-label={backLabel}>
     <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
       <path d="M15 5 L8 12 L15 19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
     </svg>
-    <span>{sceneStay.backVisibleLabel}</span>
+    <span>{backVisibleLabel}</span>
   </button>
 
   <div class="stay__content">
@@ -181,7 +199,8 @@ const whatsAppUrl = getGoTravelWhatsAppUrl(guestName || 'invitado');
     background: radial-gradient(ellipse at center, rgba(255, 254, 248, 0.95), rgba(255, 254, 248, 0) 80%);
   }
 
-  :global(.experience.is-revealing-stay) .stay__back {
+  :global(.experience.is-revealing-stay) .stay__back,
+  :global(.experience.is-travel-info-revealing) .stay__back {
     opacity: 1;
   }
 
@@ -549,5 +568,17 @@ const whatsAppUrl = getGoTravelWhatsAppUrl(guestName || 'invitado');
   :global(.experience[data-scene='stay'].is-instant) [data-stay-part] {
     opacity: 1;
     transform: translateY(0);
+  }
+
+  /*
+    Page-3 shortcut instance (see backAction/backLabel/backVisibleLabel
+    above): always an instant cut, never the staged reveal above -- its
+    content is simply visible right away, matching a "practical shortcut"
+    rather than another cinematic entrance.
+  */
+  :global(.experience.is-travel-info-revealing) [data-stay-part] {
+    opacity: 1;
+    transform: translateY(0);
+    transition: none !important;
   }
 </style>

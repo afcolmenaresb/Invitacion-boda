@@ -355,6 +355,36 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
   </section>
 
   <!--
+    Travel-info stage: the page-3 "VER INFORMACIÓN DEL VIAJE" shortcut --
+    visually identical to the stay stage above (same StayScene component,
+    same textura_vertical_4 background, same RSVP/Firestore doc), reused
+    here rather than duplicated, but reached and left independently of the
+    main cover->...->stay sequence (own hash, always an instant cut, back
+    goes to destination -- see goToScene/applySceneInstantly/StayScene's
+    own backAction prop). Deliberately left out of SCENE_ORDER so it's
+    never treated as "adjacent" to anything and never plays transition
+    videos 4-8.
+  -->
+  <section class="experience__scene experience__scene--travel-info" data-scene-panel="travelInfo" inert>
+    <div class="experience__stay-frame">
+      <div class="experience__stay-canvas">
+        <div class="experience__stay-image" data-bg-src={stayTextureSrc} aria-hidden="true"></div>
+        <div class="experience__stay-overlay">
+          <StayScene
+            addressing={addressing}
+            guestId={slug}
+            guestName={displayName}
+            partySize={partySize}
+            backAction="back-to-destination"
+            backLabel="Volver al destino"
+            backVisibleLabel="Destino"
+          />
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!--
     Persistent background music -- a single <audio> element living outside
     every scene section, so nothing about scene transitions (panel
     opacity, inert, DOM order) ever touches it: it is the one piece of
@@ -416,7 +446,13 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     const keepsakeFrameEl = root.querySelector<HTMLElement>('.experience__keepsake-frame');
     const keepsakeVideoEl = root.querySelector<HTMLVideoElement>('.experience__keepsake-video');
     const stayPanel = root.querySelector<HTMLElement>('[data-scene-panel="stay"]');
-    const stayImageEl = root.querySelector<HTMLElement>('.experience__stay-image');
+    // Scoped to stayPanel (not root) because the page-3 shortcut panel
+    // below reuses the same .experience__stay-image class on its own,
+    // separate element -- an unscoped query would still resolve
+    // correctly by DOM order today, but scoping removes the ambiguity.
+    const stayImageEl = stayPanel?.querySelector<HTMLElement>('.experience__stay-image');
+    const travelInfoPanel = root.querySelector<HTMLElement>('[data-scene-panel="travelInfo"]');
+    const travelInfoImageEl = travelInfoPanel?.querySelector<HTMLElement>('.experience__stay-image');
     const musicEl = root.querySelector<HTMLAudioElement>('.experience__music');
 
     // Forward (cover -> memory) phase timings.
@@ -706,13 +742,17 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       | 'ceremony'
       | 'celebration'
       | 'keepsake'
-      | 'stay';
+      | 'stay'
+      | 'travelInfo';
     // Single source of truth for scene order/hash -- both goToScene's
     // adjacency check (only cover<->memory, memory<->destination,
     // destination<->journey, journey<->imagined, imagined<->ceremony,
     // ceremony<->celebration, celebration<->keepsake and keepsake<->stay
     // have a defined animated path) and the hash routing below read from
-    // this instead of hand-repeating the mapping.
+    // this instead of hand-repeating the mapping. 'travelInfo' is
+    // deliberately NOT listed here -- see sceneIndex/the adjacency check
+    // in goToScene, which treats anything missing from this array as
+    // never adjacent to anything, always landing via an instant cut.
     const SCENE_ORDER: SceneName[] = [
       'cover',
       'memory',
@@ -740,6 +780,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       // matches this page's own title ("...lo inolvidable.") instead.
       keepsake: '#inolvidable',
       stay: '#estadia',
+      travelInfo: '#informacion-viaje',
     };
     const sceneIndex = (scene: SceneName) => SCENE_ORDER.indexOf(scene);
 
@@ -759,6 +800,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     let keepsakeAssetsRequested = false;
     let keepsakeVideoSrcAssigned = false;
     let stayAssetsRequested = false;
+    let travelInfoAssetsRequested = false;
 
     function clearCompletionTimer() {
       if (completionTimer !== null) {
@@ -1100,6 +1142,20 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       }
     }
 
+    // Same idea, for the page-3 shortcut's own separate image element
+    // (see travelInfoImageEl above) -- independent of ensureStayAssets
+    // since the two panels never share DOM, even though they share a
+    // texture file and a component.
+    function ensureTravelInfoAssets() {
+      if (travelInfoAssetsRequested) return;
+      travelInfoAssetsRequested = true;
+
+      const imageSrc = travelInfoImageEl?.dataset.bgSrc;
+      if (travelInfoImageEl && imageSrc) {
+        travelInfoImageEl.style.backgroundImage = `url('${imageSrc}')`;
+      }
+    }
+
     // Fades a transition video's own audio down to 0 over its last
     // ~1.5s, "sin corte brusco" -- driven by the video's own real
     // playback progress rather than a separate timer, so it can never
@@ -1218,6 +1274,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       if (celebrationPanel) celebrationPanel.toggleAttribute('inert', scene !== 'celebration');
       if (keepsakePanel) keepsakePanel.toggleAttribute('inert', scene !== 'keepsake');
       if (stayPanel) stayPanel.toggleAttribute('inert', scene !== 'stay');
+      if (travelInfoPanel) travelInfoPanel.toggleAttribute('inert', scene !== 'travelInfo');
     }
 
     function focusSceneHeading(scene: SceneName) {
@@ -1238,7 +1295,9 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
                       ? keepsakePanel?.querySelector<HTMLElement>('[data-scene-heading]')
                       : scene === 'stay'
                         ? stayPanel?.querySelector<HTMLElement>('[data-scene-heading]')
-                        : coverPanel?.querySelector<HTMLElement>('.cover__cta');
+                        : scene === 'travelInfo'
+                          ? travelInfoPanel?.querySelector<HTMLElement>('[data-scene-heading]')
+                          : coverPanel?.querySelector<HTMLElement>('.cover__cta');
       target?.focus({ preventScroll: true });
     }
 
@@ -1313,6 +1372,10 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       root!.classList.toggle('is-keepsake-receded', scene === 'stay');
       root!.classList.toggle('is-revealing-stay', scene === 'stay');
       root!.classList.toggle('is-stay-revealing', scene === 'stay');
+      // Travel-info is an isolated island, not part of the cover->...
+      // ->stay "past" cascade above -- it doesn't recede/reveal anything
+      // else, it's just shown or hidden outright (see its own CSS block).
+      root!.classList.toggle('is-travel-info-revealing', scene === 'travelInfo');
       // Defensive: these are only ever set (and cleared) inside
       // runVideoAndReveal's own video->MemoryScene handoff, but an instant
       // scene switch should never risk inheriting a leftover inline value.
@@ -1383,6 +1446,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       if (pastCeremony) ensureCelebrationAssets();
       if (pastCelebration) ensureKeepsakeAssets();
       if (pastKeepsake) ensureStayAssets();
+      if (scene === 'travelInfo') ensureTravelInfoAssets();
       void root!.offsetWidth;
       requestAnimationFrame(() => {
         root?.classList.remove('is-instant');
@@ -2245,13 +2309,19 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
         !ceremonyPanel ||
         !celebrationPanel ||
         !keepsakePanel ||
-        !stayPanel
+        !stayPanel ||
+        !travelInfoPanel
       )
         return;
 
       const fromIndex = sceneIndex(currentScene);
       const toIndex = sceneIndex(scene);
-      const adjacent = Math.abs(fromIndex - toIndex) === 1;
+      // 'travelInfo' is never in SCENE_ORDER (see its own comment above),
+      // so either index is -1 whenever it's involved -- guarding on that
+      // here means every transition into or out of it always falls
+      // through to the "not adjacent" instant-cut branch below, exactly
+      // as intended, regardless of which scene it's coming from/going to.
+      const adjacent = fromIndex !== -1 && toIndex !== -1 && Math.abs(fromIndex - toIndex) === 1;
 
       if (!adjacent) {
         // No defined animated path between these two scenes (e.g. a
@@ -2762,6 +2832,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       const backToCelebrationTrigger = target.closest<HTMLElement>('[data-action="back-to-celebration"]');
       const stayTrigger = target.closest<HTMLElement>('[data-action="go-to-stay"]');
       const backToKeepsakeTrigger = target.closest<HTMLElement>('[data-action="back-to-keepsake"]');
+      const travelInfoTrigger = target.closest<HTMLElement>('[data-action="go-to-travel-info"]');
 
       if (forwardTrigger && root!.contains(forwardTrigger)) {
         event.preventDefault();
@@ -2812,10 +2883,19 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       } else if (backToKeepsakeTrigger && root!.contains(backToKeepsakeTrigger)) {
         event.preventDefault();
         goToScene('keepsake');
+      } else if (travelInfoTrigger && root!.contains(travelInfoTrigger)) {
+        // Page 3's own shortcut -- always the "not adjacent" instant-cut
+        // path (see goToScene's own adjacency check), never the animated
+        // keepsake<->stay crossfade. Its own back button reuses the
+        // existing back-to-destination action/branch above (StayScene's
+        // backAction prop), so no new back-navigation code is needed.
+        event.preventDefault();
+        goToScene('travelInfo');
       }
     });
 
     function sceneFromHash(hash: string): SceneName {
+      if (hash === '#informacion-viaje') return 'travelInfo';
       if (hash === '#estadia') return 'stay';
       if (hash === '#inolvidable') return 'keepsake';
       if (hash === '#fiesta') return 'celebration';
@@ -4290,7 +4370,8 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
   }
 
   @media (prefers-reduced-motion: no-preference) {
-    :global(.experience.is-revealing-stay) .experience__stay-image {
+    :global(.experience.is-revealing-stay) .experience__stay-image,
+    :global(.experience.is-travel-info-revealing) .experience__stay-image {
       animation: stayKenBurns 48s ease-in-out infinite alternate;
     }
   }
@@ -4307,5 +4388,39 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
   .experience__stay-overlay {
     position: absolute;
     inset: 0;
+  }
+
+  /*
+    Travel-info scene (page-3 shortcut) -- an isolated island, not another
+    step in the cover->...->stay depth chain above, so it doesn't need
+    that chain's z-index/receding choreography: shown outright whenever
+    it's the active scene, hidden outright otherwise, always an instant
+    cut (see goToScene/applySceneInstantly), so no transition/duration is
+    declared here at all. Structural sizing/background/Ken Burns all come
+    from .experience__stay-frame/-canvas/-image/-overlay above, reused
+    as-is (see the markup's own comment).
+  */
+  .experience__scene--travel-info {
+    z-index: -8;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .experience[data-scene='travelInfo'] .experience__scene--travel-info {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .experience[data-scene='travelInfo'] .experience__scene--cover,
+  .experience[data-scene='travelInfo'] .experience__scene--memory,
+  .experience[data-scene='travelInfo'] .experience__scene--destination,
+  .experience[data-scene='travelInfo'] .experience__scene--journey,
+  .experience[data-scene='travelInfo'] .experience__scene--imagined,
+  .experience[data-scene='travelInfo'] .experience__scene--ceremony,
+  .experience[data-scene='travelInfo'] .experience__scene--celebration,
+  .experience[data-scene='travelInfo'] .experience__scene--keepsake,
+  .experience[data-scene='travelInfo'] .experience__scene--stay {
+    pointer-events: none;
+    visibility: hidden;
   }
 </style>
