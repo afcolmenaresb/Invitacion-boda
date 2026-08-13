@@ -19,6 +19,7 @@ const closingLines = sceneImaginedDays.closing.split('\n');
 ---
 
 <div class="imagined" data-scene-panel-content aria-label={eyebrow}>
+  <span class="imagined__wash" aria-hidden="true"></span>
   <button type="button" class="imagined__back" data-action="back-to-journey" aria-label={sceneImaginedDays.backLabel}>
     <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
       <path d="M15 5 L8 12 L15 19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
@@ -64,9 +65,14 @@ const closingLines = sceneImaginedDays.closing.split('\n');
       ))}
     </p>
 
-    <p class="imagined__cta" data-imagined-part="cta" data-action="imagined-cta-primary">
+    <button
+      type="button"
+      class="imagined__cta"
+      data-imagined-part="cta"
+      data-action="go-to-ceremony"
+    >
       {sceneImaginedDays.ctaPrimary}
-    </p>
+    </button>
   </div>
 </div>
 
@@ -146,6 +152,32 @@ const closingLines = sceneImaginedDays.closing.split('\n');
     align-items: flex-start;
     text-align: left;
     padding: 0 28px 108px;
+  }
+
+  /*
+    Reading column -- same wide, soft "wash" of warm ivory light living
+    behind the entire text block as JourneyScene/CeremonyScene/
+    CelebrationScene's own .X__wash (identical values, kept consistent
+    across every scene that uses this device). Covers roughly the left
+    55-60% of the canvas and dissolves toward the right, quieting the
+    video underneath just enough to read clearly without a flat panel
+    anywhere.
+  */
+  .imagined__wash {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse 60% 44% at 26% 66%, rgba(255, 251, 244, 0.26) 0%, rgba(255, 251, 244, 0) 78%),
+      linear-gradient(
+        to right,
+        rgba(255, 251, 244, 0.55) 0%,
+        rgba(255, 251, 244, 0.38) 36%,
+        rgba(255, 251, 244, 0.14) 60%,
+        rgba(255, 251, 244, 0) 88%
+      );
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 1) 38%, rgba(0, 0, 0, 1) 100%);
+    mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 1) 38%, rgba(0, 0, 0, 1) 100%);
   }
 
   /* Shared halo language already approved on pages 2-4: a soft, local
@@ -234,10 +266,24 @@ const closingLines = sceneImaginedDays.closing.split('\n');
     CTA -- separated clearly from the closing as its own later gesture
     (not too close to it, not too close to the bottom edge), same
     editorial sans/uppercase/arrow language as every other primary CTA in
-    the experience.
+    the experience. Now a real <button> (was a plain <p>) so it can
+    trigger the ceremony transition -- reset to look identical to the old
+    paragraph: no border/background/padding, same cursor affordance the
+    rest of the experience's controls use. Deliberately NOT resetting
+    font/letter-spacing/text-transform to "inherit" here -- see
+    JourneyScene.astro's own .journey__cta--primary comment (and
+    DestinationScene.astro's .destination__cta--primary before it) for
+    why that specific trick silently breaks the uppercase transform
+    instead of fixing anything.
   */
   .imagined__cta {
     position: relative;
+    display: block;
+    background: none;
+    border: none;
+    padding: 0;
+    text-align: left;
+    cursor: pointer;
     margin: 46px 0 0;
     font-family: var(--font-sans);
     letter-spacing: 0.14em;

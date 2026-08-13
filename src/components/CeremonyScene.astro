@@ -1,0 +1,341 @@
+---
+import { sceneCeremony } from '../data/sceneCeremony';
+---
+
+<div class="ceremony" data-scene-panel-content aria-label={sceneCeremony.heading}>
+  <span class="ceremony__wash" aria-hidden="true"></span>
+  <button type="button" class="ceremony__back" data-action="back-to-imagined" aria-label={sceneCeremony.backLabel}>
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
+      <path d="M15 5 L8 12 L15 19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
+    <span>{sceneCeremony.backVisibleLabel}</span>
+  </button>
+
+  <div class="ceremony__content">
+    <p class="ceremony__heading" data-scene-heading data-ceremony-part="heading" tabindex="-1">
+      <span class="ceremony__halo" aria-hidden="true"></span>
+      {sceneCeremony.heading}
+    </p>
+
+    <div class="ceremony__lines" data-ceremony-part="lines">
+      {sceneCeremony.lines.map((line, i) => (
+        <p class={`ceremony__line ceremony__line--${i + 1}`}>
+          <span class="ceremony__halo ceremony__halo--line" aria-hidden="true"></span>
+          {line}
+        </p>
+      ))}
+    </div>
+
+    <p class="ceremony__date" data-ceremony-part="date">
+      <span class="ceremony__halo ceremony__halo--line" aria-hidden="true"></span>
+      {sceneCeremony.date}
+    </p>
+
+    <button
+      type="button"
+      class="ceremony__cta"
+      data-ceremony-part="cta"
+      data-action="go-to-celebration"
+    >
+      {sceneCeremony.cta}
+    </button>
+  </div>
+</div>
+
+<style>
+  .ceremony {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    isolation: isolate;
+  }
+
+  /* Same control as every previous scene's own back button -- identical
+     position, type treatment and icon, just pointing one scene back. */
+  .ceremony__back {
+    position: absolute;
+    top: max(18px, env(safe-area-inset-top));
+    left: max(18px, env(safe-area-inset-left));
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: none;
+    border: none;
+    padding: 0.4rem 0.2rem;
+    cursor: pointer;
+    font-family: var(--font-sans);
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #3a332b;
+    opacity: 0;
+  }
+
+  .ceremony__back::before {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    inset: -6px -10px;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, rgba(255, 254, 248, 0.95), rgba(255, 254, 248, 0) 80%);
+  }
+
+  :global(.experience.is-revealing-ceremony) .ceremony__back {
+    opacity: 1;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    :global(.experience:not(.is-instant)) .ceremony__back {
+      transition: opacity 320ms ease, color 0.2s ease, transform 0.2s ease;
+    }
+
+    .ceremony__back:hover,
+    .ceremony__back:focus-visible {
+      color: var(--color-accent);
+      transform: translateX(-2px);
+    }
+  }
+
+  :global(.experience.is-instant) .ceremony__back {
+    transition: none !important;
+  }
+
+  /*
+    Same fixed 390x844 canvas convention as every other scene. Content
+    sits low, over the video's own quieter lower register, so the altar
+    and chairs the source footage shows stay visible in the frame's upper
+    reaches rather than being covered by text.
+  */
+  .ceremony__content {
+    margin-top: auto;
+    width: 100%;
+    max-width: 358.8px;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    text-align: left;
+    padding: 0 28px 108px;
+  }
+
+  /*
+    Reading column -- same wide, soft "wash" of warm ivory light living
+    behind the entire text block as JourneyScene/ImaginedDaysScene/
+    CelebrationScene's own .X__wash (identical values, kept consistent
+    across every scene that uses this device). Covers roughly the left
+    55-60% of the canvas and dissolves toward the right, quieting the
+    video underneath just enough to read clearly without a flat panel
+    anywhere.
+  */
+  .ceremony__wash {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse 60% 44% at 26% 66%, rgba(255, 251, 244, 0.26) 0%, rgba(255, 251, 244, 0) 78%),
+      linear-gradient(
+        to right,
+        rgba(255, 251, 244, 0.55) 0%,
+        rgba(255, 251, 244, 0.38) 36%,
+        rgba(255, 251, 244, 0.14) 60%,
+        rgba(255, 251, 244, 0) 88%
+      );
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 1) 38%, rgba(0, 0, 0, 1) 100%);
+    mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 1) 38%, rgba(0, 0, 0, 1) 100%);
+  }
+
+  /*
+    Same halo language already approved on pages 2-5: a soft, local
+    opening of ivory light behind text, never a card/pill (no
+    border-radius, no solid fill, no visible edge) and never a global
+    scrim over the video -- kept deliberately fainter here ("muy sutil")
+    than the other scenes', used only where black text actually needs the
+    lift for legibility.
+  */
+  .ceremony__halo {
+    position: absolute;
+    z-index: -1;
+    pointer-events: none;
+    inset: -10px -18px;
+    background: radial-gradient(ellipse at center, rgba(255, 254, 248, 0.7) 0%, rgba(255, 254, 248, 0) 72%);
+  }
+
+  .ceremony__halo--line {
+    inset: -8px -14px;
+  }
+
+  .ceremony__heading {
+    position: relative;
+    margin: 0 0 30px;
+    font-family: var(--font-serif);
+    font-style: normal;
+    font-weight: 400;
+    font-size: 1.7rem;
+    line-height: 1.4;
+    color: #000;
+  }
+
+  .ceremony__lines {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .ceremony__line {
+    position: relative;
+    margin: 0;
+    font-family: var(--font-serif);
+    font-style: normal;
+    font-weight: 400;
+    font-size: 1.2rem;
+    line-height: 1.5;
+    color: #000;
+  }
+
+  .ceremony__date {
+    position: relative;
+    margin: 26px 0 0;
+    font-family: var(--font-sans);
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    font-size: 0.82rem;
+    color: #000;
+  }
+
+  /*
+    CTA -- clearly separated from the text block above (not immediately
+    following the date, not too close to the bottom edge), same
+    editorial sans/uppercase/arrow language as every other primary CTA in
+    the experience. Now a real <button> (was a plain <p>) so it can
+    trigger the celebration transition -- reset to look identical to the
+    old paragraph: no border/background/padding, same cursor affordance
+    the rest of the experience's controls use. Deliberately NOT resetting
+    font/letter-spacing/text-transform to "inherit" here -- see
+    JourneyScene.astro's own .journey__cta--primary comment for why that
+    specific trick silently breaks the uppercase transform instead of
+    fixing anything.
+  */
+  .ceremony__cta {
+    position: relative;
+    display: block;
+    background: none;
+    border: none;
+    padding: 0;
+    text-align: left;
+    cursor: pointer;
+    margin: 52px 0 0;
+    font-family: var(--font-sans);
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-size: 0.92rem;
+    color: #3a332b;
+  }
+
+  .ceremony__cta::before {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    inset: -8px -14px;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, rgba(255, 254, 248, 1), rgba(255, 254, 248, 0) 80%);
+  }
+
+  .ceremony__cta::after {
+    content: ' →';
+  }
+
+  /*
+    Heading, lines, date and CTA all use a plain per-part transition
+    (never a fade-out keyframe like ImaginedDaysScene's own ephemeral
+    memories -- this scene's text is meant to arrive and stay, "aparecer
+    con suavidad" and settle) with a generous stagger, measured from
+    is-ceremony-revealing itself being added -- which happens at the same
+    moment transition6.mp4 starts playing, "que texto y video comiencen
+    juntos" (see runCeremonyVideoAndReveal's own comment). The video
+    itself keeps playing normally underneath, all the way to its own
+    natural end and freeze, unaffected by this.
+  */
+  .ceremony__heading,
+  .ceremony__line,
+  .ceremony__date,
+  .ceremony__cta {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    :global(.experience:not(.is-instant)) .ceremony__heading,
+    :global(.experience:not(.is-instant)) .ceremony__line,
+    :global(.experience:not(.is-instant)) .ceremony__date,
+    :global(.experience:not(.is-instant)) .ceremony__cta {
+      transition: opacity 1000ms ease, transform 1000ms ease;
+    }
+
+    :global(.experience.is-ceremony-revealing) .ceremony__heading {
+      transition-delay: 0ms;
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    :global(.experience.is-ceremony-revealing) .ceremony__line--1 {
+      transition-delay: 900ms;
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    :global(.experience.is-ceremony-revealing) .ceremony__line--2 {
+      transition-delay: 1500ms;
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    :global(.experience.is-ceremony-revealing) .ceremony__line--3 {
+      transition-delay: 2100ms;
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    :global(.experience.is-ceremony-revealing) .ceremony__date {
+      transition-delay: 2900ms;
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    :global(.experience.is-ceremony-revealing) .ceremony__cta {
+      transition-delay: 3900ms;
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /*
+    Reduced motion / instant loads: no per-part stagger -- the whole
+    scene settles as a single quiet crossfade, same convention as every
+    previous scene's own reduced-motion path.
+  */
+  :global(.experience.is-reduced-motion.is-ceremony-revealing) .ceremony__heading,
+  :global(.experience.is-reduced-motion.is-ceremony-revealing) .ceremony__line,
+  :global(.experience.is-reduced-motion.is-ceremony-revealing) .ceremony__date,
+  :global(.experience.is-reduced-motion.is-ceremony-revealing) .ceremony__cta,
+  :global(.experience.is-instant) .ceremony__heading,
+  :global(.experience.is-instant) .ceremony__line,
+  :global(.experience.is-instant) .ceremony__date,
+  :global(.experience.is-instant) .ceremony__cta {
+    transition: opacity 260ms ease !important;
+    transform: none !important;
+    transition-delay: 0ms !important;
+  }
+
+  :global(.experience.is-reduced-motion.is-ceremony-revealing) .ceremony__heading,
+  :global(.experience.is-reduced-motion.is-ceremony-revealing) .ceremony__line,
+  :global(.experience.is-reduced-motion.is-ceremony-revealing) .ceremony__date,
+  :global(.experience.is-reduced-motion.is-ceremony-revealing) .ceremony__cta,
+  :global(.experience[data-scene='ceremony'].is-instant) .ceremony__heading,
+  :global(.experience[data-scene='ceremony'].is-instant) .ceremony__line,
+  :global(.experience[data-scene='ceremony'].is-instant) .ceremony__date,
+  :global(.experience[data-scene='ceremony'].is-instant) .ceremony__cta {
+    opacity: 1;
+    transform: translateY(0);
+  }
+</style>
