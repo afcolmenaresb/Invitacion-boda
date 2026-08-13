@@ -21,8 +21,8 @@ export const memoryScene = {
   ],
   // The final line depends on Guest.addressing -- see getMemorySceneFinalLine.
   finalLine: {
-    singular: 'Y tú, ahí.',
-    plural: 'Y ustedes, ahí.',
+    singular: '¿Puedes sentirlo?',
+    plural: '¿Pueden sentirlo?',
   },
   cta: 'Descubrir el destino',
   backLabel: 'Volver a la portada',
