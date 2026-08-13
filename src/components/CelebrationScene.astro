@@ -16,6 +16,7 @@ const finalLine = getCelebrationFinalLine(addressing);
 ---
 
 <div class="celebration" data-scene-panel-content aria-label={sceneCelebration.eyebrow}>
+  <span class="celebration__wash" aria-hidden="true"></span>
   <button type="button" class="celebration__back" data-action="back-to-ceremony" aria-label={sceneCelebration.backLabel}>
     <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
       <path d="M15 5 L8 12 L15 19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
@@ -112,10 +113,11 @@ const finalLine = getCelebrationFinalLine(addressing);
   /*
     Same fixed 390x844 canvas convention as every other scene. Content
     sits low, over the video's own quieter lower register, same
-    composition logic as the previous scenes -- nudged up a bit further
-    than the other scenes' own 108px (readability pass: several lines
-    were landing right over the table/flowers/candles in the footage), so
-    it has more room to breathe over the video's calmer upper area.
+    composition logic as the previous scenes -- nudged up further than
+    the other scenes' own 108px (readability pass: several lines were
+    landing right over the table/flowers/candles in the footage), so it
+    has more room to breathe over the video's calmer area and sit inside
+    .celebration__wash's own quiet reading column below.
   */
   .celebration__content {
     position: relative;
@@ -126,36 +128,44 @@ const finalLine = getCelebrationFinalLine(addressing);
     flex-direction: column;
     align-items: flex-start;
     text-align: left;
-    padding: 0 28px 134px;
+    padding: 0 28px 156px;
   }
 
   /*
-    Readability veil -- a single, very soft, wide radial glow sitting
-    behind the whole text block (eyebrow through cta), not just the
-    tight local halos each part already has. Same warm ivory ink as
-    those halos, just spread much wider and fainter -- never a solid
-    panel/card (no flat color, no border, no edge) and kept narrower
-    than the canvas itself so it never touches the frame's own borders
-    or reads as a rectangle.
+    Reading column -- a real, wide "wash" of warm ivory light living
+    behind the entire text block (eyebrow through cta), not a small
+    isolated halo. Covers roughly the left 55-60% of the canvas (where
+    this left-aligned content actually sits) and dissolves smoothly
+    toward the right, so the busier/decorative right side of the frame
+    is left completely untouched -- never a flat panel (no solid fill at
+    any single alpha, no border, no corner, no edge you can trace with
+    your eye). Two layers:
+      1. a linear-gradient(to right, ...) doing the actual left->right
+         "quieting" of the footage the spec asks for -- most opaque at
+         the very left, fully gone well before the right edge;
+      2. a much fainter radial-gradient centered roughly behind the main
+         block, adding a touch more lift right where the eyebrow/title/
+         body/cta actually are, without changing the overall silhouette.
+    mask-image fades the whole thing in vertically starting a bit above
+    where the content begins, so there is no horizontal seam where the
+    wash "starts" -- it simply grows out of nothing, the same soft way
+    the local halos already do.
   */
-  .celebration__content::before {
-    content: '';
+  .celebration__wash {
     position: absolute;
-    z-index: -2;
+    inset: 0;
     pointer-events: none;
-    inset: -34px -10px -14px -10px;
-    /* No explicit size keyword/percentage here on purpose: the default
-       "farthest-corner" sizing makes the 0-100% stops below relative to
-       the distance from the center to this box's own farthest corner, so
-       ending at 66% guarantees full transparency well *inside* the box
-       -- never a visible edge right at its boundary (which is what an
-       explicit oversized ellipse was doing before). */
-    background: radial-gradient(
-      ellipse at 50% 40%,
-      rgba(255, 253, 246, 0.46) 0%,
-      rgba(255, 253, 246, 0.2) 38%,
-      rgba(255, 253, 246, 0) 66%
-    );
+    background:
+      radial-gradient(ellipse 60% 44% at 26% 66%, rgba(255, 251, 244, 0.4) 0%, rgba(255, 251, 244, 0) 78%),
+      linear-gradient(
+        to right,
+        rgba(255, 251, 244, 0.8) 0%,
+        rgba(255, 251, 244, 0.6) 36%,
+        rgba(255, 251, 244, 0.24) 60%,
+        rgba(255, 251, 244, 0) 88%
+      );
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 1) 40%, rgba(0, 0, 0, 1) 100%);
+    mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 1) 40%, rgba(0, 0, 0, 1) 100%);
   }
 
   /*
@@ -190,11 +200,11 @@ const finalLine = getCelebrationFinalLine(addressing);
 
   /*
     Title -- large, editorial serif. Warm gold, same family as
-    var(--color-accent) but a shade deeper (kept local to this scene,
+    var(--color-accent) but deepened further (kept local to this scene,
     the shared token itself is untouched) so it reads warmer than the
-    ceremony before it while still having enough contrast against the
-    video -- "no negro puro agresivo", just a richer version of the same
-    warmth.
+    ceremony before it while still having real contrast against the
+    video -- "no negro puro agresivo", just a richer, darker version of
+    the same warmth.
   */
   .celebration__title {
     position: relative;
@@ -204,7 +214,7 @@ const finalLine = getCelebrationFinalLine(addressing);
     font-weight: 400;
     font-size: 1.85rem;
     line-height: 1.35;
-    color: #8a6b40;
+    color: #5f4522;
   }
 
   /*
@@ -226,13 +236,14 @@ const finalLine = getCelebrationFinalLine(addressing);
     font-weight: 400;
     font-size: 1.18rem;
     line-height: 1.5;
-    /* Deepened from #4a3f35 for the same readability pass -- still a
-       warm ink, not pure black. */
-    color: #3a2f25;
+    /* Taken to a near-ink tone -- "llevarlo a un tono casi tinta" -- the
+       strongest deepening in this pass, since this is the block that was
+       still reading too soft. Still a warm brown, not flat #000. */
+    color: #241a12;
   }
 
   .celebration__final {
-    color: #3a2f25;
+    color: #241a12;
   }
 
   /*
@@ -250,7 +261,7 @@ const finalLine = getCelebrationFinalLine(addressing);
     font-weight: 400;
     font-size: 1.2rem;
     line-height: 1.5;
-    color: #8a6b40;
+    color: #5f4522;
   }
 
   /*
@@ -268,24 +279,28 @@ const finalLine = getCelebrationFinalLine(addressing);
     letter-spacing: 0.14em;
     text-transform: uppercase;
     font-size: 0.92rem;
-    /* Deepened from #3a332b -- "el CTA debe ganar un poco de presencia". */
-    color: #2f2820;
+    /* Deepened further -- "asegúrate de que el contraste del texto sea
+       alto". */
+    color: #221a10;
   }
 
-  /* Same halo language as every other CTA, just a touch larger/more
-     opaque so it reads clearly as its own gesture over the video --
-     still soft-edged, never a hard box. */
+  /* Same halo language as every other CTA, made clearly more evident
+     this round -- wider reach and a longer opaque plateau before it
+     fades -- so the CTA reads immediately as its own gesture even
+     against a busy frame, while the edge itself stays soft, never a
+     hard box. */
   .celebration__cta::before {
     content: '';
     position: absolute;
     z-index: -1;
-    inset: -11px -18px;
+    inset: -16px -26px;
     pointer-events: none;
     background: radial-gradient(
       ellipse at center,
       rgba(255, 254, 248, 1) 0%,
-      rgba(255, 254, 248, 0.9) 50%,
-      rgba(255, 254, 248, 0) 85%
+      rgba(255, 254, 248, 0.96) 45%,
+      rgba(255, 254, 248, 0.5) 72%,
+      rgba(255, 254, 248, 0) 100%
     );
   }
 
