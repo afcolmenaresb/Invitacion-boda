@@ -7,6 +7,7 @@ import ImaginedDaysScene from './ImaginedDaysScene.astro';
 import CeremonyScene from './CeremonyScene.astro';
 import CelebrationScene from './CelebrationScene.astro';
 import KeepsakeScene from './KeepsakeScene.astro';
+import StayScene from './StayScene.astro';
 import { musicPlaylist } from '../data/musicPlaylist';
 import type { Guest } from '../data/guests';
 
@@ -14,9 +15,13 @@ interface Props {
   displayName?: string;
   dedication?: string;
   addressing?: Guest['addressing'];
+  /** Guest.slug -- doubles as the RSVP document id on page 9 (StayScene). */
+  slug?: string;
+  /** Guest.partySize (already resolved via getGuestPartySize) -- see StayScene's own RSVP write. */
+  partySize?: number;
 }
 
-const { displayName, dedication, addressing } = Astro.props;
+const { displayName, dedication, addressing, slug, partySize } = Astro.props;
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 const videoSrc = `${base}/videos/memory-transition2.mp4`;
 const videoSrc2 = `${base}/videos/memory-transition3.mp4`;
@@ -31,6 +36,9 @@ const videoSrc7 = `${base}/videos/memory-transition8.mp4`;
 // whichever of the two videos is adjacent to it pixel-for-pixel.
 const memoryTextureSrc = `${base}/images/textura_vertical_2.1.png`;
 const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
+// Page 9's own static background -- no video, see the markup's own
+// comment below.
+const stayTextureSrc = `${base}/images/textura_vertical_4.png`;
 // Background-music playlist -- see musicPlaylist.ts for the single source
 // of truth (add/reorder tracks there, not here). Serialized into the
 // <audio> element's own data-tracks below; the script shuffles this order
@@ -324,6 +332,29 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
   </section>
 
   <!--
+    Stay stage (page 9, "Tu estadía"): same fixed 390x844 logical canvas
+    as everything above, but unlike every scene before it, this one has
+    no video at all -- a single static photo (textura_vertical_4.png)
+    with a very slow, subtle Ken Burns scale (see .experience__stay-image
+    below), never a video crossfade. Its own text begins appearing as
+    soon as the stay panel itself starts revealing (see the script's own
+    `scene === 'stay'` branch in goToScene) -- there is no video to key
+    the entrance against. The image is intentionally left unset here
+    (data-bg-src only) and assigned lazily once KeepsakeScene is actually
+    reached, same convention as ensureKeepsakeAssets.
+  -->
+  <section class="experience__scene experience__scene--stay" data-scene-panel="stay" inert>
+    <div class="experience__stay-frame">
+      <div class="experience__stay-canvas">
+        <div class="experience__stay-image" data-bg-src={stayTextureSrc} aria-hidden="true"></div>
+        <div class="experience__stay-overlay">
+          <StayScene addressing={addressing} guestId={slug} guestName={displayName} partySize={partySize} />
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!--
     Persistent background music -- a single <audio> element living outside
     every scene section, so nothing about scene transitions (panel
     opacity, inert, DOM order) ever touches it: it is the one piece of
@@ -384,6 +415,8 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     const keepsakePanel = root.querySelector<HTMLElement>('[data-scene-panel="keepsake"]');
     const keepsakeFrameEl = root.querySelector<HTMLElement>('.experience__keepsake-frame');
     const keepsakeVideoEl = root.querySelector<HTMLVideoElement>('.experience__keepsake-video');
+    const stayPanel = root.querySelector<HTMLElement>('[data-scene-panel="stay"]');
+    const stayImageEl = root.querySelector<HTMLElement>('.experience__stay-image');
     const musicEl = root.querySelector<HTMLAudioElement>('.experience__music');
 
     // Forward (cover -> memory) phase timings.
@@ -494,6 +527,14 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     // KeepsakeScene.astro) before declaring the scene settled -- same
     // convention as CELEBRATION_FALLBACK_HOLD_MS above.
     const KEEPSAKE_FALLBACK_HOLD_MS = 5900;
+
+    // Forward (keepsake -> stay) phase timing. No video at all on this
+    // scene (see the markup's own comment), so there is no readiness
+    // wait/outcome to settle after -- StayScene's own content starts
+    // revealing the moment the crossfade itself starts, and the whole
+    // transition settles quickly, same short baseline as every other
+    // scene's own settle constant.
+    const STAY_SETTLE_MS = 200;
 
     // --- Persistent background music ---
     //
@@ -664,13 +705,14 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       | 'imagined'
       | 'ceremony'
       | 'celebration'
-      | 'keepsake';
+      | 'keepsake'
+      | 'stay';
     // Single source of truth for scene order/hash -- both goToScene's
     // adjacency check (only cover<->memory, memory<->destination,
     // destination<->journey, journey<->imagined, imagined<->ceremony,
-    // ceremony<->celebration and celebration<->keepsake have a defined
-    // animated path) and the hash routing below read from this instead of
-    // hand-repeating the mapping.
+    // ceremony<->celebration, celebration<->keepsake and keepsake<->stay
+    // have a defined animated path) and the hash routing below read from
+    // this instead of hand-repeating the mapping.
     const SCENE_ORDER: SceneName[] = [
       'cover',
       'memory',
@@ -680,6 +722,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       'ceremony',
       'celebration',
       'keepsake',
+      'stay',
     ];
     const SCENE_HASH: Record<SceneName, string> = {
       cover: '#portada',
@@ -696,6 +739,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       // '#recuerdo' is already memory's own hash (page 2) -- '#inolvidable'
       // matches this page's own title ("...lo inolvidable.") instead.
       keepsake: '#inolvidable',
+      stay: '#estadia',
     };
     const sceneIndex = (scene: SceneName) => SCENE_ORDER.indexOf(scene);
 
@@ -714,6 +758,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     let celebrationVideoSrcAssigned = false;
     let keepsakeAssetsRequested = false;
     let keepsakeVideoSrcAssigned = false;
+    let stayAssetsRequested = false;
 
     function clearCompletionTimer() {
       if (completionTimer !== null) {
@@ -1040,6 +1085,21 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       }
     }
 
+    // Same idea as ensureKeepsakeAssets, one scene later, but simpler --
+    // page 9 has no video at all, just textura_vertical_4.png (see
+    // .experience__stay-image's own comment in the markup above), so
+    // there is nothing to preload/play, only the background-image to
+    // assign once KeepsakeScene is actually reached.
+    function ensureStayAssets() {
+      if (stayAssetsRequested) return;
+      stayAssetsRequested = true;
+
+      const imageSrc = stayImageEl?.dataset.bgSrc;
+      if (stayImageEl && imageSrc) {
+        stayImageEl.style.backgroundImage = `url('${imageSrc}')`;
+      }
+    }
+
     // Fades a transition video's own audio down to 0 over its last
     // ~1.5s, "sin corte brusco" -- driven by the video's own real
     // playback progress rather than a separate timer, so it can never
@@ -1157,6 +1217,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       if (ceremonyPanel) ceremonyPanel.toggleAttribute('inert', scene !== 'ceremony');
       if (celebrationPanel) celebrationPanel.toggleAttribute('inert', scene !== 'celebration');
       if (keepsakePanel) keepsakePanel.toggleAttribute('inert', scene !== 'keepsake');
+      if (stayPanel) stayPanel.toggleAttribute('inert', scene !== 'stay');
     }
 
     function focusSceneHeading(scene: SceneName) {
@@ -1175,7 +1236,9 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
                     ? celebrationPanel?.querySelector<HTMLElement>('[data-scene-heading]')
                     : scene === 'keepsake'
                       ? keepsakePanel?.querySelector<HTMLElement>('[data-scene-heading]')
-                      : coverPanel?.querySelector<HTMLElement>('.cover__cta');
+                      : scene === 'stay'
+                        ? stayPanel?.querySelector<HTMLElement>('[data-scene-heading]')
+                        : coverPanel?.querySelector<HTMLElement>('.cover__cta');
       target?.focus({ preventScroll: true });
     }
 
@@ -1192,31 +1255,41 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
         'is-imagined-revealing',
         'is-ceremony-revealing',
         'is-celebration-revealing',
-        'is-keepsake-revealing'
+        'is-keepsake-revealing',
+        'is-stay-revealing'
       );
-      // memory, destination, journey, imagined, ceremony, celebration and
-      // keepsake all sit "past" the cover, so it stays fully receded for
-      // any of them; each further scene sits past the previous one too --
-      // each stays fully painted (is-revealing-*) but visually receded
-      // behind the next one (is-*-receded) -- same convention as the
-      // cover/memory pair, repeated one level deeper each time.
+      // memory, destination, journey, imagined, ceremony, celebration,
+      // keepsake and stay all sit "past" the cover, so it stays fully
+      // receded for any of them; each further scene sits past the
+      // previous one too -- each stays fully painted (is-revealing-*) but
+      // visually receded behind the next one (is-*-receded) -- same
+      // convention as the cover/memory pair, repeated one level deeper
+      // each time.
       const pastDestination =
         scene === 'destination' ||
         scene === 'journey' ||
         scene === 'imagined' ||
         scene === 'ceremony' ||
         scene === 'celebration' ||
-        scene === 'keepsake';
+        scene === 'keepsake' ||
+        scene === 'stay';
       const pastJourney =
         scene === 'journey' ||
         scene === 'imagined' ||
         scene === 'ceremony' ||
         scene === 'celebration' ||
-        scene === 'keepsake';
+        scene === 'keepsake' ||
+        scene === 'stay';
       const pastImagined =
-        scene === 'imagined' || scene === 'ceremony' || scene === 'celebration' || scene === 'keepsake';
-      const pastCeremony = scene === 'ceremony' || scene === 'celebration' || scene === 'keepsake';
-      const pastCelebration = scene === 'celebration' || scene === 'keepsake';
+        scene === 'imagined' ||
+        scene === 'ceremony' ||
+        scene === 'celebration' ||
+        scene === 'keepsake' ||
+        scene === 'stay';
+      const pastCeremony =
+        scene === 'ceremony' || scene === 'celebration' || scene === 'keepsake' || scene === 'stay';
+      const pastCelebration = scene === 'celebration' || scene === 'keepsake' || scene === 'stay';
+      const pastKeepsake = scene === 'keepsake' || scene === 'stay';
       root!.classList.toggle('is-cover-receded', scene !== 'cover');
       root!.classList.toggle('is-revealing-memory', scene !== 'cover');
       root!.classList.toggle('is-memory-receded', pastDestination);
@@ -1234,9 +1307,12 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       root!.classList.toggle('is-ceremony-receded', pastCelebration);
       root!.classList.toggle('is-revealing-celebration', pastCelebration);
       root!.classList.toggle('is-celebration-revealing', pastCelebration);
-      root!.classList.toggle('is-celebration-receded', scene === 'keepsake');
-      root!.classList.toggle('is-revealing-keepsake', scene === 'keepsake');
-      root!.classList.toggle('is-keepsake-revealing', scene === 'keepsake');
+      root!.classList.toggle('is-celebration-receded', pastKeepsake);
+      root!.classList.toggle('is-revealing-keepsake', pastKeepsake);
+      root!.classList.toggle('is-keepsake-revealing', pastKeepsake);
+      root!.classList.toggle('is-keepsake-receded', scene === 'stay');
+      root!.classList.toggle('is-revealing-stay', scene === 'stay');
+      root!.classList.toggle('is-stay-revealing', scene === 'stay');
       // Defensive: these are only ever set (and cleared) inside
       // runVideoAndReveal's own video->MemoryScene handoff, but an instant
       // scene switch should never risk inheriting a leftover inline value.
@@ -1292,11 +1368,12 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       }
       resetKeepsakeVideo();
       // A direct/instant load landing on memory, destination, journey,
-      // imagined, ceremony, celebration or keepsake should still get the
-      // same lazy head start on each scene's own media as the animated
+      // imagined, ceremony, celebration, keepsake or stay should still get
+      // the same lazy head start on each scene's own media as the animated
       // path -- see ensureDestinationAssets/ensureJourneyAssets/
       // ensureImaginedAssets/ensureCeremonyAssets/ensureCelebrationAssets/
-      // ensureKeepsakeAssets.
+      // ensureKeepsakeAssets/ensureStayAssets. Stay has no video to reset,
+      // just its own static image (see ensureStayAssets).
       if (scene === 'memory' || pastDestination) {
         ensureDestinationAssets();
       }
@@ -1305,6 +1382,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       if (pastImagined) ensureCeremonyAssets();
       if (pastCeremony) ensureCelebrationAssets();
       if (pastCelebration) ensureKeepsakeAssets();
+      if (pastKeepsake) ensureStayAssets();
       void root!.offsetWidth;
       requestAnimationFrame(() => {
         root?.classList.remove('is-instant');
@@ -2070,6 +2148,11 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     async function runKeepsakeVideoAndReveal() {
       ensureKeepsakeAssets();
 
+      // KeepsakeScene is reached -- give page 9's own static image a head
+      // start now, well before its own "Ver información del viaje" CTA
+      // can realistically be reached/clicked (see ensureStayAssets).
+      ensureStayAssets();
+
       let ready = false;
       if (keepsakeVideoEl && keepsakeVideoSrcAssigned) {
         try {
@@ -2161,7 +2244,8 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
         !imaginedPanel ||
         !ceremonyPanel ||
         !celebrationPanel ||
-        !keepsakePanel
+        !keepsakePanel ||
+        !stayPanel
       )
         return;
 
@@ -2430,7 +2514,44 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
         return;
       }
 
-      if (scene === 'keepsake') {
+      if (scene === 'keepsake' && currentScene === 'stay') {
+        // Back (stay -> keepsake): same idea -- no video in reverse, just
+        // a short crossfade. KeepsakeScene's own panel/content were never
+        // cleared (is-revealing-keepsake stays set the whole time once
+        // first reached, including its frozen last video frame), so it
+        // simply reappears as-is.
+        root!.classList.remove('is-revealing-stay', 'is-stay-revealing', 'is-keepsake-receded');
+        const duration = reduced ? REDUCED_MOTION_DURATION : BACKWARD_DURATION;
+        completionTimer = window.setTimeout(() => {
+          completionTimer = null;
+          currentScene = scene;
+          isTransitioning = false;
+          root!.classList.remove('is-transitioning');
+          focusSceneHeading(scene);
+        }, duration);
+        return;
+      }
+
+      if (scene === 'stay') {
+        // Forward (keepsake -> stay). No video at all on this scene (see
+        // .experience__stay-image's own comment) -- the reduced/full
+        // motion paths only differ in how long the crossfade/settle
+        // takes, same as every other scene's own reduced-motion branch,
+        // just without a video-readiness wait since there's no video to
+        // wait for.
+        ensureStayAssets();
+        root!.classList.add('is-keepsake-receded', 'is-revealing-stay', 'is-stay-revealing');
+        completionTimer = window.setTimeout(() => {
+          completionTimer = null;
+          currentScene = scene;
+          isTransitioning = false;
+          root!.classList.remove('is-transitioning');
+          focusSceneHeading(scene);
+        }, reduced ? REDUCED_MOTION_DURATION : STAY_SETTLE_MS);
+        return;
+      }
+
+      if (scene === 'keepsake' && currentScene !== 'stay') {
         // Forward (celebration -> keepsake).
         if (reduced) {
           // Reduced motion: never plays transition8.mp4 -- no static
@@ -2639,6 +2760,8 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       const backToCeremonyTrigger = target.closest<HTMLElement>('[data-action="back-to-ceremony"]');
       const keepsakeTrigger = target.closest<HTMLElement>('[data-action="go-to-keepsake"]');
       const backToCelebrationTrigger = target.closest<HTMLElement>('[data-action="back-to-celebration"]');
+      const stayTrigger = target.closest<HTMLElement>('[data-action="go-to-stay"]');
+      const backToKeepsakeTrigger = target.closest<HTMLElement>('[data-action="back-to-keepsake"]');
 
       if (forwardTrigger && root!.contains(forwardTrigger)) {
         event.preventDefault();
@@ -2683,10 +2806,17 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       } else if (backToCelebrationTrigger && root!.contains(backToCelebrationTrigger)) {
         event.preventDefault();
         goToScene('celebration');
+      } else if (stayTrigger && root!.contains(stayTrigger)) {
+        event.preventDefault();
+        goToScene('stay');
+      } else if (backToKeepsakeTrigger && root!.contains(backToKeepsakeTrigger)) {
+        event.preventDefault();
+        goToScene('keepsake');
       }
     });
 
     function sceneFromHash(hash: string): SceneName {
+      if (hash === '#estadia') return 'stay';
       if (hash === '#inolvidable') return 'keepsake';
       if (hash === '#fiesta') return 'celebration';
       if (hash === '#celebracion') return 'ceremony';
@@ -3593,6 +3723,11 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     pointer-events: none;
   }
 
+  .experience.is-transitioning :global(.keepsake__cta),
+  .experience.is-transitioning :global([data-action='back-to-keepsake']) {
+    pointer-events: none;
+  }
+
   @media (prefers-reduced-motion: no-preference) {
     .experience:not(.is-instant) .experience__scene--ceremony {
       transition: opacity 360ms ease;
@@ -4004,6 +4139,172 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
   }
 
   .experience__keepsake-overlay {
+    position: absolute;
+    inset: 0;
+  }
+
+  /*
+    Stay scene (page 9) -- additive only, same convention as the keepsake
+    block above, one level deeper: sits below keepsake in the stacking
+    order (z-index -6, keepsake -5, celebration -4, ceremony -3, imagined
+    -2, journey -1, destination 0, memory 1, cover 2), so the keepsake ->
+    stay crossfade is the same "panel above fades out, panel below is
+    already there" pattern, repeated once more -- the last time, this is
+    the final scene.
+  */
+  .experience__scene--stay {
+    z-index: -6;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .experience[data-scene='stay'] .experience__scene--stay {
+    pointer-events: auto;
+  }
+
+  .experience[data-scene='stay'] .experience__scene--cover,
+  .experience[data-scene='stay'] .experience__scene--memory,
+  .experience[data-scene='stay'] .experience__scene--destination,
+  .experience[data-scene='stay'] .experience__scene--journey,
+  .experience[data-scene='stay'] .experience__scene--imagined,
+  .experience[data-scene='stay'] .experience__scene--ceremony,
+  .experience[data-scene='stay'] .experience__scene--celebration,
+  .experience[data-scene='stay'] .experience__scene--keepsake {
+    pointer-events: none;
+  }
+
+  .experience[data-scene='stay']:not(.is-transitioning) .experience__scene--cover,
+  .experience[data-scene='stay']:not(.is-transitioning) .experience__scene--memory,
+  .experience[data-scene='stay']:not(.is-transitioning) .experience__scene--destination,
+  .experience[data-scene='stay']:not(.is-transitioning) .experience__scene--journey,
+  .experience[data-scene='stay']:not(.is-transitioning) .experience__scene--imagined,
+  .experience[data-scene='stay']:not(.is-transitioning) .experience__scene--ceremony,
+  .experience[data-scene='stay']:not(.is-transitioning) .experience__scene--celebration,
+  .experience[data-scene='stay']:not(.is-transitioning) .experience__scene--keepsake {
+    visibility: hidden;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .experience:not(.is-instant) .experience__scene--stay {
+      transition: opacity 360ms ease;
+    }
+
+    .experience.is-revealing-stay .experience__scene--stay {
+      opacity: 1;
+    }
+
+    /* Keepsake recedes while .is-keepsake-receded is present -- defined
+       after the existing ".is-revealing-keepsake .experience__scene--keepsake
+       {opacity:1}" rule above so it wins on the (otherwise equal)
+       specificity, same trick as .is-celebration-receded overriding
+       celebration's own opacity. Plain baseline duration (matches every
+       previous stage's own back/forward panel fade) -- no bespoke
+       extended timing invented here, per "mantén el patrón existente". */
+    .experience.is-keepsake-receded .experience__scene--keepsake {
+      transition: opacity 360ms ease;
+      opacity: 0;
+    }
+
+    .experience[data-transition-direction='back'].is-transitioning .experience__scene--stay {
+      transition-duration: 850ms;
+    }
+  }
+
+  .experience.is-reduced-motion .experience__scene--stay {
+    transition: opacity 260ms ease !important;
+    transform: none !important;
+  }
+
+  .experience.is-reduced-motion.is-revealing-stay .experience__scene--stay {
+    opacity: 1;
+  }
+
+  .experience.is-reduced-motion[data-scene='stay'] .experience__scene--keepsake {
+    opacity: 0;
+  }
+
+  .experience.is-instant .experience__scene--stay,
+  .experience.is-instant .experience__stay-image,
+  .experience.is-instant :global(.keepsake__cta) {
+    transition: none !important;
+  }
+
+  /*
+    Stay stage -- same fixed 390x844 canvas convention as every scene
+    above, but no video/freeze logic at all: textura_vertical_4.png is
+    the whole background, always. Legibility comes from StayScene's own
+    local halos plus its own reading-column wash (same device as pages
+    4-8), never a global darkening filter over the photo -- "mantener
+    visible la fotografía".
+  */
+  .experience__stay-frame {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    overflow: hidden;
+    background-color: var(--color-bg);
+  }
+
+  .experience__stay-canvas {
+    position: relative;
+    width: 390px;
+    height: 844px;
+    flex-shrink: 0;
+    overflow: hidden;
+    transform-origin: center center;
+    transform: scale(var(--cover-scale, 1));
+  }
+
+  :global(html.is-fill-viewport) .experience__stay-canvas {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%) scale(var(--cover-scale-x, 1), var(--cover-scale-y, 1));
+  }
+
+  /*
+    The photo itself -- absolute-fill, same 1% overscan as every video
+    crop elsewhere in this file (a fractional --cover-scale can otherwise
+    leave a hairline seam on one edge). A very slow, subtle "Ken Burns"
+    scale gives it a touch of life without ever feeling like a slideshow
+    effect -- max ~2.5% growth (well inside the "~2-3%" asked for) over a
+    long, slow 48s breath, eased both ways so it never has a visible
+    start/end snap. Gated behind is-revealing-stay so it only ever runs
+    while this is actually the foreground scene, and fully disabled under
+    reduced motion (see below) -- a static, sharp last frame is used
+    there instead, same principle as every other scene's own
+    reduced-motion fallback.
+  */
+  .experience__stay-image {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 101%;
+    height: 101%;
+    transform: translate(-50%, -50%);
+    background-size: cover;
+    background-position: 50% 50%;
+    background-repeat: no-repeat;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    :global(.experience.is-revealing-stay) .experience__stay-image {
+      animation: stayKenBurns 48s ease-in-out infinite alternate;
+    }
+  }
+
+  @keyframes stayKenBurns {
+    from {
+      transform: translate(-50%, -50%) scale(1);
+    }
+    to {
+      transform: translate(-50%, -50%) scale(1.025);
+    }
+  }
+
+  .experience__stay-overlay {
     position: absolute;
     inset: 0;
   }
