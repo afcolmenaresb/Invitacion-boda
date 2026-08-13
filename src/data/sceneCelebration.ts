@@ -11,7 +11,7 @@
  */
 export const sceneCelebration = {
   eyebrow: 'La celebración',
-  title: 'Y después, la alegría.',
+  title: 'Después, la alegría.',
   // Five short lines -- each its own DOM node inside .celebration__body
   // (see CelebrationScene.astro) but written to read as one continuous
   // scene.

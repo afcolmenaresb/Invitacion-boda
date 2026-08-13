@@ -44,9 +44,14 @@ const finalLine = getDestinationFinalLine(addressing);
     >
       {sceneDestination.ctaPrimary}
     </button>
-    <p class="destination__cta destination__cta--secondary" data-destination-part="cta-secondary" data-action="show-trip-info">
+    <button
+      type="button"
+      class="destination__cta destination__cta--secondary"
+      data-destination-part="cta-secondary"
+      data-action="go-to-stay"
+    >
       {sceneDestination.ctaSecondary}
-    </p>
+    </button>
   </div>
 </div>
 
@@ -262,6 +267,18 @@ const finalLine = getDestinationFinalLine(addressing);
   }
 
   .destination__cta--secondary {
+    /* Now a real <button> (was a plain <p>) so it can jump straight to
+       StayScene as a shortcut -- same reset rationale as
+       .destination__cta--primary's own comment above: no
+       border/background/padding, and font/letter-spacing/text-transform
+       are left alone since .destination__cta above already declares them
+       as normal author styles that apply the same way to a <button>. */
+    display: block;
+    background: none;
+    border: none;
+    padding: 0;
+    text-align: left;
+    cursor: pointer;
     color: #8c7f6a;
     font-size: 0.72rem;
   }

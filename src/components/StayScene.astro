@@ -219,26 +219,43 @@ const whatsAppUrl = getGoTravelWhatsAppUrl(guestName || 'invitado');
   }
 
   /*
-    Reading column -- same wide, soft "wash" of warm ivory light living
-    behind the entire text block as JourneyScene/ImaginedDaysScene/
-    CeremonyScene/CelebrationScene/KeepsakeScene's own .X__wash (identical
-    values, kept consistent across every scene that uses this device).
+    Reading column -- same wide, soft "wash" of warm ivory light as
+    JourneyScene/ImaginedDaysScene/CeremonyScene/CelebrationScene/
+    KeepsakeScene's own .X__wash, but sized wider/taller than their shared
+    recipe: this scene's own content block (eyebrow through the RSVP
+    options) is taller and reaches further right than any previous scene's,
+    so the wash's spatial reach is widened to actually sit behind all of
+    it -- peak opacity values are intentionally unchanged from the shared
+    recipe (still 0.26/0.55 at their strongest), only the area they cover
+    is larger, per spec ("ampliar el área antes que hacerla más blanca").
   */
   .stay__wash {
     position: absolute;
     inset: 0;
     pointer-events: none;
     background:
-      radial-gradient(ellipse 60% 44% at 26% 66%, rgba(255, 251, 244, 0.26) 0%, rgba(255, 251, 244, 0) 78%),
+      radial-gradient(ellipse 82% 62% at 32% 60%, rgba(255, 251, 244, 0.26) 0%, rgba(255, 251, 244, 0) 80%),
       linear-gradient(
         to right,
         rgba(255, 251, 244, 0.55) 0%,
-        rgba(255, 251, 244, 0.38) 36%,
-        rgba(255, 251, 244, 0.14) 60%,
-        rgba(255, 251, 244, 0) 88%
+        rgba(255, 251, 244, 0.4) 42%,
+        rgba(255, 251, 244, 0.2) 70%,
+        rgba(255, 251, 244, 0) 98%
       );
-    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 1) 38%, rgba(0, 0, 0, 1) 100%);
-    mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 1) 38%, rgba(0, 0, 0, 1) 100%);
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent 0%,
+      rgba(0, 0, 0, 0.55) 14%,
+      rgba(0, 0, 0, 1) 26%,
+      rgba(0, 0, 0, 1) 100%
+    );
+    mask-image: linear-gradient(
+      to bottom,
+      transparent 0%,
+      rgba(0, 0, 0, 0.55) 14%,
+      rgba(0, 0, 0, 1) 26%,
+      rgba(0, 0, 0, 1) 100%
+    );
   }
 
   /*

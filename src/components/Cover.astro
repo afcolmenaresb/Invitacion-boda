@@ -290,7 +290,12 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   </div>
 
   <div class="cover__meta">
-    <p class="cover__location" data-animation="location">Imbassaí, Bahía</p>
+    {/* Text removed per request -- element kept empty (not deleted) so
+       startAnimationOnce's own required-element guard still finds it and
+       the existing elephant/duck/name/dedication animation sequence keeps
+       running unchanged; prepareFadeHidden/triggerFade on it are already
+       plain opacity fades with no text-dependent logic. */}
+    <p class="cover__location" data-animation="location"></p>
     <a class="cover__cta" href="#recuerdo" data-animation="cta">Comenzar el viaje</a>
   </div>
     </header>
