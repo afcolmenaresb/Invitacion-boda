@@ -21,6 +21,27 @@ export interface SaveRsvpInput {
 }
 
 /**
+ * TEMPORARY diagnostic hook (see this module's own catch block below) --
+ * lets StayScene.astro surface the real Firestore error on-device
+ * (mobile/tablet) while the invitation is otherwise locked to laptop, per
+ * the current debugging request. Holds only the most recent failed
+ * write's diagnostics, cleared again on the next successful write.
+ * Remove this and its call sites once the underlying save error is fixed.
+ */
+export interface RsvpErrorDiagnostics {
+  code: string;
+  message: string;
+  projectId: string | undefined;
+  envVarsPresent: Record<string, boolean>;
+}
+
+let lastRsvpErrorDiagnostics: RsvpErrorDiagnostics | null = null;
+
+export function getLastRsvpErrorDiagnostics(): RsvpErrorDiagnostics | null {
+  return lastRsvpErrorDiagnostics;
+}
+
+/**
  * Writes (or overwrites) this guest's RSVP document. Never throws --
  * returns false on any failure (missing/broken Firebase config, offline,
  * denied by security rules, etc.) so the calling UI can show a quiet
@@ -39,6 +60,7 @@ export async function saveRsvpResponse(input: SaveRsvpInput): Promise<boolean> {
       partySize: input.partySize,
       respondedAt: serverTimestamp(),
     });
+    lastRsvpErrorDiagnostics = null;
     return true;
   } catch (error) {
     // Logged, not swallowed -- e.g. a rules mismatch (permission-denied)
@@ -49,6 +71,7 @@ export async function saveRsvpResponse(input: SaveRsvpInput): Promise<boolean> {
     const code = (error as { code?: string })?.code ?? 'unknown';
     const message = error instanceof Error ? error.message : String(error);
     const { projectId, envVarsPresent } = getFirebaseConfigDiagnostics();
+    lastRsvpErrorDiagnostics = { code, message, projectId, envVarsPresent };
     console.error(
       `[rsvp] saveRsvpResponse failed -- code: ${code}, message: ${message}, projectId: ${projectId ?? '(not set)'}`
     );

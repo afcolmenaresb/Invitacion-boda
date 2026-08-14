@@ -105,6 +105,15 @@ const whatsAppUrl = getGoTravelWhatsAppUrl(guestName || 'invitado');
         <span data-rsvp-message="not_attending" hidden>{rsvpConfirmations.not_attending}</span>
         <span data-rsvp-message="error" hidden>{sceneStay.rsvpError}</span>
       </p>
+      <!--
+        TEMPORARY diagnostic block -- see rsvp.ts's own
+        getLastRsvpErrorDiagnostics() comment. Only ever shown after a
+        failed saveRsvpResponse() call, alongside (never instead of) the
+        existing user-facing error message above. Remove this block, its
+        styles below, and the script that fills it once the underlying
+        Firestore save error is fixed.
+      -->
+      <pre class="stay__rsvp-diagnostics" data-rsvp-diagnostics hidden></pre>
     </div>
 
     <a
@@ -120,7 +129,20 @@ const whatsAppUrl = getGoTravelWhatsAppUrl(guestName || 'invitado');
 </div>
 
 <script>
-  import { saveRsvpResponse, type AttendanceStatus } from '../lib/rsvp';
+  import { saveRsvpResponse, getLastRsvpErrorDiagnostics, type AttendanceStatus } from '../lib/rsvp';
+
+  // TEMPORARY -- maps rsvp.ts's envVarsPresent keys (the firebaseConfig
+  // object's own camelCase field names) to the PUBLIC_FIREBASE_* var
+  // names this diagnostic block reports, per the current debugging
+  // request. Remove alongside the rest of this diagnostic block.
+  const ENV_VAR_LABELS: Record<string, string> = {
+    apiKey: 'PUBLIC_FIREBASE_API_KEY',
+    authDomain: 'PUBLIC_FIREBASE_AUTH_DOMAIN',
+    projectId: 'PUBLIC_FIREBASE_PROJECT_ID',
+    storageBucket: 'PUBLIC_FIREBASE_STORAGE_BUCKET',
+    messagingSenderId: 'PUBLIC_FIREBASE_MESSAGING_SENDER_ID',
+    appId: 'PUBLIC_FIREBASE_APP_ID',
+  };
 
   // Runs once per page load, same as every other lightweight client
   // script in this project (see Cover.astro) -- .stay__rsvp only exists
@@ -132,6 +154,7 @@ const whatsAppUrl = getGoTravelWhatsAppUrl(guestName || 'invitado');
 
     const feedback = rsvpEl.querySelector<HTMLElement>('[data-rsvp-feedback]');
     const messages = feedback ? Array.from(feedback.querySelectorAll<HTMLElement>('[data-rsvp-message]')) : [];
+    const diagnostics = rsvpEl.querySelector<HTMLElement>('[data-rsvp-diagnostics]');
     const buttons = Array.from(rsvpEl.querySelectorAll<HTMLButtonElement>('.stay__rsvp-option'));
 
     function showMessage(key: string) {
@@ -155,6 +178,33 @@ const whatsAppUrl = getGoTravelWhatsAppUrl(guestName || 'invitado');
 
         void saveRsvpResponse({ guestId, guestName, attendanceStatus: status, partySize }).then((ok) => {
           showMessage(ok ? status : 'error');
+
+          // TEMPORARY -- see this file's own diagnostics markup/comment
+          // above and getLastRsvpErrorDiagnostics() in rsvp.ts. Only
+          // appears alongside the existing error message, never replacing
+          // it, and only on an actual failed write.
+          if (!diagnostics) return;
+          if (ok) {
+            diagnostics.hidden = true;
+            diagnostics.textContent = '';
+            return;
+          }
+          const info = getLastRsvpErrorDiagnostics();
+          if (!info) {
+            diagnostics.hidden = true;
+            diagnostics.textContent = '';
+            return;
+          }
+          const envLines = Object.entries(info.envVarsPresent)
+            .map(([key, present]) => `${ENV_VAR_LABELS[key] ?? key}: ${present}`)
+            .join('\n');
+          diagnostics.textContent =
+            `DIAGNÓSTICO\n` +
+            `code: ${info.code}\n` +
+            `message: ${info.message}\n` +
+            `projectId: ${info.projectId ?? '(not set)'}\n` +
+            `env:\n${envLines}`;
+          diagnostics.hidden = false;
         });
       });
     });
@@ -490,6 +540,28 @@ const whatsAppUrl = getGoTravelWhatsAppUrl(guestName || 'invitado');
 
   .stay__rsvp-feedback.is-visible {
     opacity: 1;
+  }
+
+  /*
+    TEMPORARY -- see this file's own diagnostics markup/script comments.
+    Deliberately plain (monospace, small, on a faint readable backing) so
+    it's legible on-device without matching this scene's actual visual
+    language, since it's meant to be removed once the underlying save
+    error is fixed.
+  */
+  .stay__rsvp-diagnostics {
+    margin: 10px 0 0;
+    padding: 10px 12px;
+    max-width: 100%;
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 0.68rem;
+    line-height: 1.5;
+    color: #4a3a28;
+    background: rgba(255, 251, 244, 0.85);
+    border: 1px solid rgba(74, 58, 40, 0.25);
+    border-radius: 4px;
   }
 
   @media (prefers-reduced-motion: no-preference) {
