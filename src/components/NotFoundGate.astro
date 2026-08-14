@@ -32,7 +32,9 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   style={`background-image: url('${base}/images/textura_vertical_2.png')`}
 >
   <div class="orientation-lock__content">
-    <h1 class="orientation-lock__text not-found-gate__title">Error 404: Variable No Encontrada 🖥️</h1>
+    <h1 class="orientation-lock__text not-found-gate__title">
+      <span class="not-found-gate__code">Error 404</span>: Variable No Encontrada 🖥️
+    </h1>
     <p class="orientation-lock__text not-found-gate__body">
       ¡Ups! Parece que hay una anomalía en el sistema. Ningún modelo estadístico predijo que llegarías a la matriz
       principal sin tu variable específica.
@@ -61,6 +63,18 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     margin: 0;
     font-size: 2.1rem;
     line-height: 1.25;
+  }
+
+  /* "Error 404" specifically -- broken out of the shared Homemade Apple
+     voice into the browser/OS's own default UI sans-serif (this project's
+     existing --font-sans stack: -apple-system/Segoe UI/Roboto/Arial), the
+     same generic system font any browser's own built-in error page (a
+     failed navigation, a raw HTTP 404) would render its code in. Reads as
+     "the system talking", with the rest of the sentence still in the
+     invitation's own handwritten voice. */
+  .not-found-gate__code {
+    font-family: var(--font-sans);
+    font-weight: 700;
   }
 
   .not-found-gate__body {
