@@ -3759,30 +3759,38 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     // decide, not this code), in which case it just plays. If it's
     // blocked, startBackgroundMusic's own .play() rejection is already
     // silent (no error/prompt), and musicEl is simply left paused here --
-    // retried below from the cover's very first interaction, which
-    // (being inside a real user-gesture handler) browsers always allow,
-    // even for audible audio. Deliberately not gated on "Comenzar el
-    // viaje" specifically anymore, so it never depends on that one CTA.
+    // retried below from the visitor's very first interaction with the
+    // page, which (being inside a real user-gesture handler) browsers
+    // always allow, even for audible audio. Deliberately not gated on
+    // "Comenzar el viaje" specifically anymore, so it never depends on
+    // that one CTA.
     startBackgroundMusic();
-    if (coverPanel) {
-      // pointerdown/touchstart/click cover mouse, touch and (redundantly,
-      // on purpose -- harmless overlap) synthesized click alike; keydown
-      // is kept alongside them for keyboard-only visitors, who trigger
-      // neither. Whichever fires first wins (startBackgroundMusic is a
-      // no-op once actually playing), and every listener is removed the
-      // moment that happens so this never keeps re-attempting after music
-      // has already started.
-      const retryMusicOnFirstCoverInteraction = () => {
+    {
+      // Listens on `document` -- not scoped to the cover panel's own DOM
+      // bounds -- so literally any click/tap anywhere on the page counts,
+      // not just inside Cover's own canvas (its bounding box can be
+      // smaller than the full viewport once the fixed 390x844 canvas is
+      // scaled/letterboxed on wider screens, and the CTA click itself
+      // already reaches this same handler on the way through anyway,
+      // since it bubbles). pointerdown/touchstart/click cover mouse,
+      // touch and (redundantly, on purpose -- harmless overlap)
+      // synthesized click alike; keydown is kept alongside them for
+      // keyboard-only visitors, who trigger neither. Whichever fires
+      // first wins (startBackgroundMusic is a no-op once actually
+      // playing), and every listener is removed the moment that happens
+      // so this never keeps re-attempting after music has already
+      // started.
+      const retryMusicOnFirstInteraction = () => {
         startBackgroundMusic();
-        coverPanel.removeEventListener('pointerdown', retryMusicOnFirstCoverInteraction);
-        coverPanel.removeEventListener('touchstart', retryMusicOnFirstCoverInteraction);
-        coverPanel.removeEventListener('click', retryMusicOnFirstCoverInteraction);
-        coverPanel.removeEventListener('keydown', retryMusicOnFirstCoverInteraction);
+        document.removeEventListener('pointerdown', retryMusicOnFirstInteraction);
+        document.removeEventListener('touchstart', retryMusicOnFirstInteraction);
+        document.removeEventListener('click', retryMusicOnFirstInteraction);
+        document.removeEventListener('keydown', retryMusicOnFirstInteraction);
       };
-      coverPanel.addEventListener('pointerdown', retryMusicOnFirstCoverInteraction, { passive: true });
-      coverPanel.addEventListener('touchstart', retryMusicOnFirstCoverInteraction, { passive: true });
-      coverPanel.addEventListener('click', retryMusicOnFirstCoverInteraction);
-      coverPanel.addEventListener('keydown', retryMusicOnFirstCoverInteraction);
+      document.addEventListener('pointerdown', retryMusicOnFirstInteraction, { passive: true });
+      document.addEventListener('touchstart', retryMusicOnFirstInteraction, { passive: true });
+      document.addEventListener('click', retryMusicOnFirstInteraction);
+      document.addEventListener('keydown', retryMusicOnFirstInteraction);
     }
 
     // Reveal the whole, already-settled experience as one clean fade-in
