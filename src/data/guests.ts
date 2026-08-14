@@ -936,8 +936,8 @@ export const guests: Guest[] = [
   },
   {
     inviteId: '6d687585571b4ecf96ea',
-    slug: 'andrea-eaquivel',
-    displayName: 'Andrea Eaquivel',
+    slug: 'andrea-esquivel',
+    displayName: 'Andrea Esquivel',
     addressing: 'singular',
     dedication: 'Para que nuestra boda sea perfecta, la noche debe estar estrellada. ¡Hacé maletas y cumplinos el deseo!',
     partySize: 1,
