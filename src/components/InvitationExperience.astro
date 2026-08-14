@@ -917,15 +917,31 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     // a no-op, so repeated calls (autoplay success race with the
     // interaction listener, or the "Comenzar el viaje" click reusing the
     // same function) never restart or double-trigger playback.
-    function startBackgroundMusic() {
-      if (!musicEl || !primeMusicOrder()) return;
-      if (!musicEl.paused) return;
-      void musicEl
+    //
+    // Returns the real outcome (as a Promise) instead of firing and
+    // forgetting -- the first-interaction retry logic below needs to know
+    // whether THIS attempt actually succeeded before it's safe to stop
+    // listening for further gestures: some engines (WebKit in particular)
+    // only honor a subset of gesture types for unlocking media playback
+    // (reliably 'click'/'touchend'/'keydown', NOT always
+    // 'touchstart'/'pointerdown', which can fire first on a touch device)
+    // -- removing every listener the instant *any one* of them fires,
+    // regardless of whether that specific attempt worked, would burn the
+    // more reliable ones' own chance on a gesture type that was never
+    // going to work in the first place.
+    function startBackgroundMusic(): Promise<boolean> {
+      if (!musicEl || !primeMusicOrder()) return Promise.resolve(false);
+      if (!musicEl.paused) return Promise.resolve(true);
+      return musicEl
         .play()
-        .then(() => preloadNextTrack(musicIndex))
+        .then(() => {
+          preloadNextTrack(musicIndex);
+          return true;
+        })
         .catch(() => {
           // Blocked by autoplay policy -- silent, no prompt; the first-
-          // interaction listener below will retry.
+          // interaction listener below will retry on the next gesture.
+          return false;
         });
     }
 
@@ -3632,7 +3648,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
 
       if (forwardTrigger && root!.contains(forwardTrigger)) {
         event.preventDefault();
-        startBackgroundMusic();
+        void startBackgroundMusic();
         goToScene('memory');
       } else if (backTrigger && root!.contains(backTrigger)) {
         // Every back-to-* trigger below routes through goBack, never
@@ -3744,14 +3760,19 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       goToScene(sceneFromHash(window.location.hash), { pushHistory: false });
     });
 
-    // Initial state from the URL: a direct link to #recuerdo or #destino
-    // shows that scene immediately (no replayed animation -- the spec only
-    // asks for the transition on user action), otherwise default to
-    // #portada and make that canonical in the URL.
-    const initialScene = sceneFromHash(window.location.hash);
-    applySceneInstantly(initialScene);
-    if (!Object.values(SCENE_HASH).includes(window.location.hash)) {
-      history.replaceState({ scene: initialScene }, '', '#portada');
+    // Every fresh document load (hard reload, or a direct/shared link
+    // straight into an internal hash like #fatima or #informacion-viaje)
+    // always lands on this guest's own portada, never attempts to
+    // reconstruct whatever internal scene the hash pointed at -- a
+    // mid-sequence video/frozen-frame state can't be rebuilt from a bare
+    // hash, so this deliberately never tries. The guest's own slug/guest
+    // data is untouched (it comes from the page route, not the hash), so
+    // the experience simply restarts cleanly from Cover with the same
+    // guest -- see the popstate handler above for in-session back/forward,
+    // which still navigates the SPA normally and is untouched by this.
+    applySceneInstantly('cover');
+    if (window.location.hash !== '#portada') {
+      history.replaceState({ scene: 'cover' }, '', '#portada');
     }
 
     // Try to start background music right away -- browsers may allow
@@ -3764,7 +3785,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     // always allow, even for audible audio. Deliberately not gated on
     // "Comenzar el viaje" specifically anymore, so it never depends on
     // that one CTA.
-    startBackgroundMusic();
+    void startBackgroundMusic();
     {
       // Listens on `document` -- not scoped to the cover panel's own DOM
       // bounds -- so literally any click/tap anywhere on the page counts,
@@ -3775,17 +3796,28 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       // since it bubbles). pointerdown/touchstart/click cover mouse,
       // touch and (redundantly, on purpose -- harmless overlap)
       // synthesized click alike; keydown is kept alongside them for
-      // keyboard-only visitors, who trigger neither. Whichever fires
-      // first wins (startBackgroundMusic is a no-op once actually
-      // playing), and every listener is removed the moment that happens
-      // so this never keeps re-attempting after music has already
-      // started.
+      // keyboard-only visitors, who trigger neither.
+      //
+      // Listeners are only removed once THIS attempt actually reports
+      // success, never just because some event fired -- WebKit (Safari,
+      // iOS included) does not reliably unlock media playback from
+      // 'touchstart'/'pointerdown' (only from 'touchend'/'click'/
+      // 'keydown' are guaranteed), and on a touch device 'touchstart'
+      // fires first. Removing every listener the instant that one fired
+      // -- regardless of whether .play() actually succeeded -- used to
+      // burn 'click'/'touchend'-equivalent's own, more reliable chance on
+      // a gesture type that was never going to work on that engine,
+      // leaving music silently stuck off until the visitor happened to
+      // hit a CTA (whose own click handler calls startBackgroundMusic
+      // too, so that path still worked, masking this).
       const retryMusicOnFirstInteraction = () => {
-        startBackgroundMusic();
-        document.removeEventListener('pointerdown', retryMusicOnFirstInteraction);
-        document.removeEventListener('touchstart', retryMusicOnFirstInteraction);
-        document.removeEventListener('click', retryMusicOnFirstInteraction);
-        document.removeEventListener('keydown', retryMusicOnFirstInteraction);
+        void startBackgroundMusic().then((started) => {
+          if (!started) return;
+          document.removeEventListener('pointerdown', retryMusicOnFirstInteraction);
+          document.removeEventListener('touchstart', retryMusicOnFirstInteraction);
+          document.removeEventListener('click', retryMusicOnFirstInteraction);
+          document.removeEventListener('keydown', retryMusicOnFirstInteraction);
+        });
       };
       document.addEventListener('pointerdown', retryMusicOnFirstInteraction, { passive: true });
       document.addEventListener('touchstart', retryMusicOnFirstInteraction, { passive: true });
