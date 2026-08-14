@@ -1,0 +1,43 @@
+---
+// Personalized invitation route -- URL shape /i/{slug}-{inviteId}, e.g.
+// /i/stefania-y-matias-7Qm2Kp9VxL3a. The slug prefix is presentation only
+// (readable, guessable, shareable); the trailing inviteId is what actually
+// identifies the invitation (random, stable, non-guessable, see
+// Guest.inviteId in ../../data/guests.ts).
+//
+// This is a fully static build (see astro.config.mjs -- no adapter), so
+// getStaticPaths below pre-renders exactly one HTML file per guest, at
+// the exact `${slug}-${inviteId}` path getInviteParam() produces for that
+// guest. That's what gives requirement #8 for free: a correct slug with a
+// wrong/nonexistent inviteId ("stefania-y-matias-WRONGCODE") doesn't
+// resolve to *any* generated page -- there is no partial/fuzzy match on
+// the [invite] param -- so it 404s instead of silently loading someone
+// else's invitation. Each generated HTML file also only ever embeds that
+// one guest's own data (see Astro.props below) -- never the full `guests`
+// array -- so there is no navigable index and no other guest's data ships
+// in this page's bundle.
+import BaseLayout from '../../layouts/BaseLayout.astro';
+import InvitationExperience from '../../components/InvitationExperience.astro';
+import { guests, getGuestPartySize, getInviteParam } from '../../data/guests';
+
+export function getStaticPaths() {
+  return guests.map((guest) => ({
+    params: { invite: getInviteParam(guest) },
+    props: { guest },
+  }));
+}
+
+const { guest } = Astro.props;
+---
+
+<BaseLayout title={`Invitación para ${guest.displayName}`} noindex>
+  <main>
+    <InvitationExperience
+      displayName={guest.displayName}
+      dedication={guest.dedication}
+      addressing={guest.addressing}
+      inviteId={guest.inviteId}
+      partySize={getGuestPartySize(guest)}
+    />
+  </main>
+</BaseLayout>

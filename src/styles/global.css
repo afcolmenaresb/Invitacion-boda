@@ -65,3 +65,61 @@ button,
 a {
   touch-action: manipulation;
 }
+
+/*
+  Shared "full-viewport paper notice" object -- reused verbatim by
+  OrientationGate.astro (rotate-device notice), DesktopGate.astro
+  (desktop/laptop notice) and NotFoundGate.astro (private-invitation
+  404/index screen). Lives here, not in any one of those components' own
+  <style>, so every page that renders any of the three gets the exact
+  same rules regardless of which other components that page happens to
+  render -- see Cover.astro's own comment where this used to live.
+*/
+.orientation-lock {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--color-bg);
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-position: 60% top;
+  overflow: hidden;
+}
+
+/* :not(.desktop-gate):not(.not-found-gate) keeps this from also matching
+   DesktopGate.astro's/NotFoundGate.astro's own reuse of this same shared
+   class -- each has its own, separate visibility rule below. */
+html.is-landscape-locked .orientation-lock:not(.desktop-gate):not(.not-found-gate) {
+  display: flex;
+}
+
+html.is-desktop-gated .orientation-lock.desktop-gate {
+  display: flex;
+}
+
+/* NotFoundGate has no runtime toggle (no orientation/device check --
+   it's this page's entire content), so it's simply always shown. */
+.orientation-lock.not-found-gate {
+  display: flex;
+}
+
+.orientation-lock__content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 24px;
+  text-align: center;
+}
+
+.orientation-lock__text {
+  margin: 0;
+  font-family: 'Homemade Apple', cursive;
+  font-weight: 400;
+  font-size: 1.6rem;
+  line-height: 1.4;
+  color: #211c18;
+}

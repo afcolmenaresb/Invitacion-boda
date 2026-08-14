@@ -1,12 +1,15 @@
 // RSVP persistence for page 9 (StayScene.astro) -- Cloud Firestore only,
 // storing exactly the five fields the spec calls for, nothing else.
 //
-// Collection name: "rsvp". Document id: the guest's own slug (guestId),
-// so re-submitting (changing your mind) overwrites the same document
-// instead of piling up duplicates -- "permitir modificarla después" is
-// just calling saveRsvpResponse again.
+// Collection name: "rsvp". Document id: the guest's own inviteId
+// (passed through as guestId -- kept as that field name for
+// compatibility with the existing Firestore rules, but its value is
+// always Guest.inviteId, never Guest.slug/displayName -- see
+// src/data/guests.ts), so re-submitting (changing your mind) overwrites
+// the same document instead of piling up duplicates -- "permitir
+// modificarla después" is just calling saveRsvpResponse again.
 
-import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
+import { doc, getDoc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { getFirestoreDb, getFirebaseConfigDiagnostics } from './firebase';
 
 export type AttendanceStatus = 'attending' | 'maybe' | 'not_attending';
@@ -18,6 +21,54 @@ export interface SaveRsvpInput {
   guestName: string;
   attendanceStatus: AttendanceStatus;
   partySize: number;
+}
+
+export interface SavedRsvpResponse {
+  attendanceStatus: AttendanceStatus;
+  partySize: number;
+}
+
+const VALID_ATTENDANCE_STATUSES: AttendanceStatus[] = ['attending', 'maybe', 'not_attending'];
+
+/**
+ * Reads back this guest's previously saved RSVP document (if any), so
+ * StayScene can restore it as the pre-selected option on a later visit
+ * -- a `get` on a single known document id, never a query/listing over
+ * the collection (see firestore.rules: `allow get: if true; allow list:
+ * if false;`). Returns null both when no document exists yet and when
+ * the read fails for any reason (missing/broken Firebase config,
+ * offline, denied by rules, malformed data) -- callers treat "nothing to
+ * restore" and "couldn't check" identically, leaving the RSVP UI simply
+ * unselected. Never throws.
+ */
+export async function getRsvpResponse(guestId: string): Promise<SavedRsvpResponse | null> {
+  if (!guestId) return null;
+
+  const db = getFirestoreDb();
+  if (!db) return null;
+
+  try {
+    const snapshot = await getDoc(doc(db, RSVP_COLLECTION, guestId));
+    if (!snapshot.exists()) return null;
+
+    const data = snapshot.data();
+    const attendanceStatus = data.attendanceStatus;
+    const partySize = data.partySize;
+
+    if (!VALID_ATTENDANCE_STATUSES.includes(attendanceStatus)) return null;
+    if (typeof partySize !== 'number' || partySize <= 0) return null;
+
+    return { attendanceStatus, partySize };
+  } catch (error) {
+    // Same non-blocking philosophy as saveRsvpResponse's own catch below
+    // -- logged for diagnosability, never surfaced to the visitor. A
+    // failed restore just leaves the RSVP block unselected, exactly like
+    // a first-time visit.
+    const code = (error as { code?: string })?.code ?? 'unknown';
+    const message = error instanceof Error ? error.message : String(error);
+    console.error(`[rsvp] getRsvpResponse failed -- code: ${code}, message: ${message}`);
+    return null;
+  }
 }
 
 /**

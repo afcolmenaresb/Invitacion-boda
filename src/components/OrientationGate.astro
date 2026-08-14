@@ -9,9 +9,9 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
   ANY scene, not just the cover -- the toggle itself is untouched (Cover's
   own inline script still sets/clears html.is-landscape-locked from
   viewport dimensions alone, on every resize/orientationchange, regardless
-  of which scene is active). Same markup, same shared :global() styles
-  (.orientation-lock/-content/-text, still declared in Cover.astro for
-  DesktopGate.astro to reuse too) -- nothing duplicated, only relocated.
+  of which scene is active). Same markup, same shared
+  (.orientation-lock/-content/-text, declared once in src/styles/global.css
+  so DesktopGate.astro/NotFoundGate.astro can reuse them too) -- nothing duplicated, only relocated.
 -->
 <div
   class="orientation-lock"

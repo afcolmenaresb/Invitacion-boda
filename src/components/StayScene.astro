@@ -11,7 +11,7 @@ import type { Guest } from '../data/guests';
 
 interface Props {
   addressing?: Guest['addressing'];
-  /** Guest.slug -- the RSVP document id. Empty on the guest-less demo (/) page. */
+  /** Guest.inviteId -- the RSVP document id. Empty on the guest-less demo (/) page. */
   guestId?: string;
   guestName?: string;
   partySize?: number;
@@ -120,7 +120,34 @@ const whatsAppUrl = getGoTravelWhatsAppUrl(guestName || 'invitado');
 </div>
 
 <script>
-  import { saveRsvpResponse, type AttendanceStatus } from '../lib/rsvp';
+  import { getRsvpResponse, saveRsvpResponse, type AttendanceStatus, type SavedRsvpResponse } from '../lib/rsvp';
+
+  // This scene is rendered twice per page (the main page-9 stay panel and
+  // the page-3 "VER INFORMACIÓN DEL VIAJE" shortcut, see
+  // InvitationExperience.astro) with the same guestId -- shared across
+  // both .stay__rsvp instances below so a restore never fires the same
+  // Firestore read twice for one page load.
+  const restoreByGuestId = new Map<string, Promise<SavedRsvpResponse | null>>();
+
+  // Both instances represent the *same* guest's one RSVP answer, so a
+  // fresh save made in either one (or a restore resolving in either one)
+  // needs to reach the other too -- otherwise saving in the page-9 panel
+  // and then opening the page-3 shortcut in the same visit would still
+  // show that panel's own stale/unselected state. Each instance below
+  // registers a listener here; onGuestRsvpChanged notifies every
+  // registered instance for that guestId, itself included.
+  const rsvpListenersByGuestId = new Map<string, Array<(saved: SavedRsvpResponse) => void>>();
+
+  function onGuestRsvpChanged(guestId: string, saved: SavedRsvpResponse) {
+    for (const listener of rsvpListenersByGuestId.get(guestId) ?? []) listener(saved);
+  }
+
+  // The single source of truth for "what scene is showing right now" is
+  // InvitationExperience.astro's own root, via data-scene -- this file
+  // never imports/depends on that component's internals, it only reads
+  // this one already-public attribute (see InvitationExperience.astro's
+  // markup: `<div class="experience" data-scene="...">`).
+  const experienceRoot = document.querySelector<HTMLElement>('.experience');
 
   // Runs once per page load, same as every other lightweight client
   // script in this project (see Cover.astro) -- .stay__rsvp only exists
@@ -129,6 +156,14 @@ const whatsAppUrl = getGoTravelWhatsAppUrl(guestName || 'invitado');
     const guestId = rsvpEl.dataset.guestId ?? '';
     const guestName = rsvpEl.dataset.guestName ?? '';
     const partySize = Number(rsvpEl.dataset.partySize) || 1;
+    // 'stay' (page 9) or 'travelInfo' (page-3 shortcut) -- whichever
+    // <section data-scene-panel="..."> this RSVP block actually lives
+    // in, read off the DOM rather than duplicated/hardcoded per
+    // instance, so both entry points restore identically.
+    const panelName = rsvpEl.closest<HTMLElement>('[data-scene-panel]')?.dataset.scenePanel ?? '';
+
+    console.log('[RSVP RESTORE] enter StayScene', { panel: panelName });
+    console.log('[RSVP RESTORE] inviteId:', guestId || '(none)');
 
     const feedback = rsvpEl.querySelector<HTMLElement>('[data-rsvp-feedback]');
     const messages = feedback ? Array.from(feedback.querySelectorAll<HTMLElement>('[data-rsvp-message]')) : [];
@@ -142,8 +177,60 @@ const whatsAppUrl = getGoTravelWhatsAppUrl(guestName || 'invitado');
       feedback.classList.add('is-visible');
     }
 
+    // True the instant the guest interacts with this RSVP block --
+    // guards the restore below from clobbering a fresh in-flight
+    // selection if it resolves after the guest already started
+    // answering again (see spec: never overwrite a new interaction).
+    let userInteracted = false;
+    // Set once the Firestore read resolves, so a later re-entry into
+    // this same scene (see the MutationObserver below -- "reentrada"
+    // never needs a second read) can re-apply it without refetching.
+    let savedResponse: SavedRsvpResponse | null = null;
+
+    // The one place that actually toggles .is-selected from a restored
+    // (as opposed to freshly clicked) response -- called on first load
+    // once the read resolves, and again every time the guest navigates
+    // back into this panel. Never runs after the guest has interacted
+    // (see spec: a fresh in-flight selection always wins).
+    function applySavedResponse(reason: string) {
+      if (!savedResponse) {
+        console.log('[RSVP RESTORE] reset called: nothing saved to apply', { panel: panelName, reason });
+        return;
+      }
+      if (userInteracted) {
+        console.log('[RSVP RESTORE] reset called: user already interacted, skipping restore', {
+          panel: panelName,
+          reason,
+        });
+        return;
+      }
+      console.log('[RSVP RESTORE] applying status:', savedResponse.attendanceStatus, { panel: panelName, reason });
+      const match = buttons.find((b) => b.dataset.rsvpStatus === savedResponse!.attendanceStatus);
+      if (!match) return;
+      buttons.forEach((b) => b.classList.toggle('is-selected', b === match));
+      showMessage(savedResponse.attendanceStatus);
+      console.log(
+        '[RSVP RESTORE] selected after apply:',
+        buttons.find((b) => b.classList.contains('is-selected'))?.dataset.rsvpStatus ?? '(none)'
+      );
+    }
+
+    // Registers this instance so a fresh save (from itself or its sibling
+    // instance for the same guestId) and a resolved restore both flow
+    // through the exact same "apply" path below -- one behavior, not two.
+    if (guestId) {
+      const listeners = rsvpListenersByGuestId.get(guestId) ?? [];
+      listeners.push((saved) => {
+        savedResponse = saved;
+        userInteracted = false;
+        applySavedResponse('sync');
+      });
+      rsvpListenersByGuestId.set(guestId, listeners);
+    }
+
     buttons.forEach((button) => {
       button.addEventListener('click', () => {
+        userInteracted = true;
         const status = button.dataset.rsvpStatus as AttendanceStatus | undefined;
         if (!status) return;
 
@@ -155,9 +242,55 @@ const whatsAppUrl = getGoTravelWhatsAppUrl(guestName || 'invitado');
 
         void saveRsvpResponse({ guestId, guestName, attendanceStatus: status, partySize }).then((ok) => {
           showMessage(ok ? status : 'error');
+          // A fresh save is now the current truth for this guest's RSVP,
+          // in every instance of this scene on the page (see
+          // onGuestRsvpChanged above), not just the one just clicked.
+          if (ok && guestId) onGuestRsvpChanged(guestId, { attendanceStatus: status, partySize });
         });
       });
     });
+
+    // Silent restore: no spinner, no gating of the scene's own reveal
+    // animation (this fires alongside it, never before/blocking it). If
+    // the guest already tapped an option by the time this resolves,
+    // their fresh interaction wins and this is dropped on the floor.
+    if (guestId) {
+      let restore = restoreByGuestId.get(guestId);
+      if (!restore) {
+        restore = getRsvpResponse(guestId);
+        restoreByGuestId.set(guestId, restore);
+      }
+      restore
+        .then((saved) => {
+          console.log('[RSVP RESTORE] firestore result:', saved, { panel: panelName });
+          savedResponse = saved;
+          applySavedResponse('initial-load');
+        })
+        .catch((error) => {
+          // getRsvpResponse itself never rejects -- this is belt-and-
+          // suspenders only, matching the rest of this file's philosophy
+          // of never letting the RSVP feature break the page.
+          console.error('[rsvp] restoring previous response failed:', error);
+        });
+    }
+
+    // Reentrada: the experience never reloads/recreates this component
+    // when the guest leaves and comes back to page 9 (or the page-3
+    // shortcut) within the same visit -- it's the same static DOM the
+    // whole time (see InvitationExperience.astro, no scene panel is ever
+    // re-rendered/cloned). So the only thing that could make a restored
+    // answer "disappear" on re-entry is nothing re-applying it -- this
+    // reapplies it every time data-scene switches (back) to this panel,
+    // covering "entra, sale, vuelve a entrar" without a second Firestore
+    // read (savedResponse is already known by then).
+    if (panelName && experienceRoot) {
+      const observer = new MutationObserver(() => {
+        if (experienceRoot.dataset.scene === panelName) {
+          applySavedResponse('scene-enter:' + panelName);
+        }
+      });
+      observer.observe(experienceRoot, { attributes: true, attributeFilter: ['data-scene'] });
+    }
   });
 </script>
 
