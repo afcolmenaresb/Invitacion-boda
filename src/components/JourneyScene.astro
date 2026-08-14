@@ -48,13 +48,14 @@ const ctaPrimary = getJourneyCtaPrimary(addressing);
       >
         {ctaPrimary}
       </button>
-      <p
+      <button
+        type="button"
         class="journey__cta journey__cta--secondary"
         data-journey-part="cta-secondary"
         data-action="journey-cta-secondary"
       >
         {sceneJourney.ctaSecondary}
-      </p>
+      </button>
     </div>
   </div>
 </div>
@@ -334,7 +335,19 @@ const ctaPrimary = getJourneyCtaPrimary(addressing);
     content: ' →';
   }
 
+  /*
+    Now a real <button> too (was a plain <p>, inert until this page --
+    "Un poco de nosotros" -- actually existed to link to), same reset
+    recipe as .journey__cta--primary above, just kept at its own smaller
+    size/muted color so the primary/secondary hierarchy is unchanged.
+  */
   .journey__cta--secondary {
+    display: block;
+    background: none;
+    border: none;
+    padding: 0;
+    text-align: left;
+    cursor: pointer;
     font-size: 0.72rem;
     color: #6b6055;
   }
@@ -342,6 +355,21 @@ const ctaPrimary = getJourneyCtaPrimary(addressing);
   .journey__cta--secondary::before {
     inset: -6px -10px;
     opacity: 0.75;
+  }
+
+  .journey__cta--secondary::after {
+    content: ' →';
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    :global(.experience:not(.is-instant)) .journey__cta--secondary {
+      transition: color 0.2s ease;
+    }
+
+    .journey__cta--secondary:hover,
+    .journey__cta--secondary:focus-visible {
+      color: var(--color-accent);
+    }
   }
 
   /*

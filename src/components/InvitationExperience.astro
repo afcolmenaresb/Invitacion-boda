@@ -412,12 +412,11 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     reaching it never plays any transition video, and internal navigation
     between its five screens uses a dedicated branch in goToScene (see
     that function's own comment) instead of the video-choreographed
-    forward/back branches every earlier scene has. No entry CTA is wired
-    into any existing scene yet (see InvitationExperience.astro's own
-    top-level comment) -- reachable today via #nosotros directly; about's
-    own back button targets the cover (reuses the existing back-to-cover
-    action) as a safe, always-available fallback until a real entry point
-    is chosen.
+    forward/back branches every earlier scene has. Entered via
+    JourneyScene's own pre-existing secondary CTA (data-action=
+    "journey-cta-secondary", previously an inert <p> -- see its own
+    comment); about's own back button reuses the existing back-to-journey
+    action/branch (ImaginedDaysScene's own) to return there.
 
     about/fatima/andres/faq all reuse .experience__stay-frame/-canvas/
     -image/-overlay verbatim (same static-photo-background structure
@@ -2676,8 +2675,9 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       // generic adjacency system below -- neither scene name lives in
       // SCENE_ORDER, so it would otherwise always fall into the instant-
       // cut branch (correct for entering/leaving the sub-tree, e.g.
-      // about's own back-to-cover, but not elegant enough for browsing
-      // between its five screens -- see goToAboutTreeScene's own comment).
+      // journey->about or about's own back-to-journey, but not elegant
+      // enough for browsing between its five screens -- see
+      // goToAboutTreeScene's own comment).
       if (isAboutTreeScene(scene) && isAboutTreeScene(currentScene)) {
         isTransitioning = true;
         clearCompletionTimer();
@@ -3218,6 +3218,9 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       const andresTrigger = target.closest<HTMLElement>('[data-action="go-to-andres"]');
       const backToAboutTrigger = target.closest<HTMLElement>('[data-action="back-to-about"]');
       const backToWhoWeAreTrigger = target.closest<HTMLElement>('[data-action="back-to-who-we-are"]');
+      // JourneyScene's own secondary CTA (see its own comment) -- pre-dates
+      // this sub-tree, was an inert <p> until now.
+      const journeyAboutTrigger = target.closest<HTMLElement>('[data-action="journey-cta-secondary"]');
 
       if (forwardTrigger && root!.contains(forwardTrigger)) {
         event.preventDefault();
@@ -3294,6 +3297,9 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       } else if (backToWhoWeAreTrigger && root!.contains(backToWhoWeAreTrigger)) {
         event.preventDefault();
         goToScene('whoWeAre');
+      } else if (journeyAboutTrigger && root!.contains(journeyAboutTrigger)) {
+        event.preventDefault();
+        goToScene('about');
       }
     });
 

@@ -4,7 +4,7 @@ import { sceneAbout } from '../data/sceneAbout';
 
 <div class="about" data-scene-panel-content aria-label={sceneAbout.eyebrow}>
   <span class="about__wash" aria-hidden="true"></span>
-  <button type="button" class="about__back" data-action="back-to-cover" aria-label={sceneAbout.backLabel}>
+  <button type="button" class="about__back" data-action="back-to-journey" aria-label={sceneAbout.backLabel}>
     <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
       <path d="M15 5 L8 12 L15 19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
     </svg>
@@ -46,9 +46,9 @@ import { sceneAbout } from '../data/sceneAbout';
   }
 
   /* Same control as every previous scene's own back button -- identical
-     position, type treatment and icon. Targets the cover directly since
-     this sub-tree currently has no dedicated entry CTA elsewhere in the
-     experience (see InvitationExperience.astro's own comment). */
+     position, type treatment and icon. Reuses the existing back-to-journey
+     action/branch (ImaginedDaysScene's own) since JourneyScene's secondary
+     CTA is this sub-tree's only entry point. */
   .about__back {
     position: absolute;
     top: max(18px, env(safe-area-inset-top));

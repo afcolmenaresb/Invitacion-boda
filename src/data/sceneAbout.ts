@@ -12,6 +12,7 @@ export const sceneAbout = {
   body: 'Una pequeña pausa en el camino -- para que nos conozcas un poco mejor, y para resolver esas preguntas que quizá te estés haciendo.',
   ctaWhoWeAre: '¿Quiénes somos?',
   ctaFaq: 'Preguntas frecuentes',
-  backLabel: 'Volver a la portada',
-  backVisibleLabel: 'Portada',
+  // Reached from JourneyScene's own secondary CTA -- back returns there.
+  backLabel: 'Volver al viaje',
+  backVisibleLabel: 'El viaje',
 };
