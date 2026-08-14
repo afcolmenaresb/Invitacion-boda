@@ -702,11 +702,16 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     // --- Persistent background music ---
     //
     // One <audio> element (see the markup above), never paused/reset by
-    // scene transitions -- only this block ever touches it. Silent until
-    // "Comenzar el viaje" is clicked (startBackgroundMusic, wired below
-    // alongside the existing forward-trigger click handler); once started
-    // it keeps playing across every scene, advancing to the next track on
-    // 'ended' and looping back to the first once the playlist is
+    // scene transitions -- only this block ever touches it. Tries to
+    // start itself as soon as the page loads (see startBackgroundMusic's
+    // own call site near the bottom of this script) and, if the browser's
+    // autoplay policy blocks that, retries from the cover's very first
+    // interaction instead of waiting specifically for "Comenzar el
+    // viaje" -- that CTA's own click handler still calls
+    // startBackgroundMusic too, but only as one more no-op-if-already-
+    // playing call among several, not the sole trigger anymore. Once
+    // started it keeps playing across every scene, advancing to the next
+    // track on 'ended' and looping back to the first once the playlist is
     // exhausted. Ducks (and un-ducks) around whichever transition video is
     // currently playing its own real audio -- destination/journey/
     // imagined's -- by hooking the exact points those scenes' own
@@ -717,7 +722,6 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     const MUSIC_VOLUME_DUCKED = 0.08;
     const MUSIC_VOLUME_RAMP_MS = 900; // smooth, never an abrupt jump/pause -- used both for ducking and un-ducking
 
-    let musicStarted = false;
     let musicDucked = false;
     let musicOrder: string[] = [];
     let musicIndex = 0;
@@ -802,15 +806,38 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       return result;
     }
 
+    // Only ever loads the *current* track on the real <audio> element
+    // (preload="none" -- see the markup) plus, once it's actually
+    // playing, silently warms the browser's cache for whichever track
+    // comes right after it -- never the whole playlist -- via a
+    // throwaway Audio() that's never attached to the page or played.
+    // Best-effort only: if it fails (or the browser doesn't return a
+    // promise for it), the next track still loads normally on its own
+    // turn, just without the head start.
+    function preloadNextTrack(afterIndex: number) {
+      if (musicOrder.length === 0) return;
+      const nextIndex = (afterIndex + 1) % musicOrder.length;
+      const src = musicOrder[nextIndex];
+      if (!src) return;
+      const warmup = new Audio();
+      warmup.preload = 'auto';
+      warmup.src = src;
+    }
+
     function playMusicTrack(index: number) {
       if (!musicEl || musicOrder.length === 0) return;
       musicEl.src = musicOrder[index];
-      void musicEl.play().catch(() => {
-        // Playback can legitimately fail (autoplay policy edge cases,
-        // browser tab backgrounded, etc.) -- there is nothing meaningful
-        // to fall back to for background music, so this is left silent
-        // rather than blocking or retrying indefinitely.
-      });
+      void musicEl
+        .play()
+        .then(() => preloadNextTrack(index))
+        .catch(() => {
+          // Playback can legitimately fail (autoplay policy edge cases,
+          // browser tab backgrounded, etc.) -- there is nothing meaningful
+          // to fall back to for background music, so this is left silent
+          // rather than blocking or retrying indefinitely. See
+          // startBackgroundMusic's own retry-on-first-interaction handling
+          // for the specific autoplay-blocked case.
+        });
     }
 
     // Advances to the next track in the current shuffled order; once it's
@@ -834,27 +861,52 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       musicEl.addEventListener('ended', advanceMusicTrack);
     }
 
-    // Wired to the same forward-trigger (.cover__cta / "Comenzar el
-    // viaje") click handler as the rest of the cover -> memory
-    // transition, below -- never on page load, per spec ("no reproducir
-    // música al cargar la web"). Starts once per visit.
-    function startBackgroundMusic() {
-      if (musicStarted || !musicEl) return;
+    // One-time setup (shuffle order + pick the first track) -- kept
+    // separate from actually calling .play() below so a blocked-autoplay
+    // attempt can be retried from a later user gesture without redoing
+    // (and reshuffling) the setup.
+    let musicPrimed = false;
+    function primeMusicOrder(): boolean {
+      if (musicPrimed) return true;
+      if (!musicEl) return false;
       const raw = musicEl.dataset.tracks;
-      if (!raw) return;
+      if (!raw) return false;
       let tracks: string[] = [];
       try {
         tracks = JSON.parse(raw);
       } catch {
         tracks = [];
       }
-      if (tracks.length === 0) return;
-      musicStarted = true;
+      if (tracks.length === 0) return false;
+      musicPrimed = true;
       musicOrder = shuffle(tracks);
       musicIndex = 0;
       musicEl.volume = MUSIC_VOLUME_NORMAL;
       musicDucked = false;
-      playMusicTrack(musicIndex);
+      musicEl.src = musicOrder[musicIndex];
+      return true;
+    }
+
+    // Attempts to (re)start background music -- safe to call as many
+    // times as needed. First call (page load) tries a silent autoplay;
+    // if the browser blocks it, musicEl simply stays paused and this is
+    // called again from the very first interaction with the cover (see
+    // below), which -- being inside a real user-gesture handler -- browsers
+    // always allow, even for audible audio. No error/prompt is ever
+    // surfaced either way; once truly playing (`!musicEl.paused`) this is
+    // a no-op, so repeated calls (autoplay success race with the
+    // interaction listener, or the "Comenzar el viaje" click reusing the
+    // same function) never restart or double-trigger playback.
+    function startBackgroundMusic() {
+      if (!musicEl || !primeMusicOrder()) return;
+      if (!musicEl.paused) return;
+      void musicEl
+        .play()
+        .then(() => preloadNextTrack(musicIndex))
+        .catch(() => {
+          // Blocked by autoplay policy -- silent, no prompt; the first-
+          // interaction listener below will retry.
+        });
     }
 
     // MemoryScene's own content choreography, once Fase D begins -- title
@@ -1356,19 +1408,41 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       }
     }
 
+    // Assigns a background-image only once the browser has actually
+    // decoded it, instead of handing the CSS engine an undecoded image
+    // and letting it decode synchronously on the next paint -- these four
+    // (textura_vertical_5/6/7/8) are large photos (up to ~3MB), so
+    // decoding inline like every other ensureXAssets helper does risks a
+    // visible stall or an incomplete first paint on first entry. Falls
+    // back to the plain assignment if img.decode() is unavailable or
+    // rejects (still correct, just without the guarantee).
+    function setDecodedBackgroundImage(el: HTMLElement, url: string) {
+      const img = new Image();
+      img.src = url;
+      const apply = () => {
+        el.style.backgroundImage = `url('${url}')`;
+      };
+      if (typeof img.decode === 'function') {
+        img.decode().then(apply).catch(apply);
+      } else {
+        apply();
+      }
+    }
+
     // "Un poco de nosotros" sub-tree's own static backgrounds -- same
     // lazy, idempotent pattern as ensureStayAssets/ensureTravelInfoAssets
     // (no video, just a background-image assigned once the panel is
-    // actually reached). whoWeAre has no equivalent function: its
-    // background lives inline inside WhoWeAreScene.astro itself (already
-    // cached from Cover.astro's own first paint).
+    // actually reached), plus the decode-first handling above. whoWeAre
+    // has no equivalent function: its background lives inline inside
+    // WhoWeAreScene.astro itself (already cached from Cover.astro's own
+    // first paint).
     function ensureAboutAssets() {
       if (aboutAssetsRequested) return;
       aboutAssetsRequested = true;
 
       const imageSrc = aboutImageEl?.dataset.bgSrc;
       if (aboutImageEl && imageSrc) {
-        aboutImageEl.style.backgroundImage = `url('${imageSrc}')`;
+        setDecodedBackgroundImage(aboutImageEl, imageSrc);
       }
     }
 
@@ -1378,7 +1452,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
 
       const imageSrc = fatimaImageEl?.dataset.bgSrc;
       if (fatimaImageEl && imageSrc) {
-        fatimaImageEl.style.backgroundImage = `url('${imageSrc}')`;
+        setDecodedBackgroundImage(fatimaImageEl, imageSrc);
       }
     }
 
@@ -1388,7 +1462,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
 
       const imageSrc = andresImageEl?.dataset.bgSrc;
       if (andresImageEl && imageSrc) {
-        andresImageEl.style.backgroundImage = `url('${imageSrc}')`;
+        setDecodedBackgroundImage(andresImageEl, imageSrc);
       }
     }
 
@@ -1398,7 +1472,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
 
       const imageSrc = faqImageEl?.dataset.bgSrc;
       if (faqImageEl && imageSrc) {
-        faqImageEl.style.backgroundImage = `url('${imageSrc}')`;
+        setDecodedBackgroundImage(faqImageEl, imageSrc);
       }
     }
 
@@ -1563,6 +1637,11 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     }
 
     function applySceneInstantly(scene: SceneName) {
+      // Captured before currentScene is overwritten at the bottom of this
+      // function -- needed below to tell "genuinely landing elsewhere in
+      // the main narrative" apart from "just passing through an isolated
+      // island and back" (see isIsolatedIslandTransition below).
+      const previousScene = currentScene;
       root!.classList.add('is-instant');
       // Pre-existing gap, fixed here as a small drive-by: every other
       // entry point (goToScene's own animated branches, goToAboutTreeScene)
@@ -1665,53 +1744,69 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
         memoryPanel.style.transition = '';
         memoryPanel.style.opacity = '';
       }
-      if (destinationVideoEl) {
-        destinationVideoEl.style.transition = 'none';
-        // Instant loads never play transition3.mp4 (there is no
-        // animated transition to time it against) -- hidden outright so
-        // only the static final frame is ever visible, exactly like the
-        // reduced-motion path.
-        destinationVideoEl.style.opacity = '0';
+      // Entering *or leaving* an isolated island (travelInfo, or the whole
+      // "Un poco de nosotros" sub-tree) must never touch any main-
+      // narrative video's playback state -- it's a side branch, not a
+      // step in the cover->...->stay chain, so whichever scene the
+      // visitor actually came from (its video possibly frozen on its own
+      // last frame, e.g. journey/imagined/ceremony/celebration/keepsake,
+      // none of which have a static fallback image under their video --
+      // see their own markup comments) must look exactly the same both
+      // while hidden behind the island AND once they come back to it.
+      // Checking only `scene` would protect the way in but not the way
+      // back (landing on 'journey' again is not itself an island), so
+      // both this call's target and the scene it's leaving are checked.
+      const isIsolatedIsland = (s: SceneName) => s === 'travelInfo' || isAboutTreeScene(s);
+      const isIsolatedIslandTransition = isIsolatedIsland(scene) || isIsolatedIsland(previousScene);
+      if (!isIsolatedIslandTransition) {
+        if (destinationVideoEl) {
+          destinationVideoEl.style.transition = 'none';
+          // Instant loads never play transition3.mp4 (there is no
+          // animated transition to time it against) -- hidden outright so
+          // only the static final frame is ever visible, exactly like the
+          // reduced-motion path.
+          destinationVideoEl.style.opacity = '0';
+        }
+        resetDestinationVideo();
+        if (journeyVideoEl) {
+          // Same reasoning as destinationVideoEl above -- instant loads
+          // never play transition4.mp4.
+          journeyVideoEl.style.transition = 'none';
+          journeyVideoEl.style.opacity = '0';
+        }
+        resetJourneyVideo();
+        if (imaginedVideoEl) {
+          // Same reasoning as destinationVideoEl/journeyVideoEl above --
+          // instant loads never play transition5.mp4.
+          imaginedVideoEl.style.transition = 'none';
+          imaginedVideoEl.style.opacity = '0';
+        }
+        resetImaginedVideo();
+        if (ceremonyVideoEl) {
+          // Same reasoning as destinationVideoEl/journeyVideoEl/
+          // imaginedVideoEl above -- instant loads never play
+          // transition6.mp4.
+          ceremonyVideoEl.style.transition = 'none';
+          ceremonyVideoEl.style.opacity = '0';
+        }
+        resetCeremonyVideo();
+        if (celebrationVideoEl) {
+          // Same reasoning as destinationVideoEl/journeyVideoEl/
+          // imaginedVideoEl/ceremonyVideoEl above -- instant loads never
+          // play transition7.mp4.
+          celebrationVideoEl.style.transition = 'none';
+          celebrationVideoEl.style.opacity = '0';
+        }
+        resetCelebrationVideo();
+        if (keepsakeVideoEl) {
+          // Same reasoning as destinationVideoEl/journeyVideoEl/
+          // imaginedVideoEl/ceremonyVideoEl/celebrationVideoEl above --
+          // instant loads never play transition8.mp4.
+          keepsakeVideoEl.style.transition = 'none';
+          keepsakeVideoEl.style.opacity = '0';
+        }
+        resetKeepsakeVideo();
       }
-      resetDestinationVideo();
-      if (journeyVideoEl) {
-        // Same reasoning as destinationVideoEl above -- instant loads
-        // never play transition4.mp4.
-        journeyVideoEl.style.transition = 'none';
-        journeyVideoEl.style.opacity = '0';
-      }
-      resetJourneyVideo();
-      if (imaginedVideoEl) {
-        // Same reasoning as destinationVideoEl/journeyVideoEl above --
-        // instant loads never play transition5.mp4.
-        imaginedVideoEl.style.transition = 'none';
-        imaginedVideoEl.style.opacity = '0';
-      }
-      resetImaginedVideo();
-      if (ceremonyVideoEl) {
-        // Same reasoning as destinationVideoEl/journeyVideoEl/
-        // imaginedVideoEl above -- instant loads never play
-        // transition6.mp4.
-        ceremonyVideoEl.style.transition = 'none';
-        ceremonyVideoEl.style.opacity = '0';
-      }
-      resetCeremonyVideo();
-      if (celebrationVideoEl) {
-        // Same reasoning as destinationVideoEl/journeyVideoEl/
-        // imaginedVideoEl/ceremonyVideoEl above -- instant loads never
-        // play transition7.mp4.
-        celebrationVideoEl.style.transition = 'none';
-        celebrationVideoEl.style.opacity = '0';
-      }
-      resetCelebrationVideo();
-      if (keepsakeVideoEl) {
-        // Same reasoning as destinationVideoEl/journeyVideoEl/
-        // imaginedVideoEl/ceremonyVideoEl/celebrationVideoEl above --
-        // instant loads never play transition8.mp4.
-        keepsakeVideoEl.style.transition = 'none';
-        keepsakeVideoEl.style.opacity = '0';
-      }
-      resetKeepsakeVideo();
       // A direct/instant load landing on memory, destination, journey,
       // imagined, ceremony, celebration, keepsake or stay needs every
       // "past" scene's own static background ready (so an instant
@@ -3335,6 +3430,26 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       history.replaceState({ scene: initialScene }, '', '#portada');
     }
 
+    // Try to start background music right away -- browsers may allow
+    // this outright (their own per-site/per-visit autoplay heuristics
+    // decide, not this code), in which case it just plays. If it's
+    // blocked, startBackgroundMusic's own .play() rejection is already
+    // silent (no error/prompt), and musicEl is simply left paused here --
+    // retried below from the cover's very first interaction, which
+    // (being inside a real user-gesture handler) browsers always allow,
+    // even for audible audio. Deliberately not gated on "Comenzar el
+    // viaje" specifically anymore, so it never depends on that one CTA.
+    startBackgroundMusic();
+    if (coverPanel) {
+      const retryMusicOnFirstCoverInteraction = () => {
+        startBackgroundMusic();
+        coverPanel.removeEventListener('pointerdown', retryMusicOnFirstCoverInteraction);
+        coverPanel.removeEventListener('keydown', retryMusicOnFirstCoverInteraction);
+      };
+      coverPanel.addEventListener('pointerdown', retryMusicOnFirstCoverInteraction, { passive: true });
+      coverPanel.addEventListener('keydown', retryMusicOnFirstCoverInteraction);
+    }
+
     // Reveal the whole, already-settled experience as one clean fade-in
     // (see .is-ready in the CSS below) instead of letting the browser's
     // own incremental paint show background/texture images and web fonts
@@ -4783,13 +4898,22 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     background-repeat: no-repeat;
   }
 
+  /*
+    Scoped to each panel's own [data-scene-panel] ancestor, not just the
+    shared .experience__stay-image class -- six different panels
+    (stay/travelInfo/about/fatima/andres/faq) all reuse that same class
+    name, so a bare ".is-X-revealing .experience__stay-image" selector
+    would match all six elements at once (animating five invisible,
+    possibly already-loaded backgrounds every time any one of them is
+    revealed) instead of only the one actually on screen.
+  */
   @media (prefers-reduced-motion: no-preference) {
-    :global(.experience.is-revealing-stay) .experience__stay-image,
-    :global(.experience.is-travel-info-revealing) .experience__stay-image,
-    :global(.experience.is-about-revealing) .experience__stay-image,
-    :global(.experience.is-fatima-revealing) .experience__stay-image,
-    :global(.experience.is-andres-revealing) .experience__stay-image,
-    :global(.experience.is-faq-revealing) .experience__stay-image {
+    :global(.experience.is-revealing-stay) [data-scene-panel='stay'] .experience__stay-image,
+    :global(.experience.is-travel-info-revealing) [data-scene-panel='travelInfo'] .experience__stay-image,
+    :global(.experience.is-about-revealing) [data-scene-panel='about'] .experience__stay-image,
+    :global(.experience.is-fatima-revealing) [data-scene-panel='fatima'] .experience__stay-image,
+    :global(.experience.is-andres-revealing) [data-scene-panel='andres'] .experience__stay-image,
+    :global(.experience.is-faq-revealing) [data-scene-panel='faq'] .experience__stay-image {
       animation: stayKenBurns 48s ease-in-out infinite alternate;
     }
   }

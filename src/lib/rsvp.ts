@@ -40,7 +40,13 @@ export async function saveRsvpResponse(input: SaveRsvpInput): Promise<boolean> {
       respondedAt: serverTimestamp(),
     });
     return true;
-  } catch {
+  } catch (error) {
+    // Logged, not swallowed -- e.g. a rules mismatch (permission-denied)
+    // or an invalid-argument from a malformed write shows up here with
+    // its real Firestore error code/message instead of being
+    // indistinguishable from "offline". StayScene's own UI still only
+    // ever shows its quiet inline error either way.
+    console.error('[rsvp] saveRsvpResponse failed:', error);
     return false;
   }
 }
