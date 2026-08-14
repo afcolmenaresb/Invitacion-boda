@@ -33,8 +33,10 @@ const firebaseConfig = {
   appId: import.meta.env.PUBLIC_FIREBASE_APP_ID,
 };
 
-function hasCompleteConfig(): boolean {
-  return Object.values(firebaseConfig).every((value) => typeof value === 'string' && value.length > 0);
+function missingConfigKeys(): string[] {
+  return Object.entries(firebaseConfig)
+    .filter(([, value]) => !(typeof value === 'string' && value.length > 0))
+    .map(([key]) => key);
 }
 
 let app: FirebaseApp | null = null;
@@ -47,20 +49,33 @@ let attempted = false;
  * scene is the only thing in the whole experience that needs it. Returns
  * null (never throws) if the env vars aren't configured or init fails for
  * any other reason, so a missing/broken Firebase project degrades the
- * RSVP feature alone, never the rest of the invitation.
+ * RSVP feature alone, never the rest of the invitation -- the visitor
+ * still only ever sees StayScene's own quiet inline error, never a raw
+ * exception. The real cause (which env vars are missing, or what init
+ * threw) is logged to the console instead of swallowed outright, so a
+ * misconfigured deploy (e.g. the PUBLIC_FIREBASE_* vars not set in
+ * Vercel's project settings) is diagnosable from devtools instead of
+ * indistinguishable from a genuinely offline/denied write.
  */
 export function getFirestoreDb(): Firestore | null {
   if (attempted) return db;
   attempted = true;
 
-  if (!hasCompleteConfig()) {
+  const missing = missingConfigKeys();
+  if (missing.length > 0) {
+    console.error(
+      `[rsvp] Firebase not initialized -- missing env var(s): ${missing.join(', ')}. ` +
+        'These must be set at build time (PUBLIC_-prefixed, see .env.example) -- on Vercel, ' +
+        'add them under Project Settings -> Environment Variables and redeploy.'
+    );
     return null;
   }
 
   try {
     app = initializeApp(firebaseConfig);
     db = getFirestore(app);
-  } catch {
+  } catch (error) {
+    console.error('[rsvp] Firebase initializeApp/getFirestore failed:', error);
     db = null;
   }
 

@@ -1,0 +1,40 @@
+---
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+---
+
+<!--
+  Moved out of Cover.astro so it works as a true global overlay: rendered
+  as a sibling of .experience (not nested inside any one scene panel's own
+  stacking context), it now shows correctly while rotating to landscape on
+  ANY scene, not just the cover -- the toggle itself is untouched (Cover's
+  own inline script still sets/clears html.is-landscape-locked from
+  viewport dimensions alone, on every resize/orientationchange, regardless
+  of which scene is active). Same markup, same shared :global() styles
+  (.orientation-lock/-content/-text, still declared in Cover.astro for
+  DesktopGate.astro to reuse too) -- nothing duplicated, only relocated.
+-->
+<div
+  class="orientation-lock"
+  style={`background-image: url('${base}/images/textura_vertical_2.png')`}
+>
+  <div class="orientation-lock__content">
+    <svg
+      class="orientation-lock__icon"
+      viewBox="0 0 48 80"
+      width="48"
+      height="80"
+      aria-hidden="true"
+      focusable="false"
+    >
+      <rect x="4" y="4" width="40" height="72" rx="8" fill="none" stroke="currentColor" stroke-width="3" />
+      <line x1="18" y1="70" x2="30" y2="70" stroke="currentColor" stroke-width="3" stroke-linecap="round" />
+    </svg>
+    <p class="orientation-lock__text">Para vivir esta experiencia,<br />gira tu dispositivo.</p>
+  </div>
+</div>
+
+<style>
+  .orientation-lock__icon {
+    color: #7e5e49;
+  }
+</style>

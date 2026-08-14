@@ -305,6 +305,15 @@ const finalLine = getDestinationFinalLine(addressing);
     transform: translateY(8px);
   }
 
+  /* CTAs specifically: not interactive/focusable until actually shown
+     (opacity:0 alone doesn't stop pointer-events or Tab from reaching
+     them). See the reveal rules below for when this lifts. */
+  [data-destination-part='cta-primary'],
+  [data-destination-part='cta-secondary'] {
+    visibility: hidden;
+    pointer-events: none;
+  }
+
   @media (prefers-reduced-motion: no-preference) {
     :global(.experience.is-destination-revealing) [data-destination-part] {
       transition: opacity 900ms ease, transform 900ms ease;
@@ -337,12 +346,18 @@ const finalLine = getDestinationFinalLine(addressing);
     :global(.experience.is-destination-revealing) [data-destination-part='cta-primary'] {
       opacity: 1;
       transform: translateY(0);
+      visibility: visible;
+      pointer-events: auto;
+      transition: opacity 900ms ease, transform 900ms ease, visibility 0s linear;
       transition-delay: 6600ms;
     }
 
     :global(.experience.is-destination-revealing) [data-destination-part='cta-secondary'] {
       opacity: 1;
       transform: translateY(0);
+      visibility: visible;
+      pointer-events: auto;
+      transition: opacity 900ms ease, transform 900ms ease, visibility 0s linear;
       transition-delay: 7000ms;
     }
   }
@@ -364,5 +379,13 @@ const finalLine = getDestinationFinalLine(addressing);
   :global(.experience[data-scene='destination'].is-instant) [data-destination-part] {
     opacity: 1;
     transform: translateY(0);
+  }
+
+  :global(.experience.is-reduced-motion.is-destination-revealing) [data-destination-part='cta-primary'],
+  :global(.experience.is-reduced-motion.is-destination-revealing) [data-destination-part='cta-secondary'],
+  :global(.experience[data-scene='destination'].is-instant) [data-destination-part='cta-primary'],
+  :global(.experience[data-scene='destination'].is-instant) [data-destination-part='cta-secondary'] {
+    visibility: visible;
+    pointer-events: auto;
   }
 </style>

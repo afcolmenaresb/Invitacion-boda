@@ -48,13 +48,14 @@ const ctaPrimary = getJourneyCtaPrimary(addressing);
       >
         {ctaPrimary}
       </button>
-      <p
+      <button
+        type="button"
         class="journey__cta journey__cta--secondary"
         data-journey-part="cta-secondary"
         data-action="journey-cta-secondary"
       >
         {sceneJourney.ctaSecondary}
-      </p>
+      </button>
     </div>
   </div>
 </div>
@@ -334,7 +335,19 @@ const ctaPrimary = getJourneyCtaPrimary(addressing);
     content: ' →';
   }
 
+  /*
+    Now a real <button> too (was a plain <p>, inert until this page --
+    "Un poco de nosotros" -- actually existed to link to), same reset
+    recipe as .journey__cta--primary above, just kept at its own smaller
+    size/muted color so the primary/secondary hierarchy is unchanged.
+  */
   .journey__cta--secondary {
+    display: block;
+    background: none;
+    border: none;
+    padding: 0;
+    text-align: left;
+    cursor: pointer;
     font-size: 0.72rem;
     color: #6b6055;
   }
@@ -342,6 +355,21 @@ const ctaPrimary = getJourneyCtaPrimary(addressing);
   .journey__cta--secondary::before {
     inset: -6px -10px;
     opacity: 0.75;
+  }
+
+  .journey__cta--secondary::after {
+    content: ' →';
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    :global(.experience:not(.is-instant)) .journey__cta--secondary {
+      transition: color 0.2s ease;
+    }
+
+    .journey__cta--secondary:hover,
+    .journey__cta--secondary:focus-visible {
+      color: var(--color-accent);
+    }
   }
 
   /*
@@ -358,6 +386,15 @@ const ctaPrimary = getJourneyCtaPrimary(addressing);
   [data-journey-part] {
     opacity: 0;
     transform: translateY(8px);
+  }
+
+  /* CTAs specifically: not interactive/focusable until actually shown
+     (opacity:0 alone doesn't stop pointer-events or Tab from reaching
+     them). See the reveal rules below for when this lifts. */
+  [data-journey-part='cta-primary'],
+  [data-journey-part='cta-secondary'] {
+    visibility: hidden;
+    pointer-events: none;
   }
 
   @media (prefers-reduced-motion: no-preference) {
@@ -406,12 +443,18 @@ const ctaPrimary = getJourneyCtaPrimary(addressing);
     :global(.experience.is-journey-revealing) [data-journey-part='cta-primary'] {
       opacity: 1;
       transform: translateY(0);
+      visibility: visible;
+      pointer-events: auto;
+      transition: opacity 850ms ease, transform 850ms ease, visibility 0s linear;
       transition-delay: 5800ms;
     }
 
     :global(.experience.is-journey-revealing) [data-journey-part='cta-secondary'] {
       opacity: 1;
       transform: translateY(0);
+      visibility: visible;
+      pointer-events: auto;
+      transition: opacity 850ms ease, transform 850ms ease, visibility 0s linear;
       transition-delay: 6300ms;
     }
   }
@@ -433,5 +476,13 @@ const ctaPrimary = getJourneyCtaPrimary(addressing);
   :global(.experience[data-scene='journey'].is-instant) [data-journey-part] {
     opacity: 1;
     transform: translateY(0);
+  }
+
+  :global(.experience.is-reduced-motion.is-journey-revealing) [data-journey-part='cta-primary'],
+  :global(.experience.is-reduced-motion.is-journey-revealing) [data-journey-part='cta-secondary'],
+  :global(.experience[data-scene='journey'].is-instant) [data-journey-part='cta-primary'],
+  :global(.experience[data-scene='journey'].is-instant) [data-journey-part='cta-secondary'] {
+    visibility: visible;
+    pointer-events: auto;
   }
 </style>

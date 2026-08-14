@@ -9,6 +9,14 @@ import CelebrationScene from './CelebrationScene.astro';
 import KeepsakeScene from './KeepsakeScene.astro';
 import StayScene from './StayScene.astro';
 import DesktopGate from './DesktopGate.astro';
+import OrientationGate from './OrientationGate.astro';
+import AboutScene from './AboutScene.astro';
+import WhoWeAreScene from './WhoWeAreScene.astro';
+import PersonScene from './PersonScene.astro';
+import FaqScene from './FaqScene.astro';
+import MemoriesScene from './MemoriesScene.astro';
+import { sceneFatima } from '../data/sceneFatima';
+import { sceneAndres } from '../data/sceneAndres';
 import { musicPlaylist } from '../data/musicPlaylist';
 import type { Guest } from '../data/guests';
 
@@ -40,6 +48,15 @@ const destinationTextureSrc = `${base}/images/textura_vertical_3.png`;
 // Page 9's own static background -- no video, see the markup's own
 // comment below.
 const stayTextureSrc = `${base}/images/textura_vertical_4.png`;
+// "Un poco de nosotros" sub-tree's own static backgrounds -- see the
+// markup's own comment below for the whole sub-tree. whoWeAre reuses
+// textura_vertical_2.png directly inside WhoWeAreScene.astro itself
+// (already eagerly loaded by Cover.astro on the very first paint, so no
+// separate lazy asset to track here).
+const aboutTextureSrc = `${base}/images/textura_vertical_5.jpg`;
+const andresTextureSrc = `${base}/images/textura_vertical_6.jpg`;
+const fatimaTextureSrc = `${base}/images/textura_vertical_7.jpg`;
+const faqTextureSrc = `${base}/images/textura_vertical_8.png`;
 // Background-music playlist -- see musicPlaylist.ts for the single source
 // of truth (add/reorder tracks there, not here). Serialized into the
 // <audio> element's own data-tracks below; the script shuffles this order
@@ -48,6 +65,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
 ---
 
 <DesktopGate />
+<OrientationGate />
 
 <div class="experience" id="invitation-experience" data-scene="cover" data-transition-direction="forward">
   <section class="experience__scene experience__scene--cover" data-scene-panel="cover">
@@ -388,6 +406,114 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
   </section>
 
   <!--
+    "Un poco de nosotros" sub-tree: about (root) -> whoWeAre -> {fatima,
+    andres}, about -> faq, and about -> memories (a placeholder for now --
+    see MemoriesScene.astro's own comment). A small, self-contained
+    island, same "instant cut in/out, elegant crossfade within" model as
+    travelInfo's own -- deliberately left out of SCENE_ORDER (see its own
+    comment), so reaching it never plays any transition video, and
+    internal navigation between its six screens uses a dedicated branch
+    in goToScene (see that function's own comment) instead of the
+    video-choreographed forward/back branches every earlier scene has.
+    Entered via JourneyScene's own pre-existing secondary CTA (data-action=
+    "journey-cta-secondary", previously an inert <p> -- see its own
+    comment); about's own back button reuses the existing back-to-journey
+    action/branch (ImaginedDaysScene's own) to return there.
+
+    about/fatima/andres/faq all reuse .experience__stay-frame/-canvas/
+    -image/-overlay verbatim (same static-photo-background structure
+    StayScene/TravelInfo already use, no video) -- whoWeAre and memories
+    both have their own composed/reused background self-contained inside
+    their own component instead (WhoWeAreScene.astro/MemoriesScene.astro).
+  -->
+  <section class="experience__scene experience__scene--about" data-scene-panel="about" inert>
+    <div class="experience__stay-frame">
+      <div class="experience__stay-canvas">
+        <div class="experience__stay-image" data-bg-src={aboutTextureSrc} aria-hidden="true"></div>
+        <div class="experience__stay-overlay">
+          <AboutScene />
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="experience__scene experience__scene--who-we-are" data-scene-panel="whoWeAre" inert>
+    <div class="experience__stay-frame">
+      <div class="experience__stay-canvas">
+        <div class="experience__stay-overlay">
+          <WhoWeAreScene />
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="experience__scene experience__scene--fatima" data-scene-panel="fatima" inert>
+    <div class="experience__stay-frame">
+      <div class="experience__stay-canvas">
+        <div class="experience__stay-image" data-bg-src={fatimaTextureSrc} aria-hidden="true"></div>
+        <div class="experience__stay-overlay">
+          <PersonScene
+            title={sceneFatima.title}
+            body={sceneFatima.body}
+            backAction="back-to-who-we-are"
+            backLabel={sceneFatima.backLabel}
+            backVisibleLabel={sceneFatima.backVisibleLabel}
+            eyebrow="Un poco de nosotros"
+            revealFlag="fatima"
+          />
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="experience__scene experience__scene--andres" data-scene-panel="andres" inert>
+    <div class="experience__stay-frame">
+      <div class="experience__stay-canvas">
+        <div class="experience__stay-image" data-bg-src={andresTextureSrc} aria-hidden="true"></div>
+        <div class="experience__stay-overlay">
+          <PersonScene
+            title={sceneAndres.title}
+            body={sceneAndres.body}
+            backAction="back-to-who-we-are"
+            backLabel={sceneAndres.backLabel}
+            backVisibleLabel={sceneAndres.backVisibleLabel}
+            eyebrow="Un poco de nosotros"
+            revealFlag="andres"
+          />
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="experience__scene experience__scene--faq" data-scene-panel="faq" inert>
+    <div class="experience__stay-frame">
+      <div class="experience__stay-canvas">
+        <div class="experience__stay-image" data-bg-src={faqTextureSrc} aria-hidden="true"></div>
+        <div class="experience__stay-overlay">
+          <FaqScene />
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!--
+    "Nuestros recuerdos" -- AboutScene's own third CTA. Placeholder only
+    (see MemoriesScene.astro's own comment); no dedicated background
+    asset, same convention as whoWeAre (reuses textura_vertical_2.png
+    inline, no separate .experience__stay-image/ensureMemoriesAssets
+    needed).
+  -->
+  <section class="experience__scene experience__scene--memories" data-scene-panel="memories" inert>
+    <div class="experience__stay-frame">
+      <div class="experience__stay-canvas">
+        <div class="experience__stay-overlay">
+          <MemoriesScene />
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!--
     Persistent background music -- a single <audio> element living outside
     every scene section, so nothing about scene transitions (panel
     opacity, inert, DOM order) ever touches it: it is the one piece of
@@ -456,6 +582,16 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     const stayImageEl = stayPanel?.querySelector<HTMLElement>('.experience__stay-image');
     const travelInfoPanel = root.querySelector<HTMLElement>('[data-scene-panel="travelInfo"]');
     const travelInfoImageEl = travelInfoPanel?.querySelector<HTMLElement>('.experience__stay-image');
+    const aboutPanel = root.querySelector<HTMLElement>('[data-scene-panel="about"]');
+    const aboutImageEl = aboutPanel?.querySelector<HTMLElement>('.experience__stay-image');
+    const whoWeArePanel = root.querySelector<HTMLElement>('[data-scene-panel="whoWeAre"]');
+    const fatimaPanel = root.querySelector<HTMLElement>('[data-scene-panel="fatima"]');
+    const fatimaImageEl = fatimaPanel?.querySelector<HTMLElement>('.experience__stay-image');
+    const andresPanel = root.querySelector<HTMLElement>('[data-scene-panel="andres"]');
+    const andresImageEl = andresPanel?.querySelector<HTMLElement>('.experience__stay-image');
+    const faqPanel = root.querySelector<HTMLElement>('[data-scene-panel="faq"]');
+    const faqImageEl = faqPanel?.querySelector<HTMLElement>('.experience__stay-image');
+    const memoriesPanel = root.querySelector<HTMLElement>('[data-scene-panel="memories"]');
     const musicEl = root.querySelector<HTMLAudioElement>('.experience__music');
 
     // Forward (cover -> memory) phase timings.
@@ -575,14 +711,27 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     // scene's own settle constant.
     const STAY_SETTLE_MS = 200;
 
+    // "Un poco de nosotros" sub-tree crossfade duration -- no video here
+    // either, same reasoning as STAY_SETTLE_MS above, just a touch longer
+    // since this crossfade is the whole visible transition (not a settle
+    // tucked after a video), matching the CSS opacity transition length
+    // declared on .experience__scene--about/--who-we-are/--fatima/
+    // --andres/--faq.
+    const ABOUT_CROSSFADE_MS = 420;
+
     // --- Persistent background music ---
     //
     // One <audio> element (see the markup above), never paused/reset by
-    // scene transitions -- only this block ever touches it. Silent until
-    // "Comenzar el viaje" is clicked (startBackgroundMusic, wired below
-    // alongside the existing forward-trigger click handler); once started
-    // it keeps playing across every scene, advancing to the next track on
-    // 'ended' and looping back to the first once the playlist is
+    // scene transitions -- only this block ever touches it. Tries to
+    // start itself as soon as the page loads (see startBackgroundMusic's
+    // own call site near the bottom of this script) and, if the browser's
+    // autoplay policy blocks that, retries from the cover's very first
+    // interaction instead of waiting specifically for "Comenzar el
+    // viaje" -- that CTA's own click handler still calls
+    // startBackgroundMusic too, but only as one more no-op-if-already-
+    // playing call among several, not the sole trigger anymore. Once
+    // started it keeps playing across every scene, advancing to the next
+    // track on 'ended' and looping back to the first once the playlist is
     // exhausted. Ducks (and un-ducks) around whichever transition video is
     // currently playing its own real audio -- destination/journey/
     // imagined's -- by hooking the exact points those scenes' own
@@ -593,7 +742,6 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     const MUSIC_VOLUME_DUCKED = 0.08;
     const MUSIC_VOLUME_RAMP_MS = 900; // smooth, never an abrupt jump/pause -- used both for ducking and un-ducking
 
-    let musicStarted = false;
     let musicDucked = false;
     let musicOrder: string[] = [];
     let musicIndex = 0;
@@ -678,15 +826,38 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       return result;
     }
 
+    // Only ever loads the *current* track on the real <audio> element
+    // (preload="none" -- see the markup) plus, once it's actually
+    // playing, silently warms the browser's cache for whichever track
+    // comes right after it -- never the whole playlist -- via a
+    // throwaway Audio() that's never attached to the page or played.
+    // Best-effort only: if it fails (or the browser doesn't return a
+    // promise for it), the next track still loads normally on its own
+    // turn, just without the head start.
+    function preloadNextTrack(afterIndex: number) {
+      if (musicOrder.length === 0) return;
+      const nextIndex = (afterIndex + 1) % musicOrder.length;
+      const src = musicOrder[nextIndex];
+      if (!src) return;
+      const warmup = new Audio();
+      warmup.preload = 'auto';
+      warmup.src = src;
+    }
+
     function playMusicTrack(index: number) {
       if (!musicEl || musicOrder.length === 0) return;
       musicEl.src = musicOrder[index];
-      void musicEl.play().catch(() => {
-        // Playback can legitimately fail (autoplay policy edge cases,
-        // browser tab backgrounded, etc.) -- there is nothing meaningful
-        // to fall back to for background music, so this is left silent
-        // rather than blocking or retrying indefinitely.
-      });
+      void musicEl
+        .play()
+        .then(() => preloadNextTrack(index))
+        .catch(() => {
+          // Playback can legitimately fail (autoplay policy edge cases,
+          // browser tab backgrounded, etc.) -- there is nothing meaningful
+          // to fall back to for background music, so this is left silent
+          // rather than blocking or retrying indefinitely. See
+          // startBackgroundMusic's own retry-on-first-interaction handling
+          // for the specific autoplay-blocked case.
+        });
     }
 
     // Advances to the next track in the current shuffled order; once it's
@@ -710,27 +881,52 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       musicEl.addEventListener('ended', advanceMusicTrack);
     }
 
-    // Wired to the same forward-trigger (.cover__cta / "Comenzar el
-    // viaje") click handler as the rest of the cover -> memory
-    // transition, below -- never on page load, per spec ("no reproducir
-    // música al cargar la web"). Starts once per visit.
-    function startBackgroundMusic() {
-      if (musicStarted || !musicEl) return;
+    // One-time setup (shuffle order + pick the first track) -- kept
+    // separate from actually calling .play() below so a blocked-autoplay
+    // attempt can be retried from a later user gesture without redoing
+    // (and reshuffling) the setup.
+    let musicPrimed = false;
+    function primeMusicOrder(): boolean {
+      if (musicPrimed) return true;
+      if (!musicEl) return false;
       const raw = musicEl.dataset.tracks;
-      if (!raw) return;
+      if (!raw) return false;
       let tracks: string[] = [];
       try {
         tracks = JSON.parse(raw);
       } catch {
         tracks = [];
       }
-      if (tracks.length === 0) return;
-      musicStarted = true;
+      if (tracks.length === 0) return false;
+      musicPrimed = true;
       musicOrder = shuffle(tracks);
       musicIndex = 0;
       musicEl.volume = MUSIC_VOLUME_NORMAL;
       musicDucked = false;
-      playMusicTrack(musicIndex);
+      musicEl.src = musicOrder[musicIndex];
+      return true;
+    }
+
+    // Attempts to (re)start background music -- safe to call as many
+    // times as needed. First call (page load) tries a silent autoplay;
+    // if the browser blocks it, musicEl simply stays paused and this is
+    // called again from the very first interaction with the cover (see
+    // below), which -- being inside a real user-gesture handler -- browsers
+    // always allow, even for audible audio. No error/prompt is ever
+    // surfaced either way; once truly playing (`!musicEl.paused`) this is
+    // a no-op, so repeated calls (autoplay success race with the
+    // interaction listener, or the "Comenzar el viaje" click reusing the
+    // same function) never restart or double-trigger playback.
+    function startBackgroundMusic() {
+      if (!musicEl || !primeMusicOrder()) return;
+      if (!musicEl.paused) return;
+      void musicEl
+        .play()
+        .then(() => preloadNextTrack(musicIndex))
+        .catch(() => {
+          // Blocked by autoplay policy -- silent, no prompt; the first-
+          // interaction listener below will retry.
+        });
     }
 
     // MemoryScene's own content choreography, once Fase D begins -- title
@@ -770,7 +966,13 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       | 'celebration'
       | 'keepsake'
       | 'stay'
-      | 'travelInfo';
+      | 'travelInfo'
+      | 'about'
+      | 'whoWeAre'
+      | 'fatima'
+      | 'andres'
+      | 'faq'
+      | 'memories';
     // Single source of truth for scene order/hash -- both goToScene's
     // adjacency check (only cover<->memory, memory<->destination,
     // destination<->journey, journey<->imagined, imagined<->ceremony,
@@ -808,6 +1010,12 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       keepsake: '#inolvidable',
       stay: '#estadia',
       travelInfo: '#informacion-viaje',
+      about: '#nosotros',
+      whoWeAre: '#quienes-somos',
+      fatima: '#fatima',
+      andres: '#andres',
+      faq: '#preguntas-frecuentes',
+      memories: '#nuestros-recuerdos',
     };
     const sceneIndex = (scene: SceneName) => SCENE_ORDER.indexOf(scene);
 
@@ -828,6 +1036,10 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     let keepsakeVideoSrcAssigned = false;
     let stayAssetsRequested = false;
     let travelInfoAssetsRequested = false;
+    let aboutAssetsRequested = false;
+    let fatimaAssetsRequested = false;
+    let andresAssetsRequested = false;
+    let faqAssetsRequested = false;
 
     function clearCompletionTimer() {
       if (completionTimer !== null) {
@@ -1218,6 +1430,74 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       }
     }
 
+    // Assigns a background-image only once the browser has actually
+    // decoded it, instead of handing the CSS engine an undecoded image
+    // and letting it decode synchronously on the next paint -- these four
+    // (textura_vertical_5/6/7/8) are large photos (up to ~3MB), so
+    // decoding inline like every other ensureXAssets helper does risks a
+    // visible stall or an incomplete first paint on first entry. Falls
+    // back to the plain assignment if img.decode() is unavailable or
+    // rejects (still correct, just without the guarantee).
+    function setDecodedBackgroundImage(el: HTMLElement, url: string) {
+      const img = new Image();
+      img.src = url;
+      const apply = () => {
+        el.style.backgroundImage = `url('${url}')`;
+      };
+      if (typeof img.decode === 'function') {
+        img.decode().then(apply).catch(apply);
+      } else {
+        apply();
+      }
+    }
+
+    // "Un poco de nosotros" sub-tree's own static backgrounds -- same
+    // lazy, idempotent pattern as ensureStayAssets/ensureTravelInfoAssets
+    // (no video, just a background-image assigned once the panel is
+    // actually reached), plus the decode-first handling above. whoWeAre
+    // has no equivalent function: its background lives inline inside
+    // WhoWeAreScene.astro itself (already cached from Cover.astro's own
+    // first paint).
+    function ensureAboutAssets() {
+      if (aboutAssetsRequested) return;
+      aboutAssetsRequested = true;
+
+      const imageSrc = aboutImageEl?.dataset.bgSrc;
+      if (aboutImageEl && imageSrc) {
+        setDecodedBackgroundImage(aboutImageEl, imageSrc);
+      }
+    }
+
+    function ensureFatimaAssets() {
+      if (fatimaAssetsRequested) return;
+      fatimaAssetsRequested = true;
+
+      const imageSrc = fatimaImageEl?.dataset.bgSrc;
+      if (fatimaImageEl && imageSrc) {
+        setDecodedBackgroundImage(fatimaImageEl, imageSrc);
+      }
+    }
+
+    function ensureAndresAssets() {
+      if (andresAssetsRequested) return;
+      andresAssetsRequested = true;
+
+      const imageSrc = andresImageEl?.dataset.bgSrc;
+      if (andresImageEl && imageSrc) {
+        setDecodedBackgroundImage(andresImageEl, imageSrc);
+      }
+    }
+
+    function ensureFaqAssets() {
+      if (faqAssetsRequested) return;
+      faqAssetsRequested = true;
+
+      const imageSrc = faqImageEl?.dataset.bgSrc;
+      if (faqImageEl && imageSrc) {
+        setDecodedBackgroundImage(faqImageEl, imageSrc);
+      }
+    }
+
     // Fades a transition video's own audio down to 0 over its last
     // ~1.5s, "sin corte brusco" -- driven by the video's own real
     // playback progress rather than a separate timer, so it can never
@@ -1337,6 +1617,12 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       if (keepsakePanel) keepsakePanel.toggleAttribute('inert', scene !== 'keepsake');
       if (stayPanel) stayPanel.toggleAttribute('inert', scene !== 'stay');
       if (travelInfoPanel) travelInfoPanel.toggleAttribute('inert', scene !== 'travelInfo');
+      if (aboutPanel) aboutPanel.toggleAttribute('inert', scene !== 'about');
+      if (whoWeArePanel) whoWeArePanel.toggleAttribute('inert', scene !== 'whoWeAre');
+      if (fatimaPanel) fatimaPanel.toggleAttribute('inert', scene !== 'fatima');
+      if (andresPanel) andresPanel.toggleAttribute('inert', scene !== 'andres');
+      if (faqPanel) faqPanel.toggleAttribute('inert', scene !== 'faq');
+      if (memoriesPanel) memoriesPanel.toggleAttribute('inert', scene !== 'memories');
     }
 
     function focusSceneHeading(scene: SceneName) {
@@ -1359,12 +1645,41 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
                         ? stayPanel?.querySelector<HTMLElement>('[data-scene-heading]')
                         : scene === 'travelInfo'
                           ? travelInfoPanel?.querySelector<HTMLElement>('[data-scene-heading]')
-                          : coverPanel?.querySelector<HTMLElement>('.cover__cta');
+                          : scene === 'about'
+                            ? aboutPanel?.querySelector<HTMLElement>('[data-scene-heading]')
+                            : scene === 'whoWeAre'
+                              ? whoWeArePanel?.querySelector<HTMLElement>('[data-scene-heading]')
+                              : scene === 'fatima'
+                                ? fatimaPanel?.querySelector<HTMLElement>('[data-scene-heading]')
+                                : scene === 'andres'
+                                  ? andresPanel?.querySelector<HTMLElement>('[data-scene-heading]')
+                                  : scene === 'faq'
+                                    ? faqPanel?.querySelector<HTMLElement>('[data-scene-heading]')
+                                    : scene === 'memories'
+                                      ? memoriesPanel?.querySelector<HTMLElement>('[data-scene-heading]')
+                                      : coverPanel?.querySelector<HTMLElement>('.cover__cta');
       target?.focus({ preventScroll: true });
     }
 
     function applySceneInstantly(scene: SceneName) {
+      // Captured before currentScene is overwritten at the bottom of this
+      // function -- needed below to tell "genuinely landing elsewhere in
+      // the main narrative" apart from "just passing through an isolated
+      // island and back" (see isIsolatedIslandTransition below).
+      const previousScene = currentScene;
       root!.classList.add('is-instant');
+      // Pre-existing gap, fixed here as a small drive-by: every other
+      // entry point (goToScene's own animated branches, goToAboutTreeScene)
+      // already sets is-reduced-motion before touching any content, but
+      // this one never did -- meaning a reduced-motion visitor landing
+      // directly on a deep link (e.g. #estadia, #nosotros) previously saw
+      // blank content once is-instant was removed a frame later, since
+      // every scene's own CSS reduced-motion fallback (".is-reduced-
+      // motion.is-X-revealing [data-X-part] { opacity: 1 }") never got its
+      // trigger class. Purely additive: nothing changes for anyone who
+      // isn't both reduced-motion AND landing here via a direct/instant
+      // load.
+      root!.classList.toggle('is-reduced-motion', prefersReducedMotion());
       root!.dataset.scene = scene;
       setSceneAccessibility(scene);
       root!.classList.remove(
@@ -1438,6 +1753,16 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       // ->stay "past" cascade above -- it doesn't recede/reveal anything
       // else, it's just shown or hidden outright (see its own CSS block).
       root!.classList.toggle('is-travel-info-revealing', scene === 'travelInfo');
+      // Same for the whole "Un poco de nosotros" sub-tree -- each of its
+      // five screens is its own isolated island too (see goToScene's own
+      // dedicated branch for navigation *within* this sub-tree, which
+      // reuses these same five classes).
+      root!.classList.toggle('is-about-revealing', scene === 'about');
+      root!.classList.toggle('is-who-we-are-revealing', scene === 'whoWeAre');
+      root!.classList.toggle('is-fatima-revealing', scene === 'fatima');
+      root!.classList.toggle('is-andres-revealing', scene === 'andres');
+      root!.classList.toggle('is-faq-revealing', scene === 'faq');
+      root!.classList.toggle('is-memories-revealing', scene === 'memories');
       // Defensive: these are only ever set (and cleared) inside
       // runVideoAndReveal's own video->MemoryScene handoff, but an instant
       // scene switch should never risk inheriting a leftover inline value.
@@ -1445,53 +1770,69 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
         memoryPanel.style.transition = '';
         memoryPanel.style.opacity = '';
       }
-      if (destinationVideoEl) {
-        destinationVideoEl.style.transition = 'none';
-        // Instant loads never play transition3.mp4 (there is no
-        // animated transition to time it against) -- hidden outright so
-        // only the static final frame is ever visible, exactly like the
-        // reduced-motion path.
-        destinationVideoEl.style.opacity = '0';
+      // Entering *or leaving* an isolated island (travelInfo, or the whole
+      // "Un poco de nosotros" sub-tree) must never touch any main-
+      // narrative video's playback state -- it's a side branch, not a
+      // step in the cover->...->stay chain, so whichever scene the
+      // visitor actually came from (its video possibly frozen on its own
+      // last frame, e.g. journey/imagined/ceremony/celebration/keepsake,
+      // none of which have a static fallback image under their video --
+      // see their own markup comments) must look exactly the same both
+      // while hidden behind the island AND once they come back to it.
+      // Checking only `scene` would protect the way in but not the way
+      // back (landing on 'journey' again is not itself an island), so
+      // both this call's target and the scene it's leaving are checked.
+      const isIsolatedIsland = (s: SceneName) => s === 'travelInfo' || isAboutTreeScene(s);
+      const isIsolatedIslandTransition = isIsolatedIsland(scene) || isIsolatedIsland(previousScene);
+      if (!isIsolatedIslandTransition) {
+        if (destinationVideoEl) {
+          destinationVideoEl.style.transition = 'none';
+          // Instant loads never play transition3.mp4 (there is no
+          // animated transition to time it against) -- hidden outright so
+          // only the static final frame is ever visible, exactly like the
+          // reduced-motion path.
+          destinationVideoEl.style.opacity = '0';
+        }
+        resetDestinationVideo();
+        if (journeyVideoEl) {
+          // Same reasoning as destinationVideoEl above -- instant loads
+          // never play transition4.mp4.
+          journeyVideoEl.style.transition = 'none';
+          journeyVideoEl.style.opacity = '0';
+        }
+        resetJourneyVideo();
+        if (imaginedVideoEl) {
+          // Same reasoning as destinationVideoEl/journeyVideoEl above --
+          // instant loads never play transition5.mp4.
+          imaginedVideoEl.style.transition = 'none';
+          imaginedVideoEl.style.opacity = '0';
+        }
+        resetImaginedVideo();
+        if (ceremonyVideoEl) {
+          // Same reasoning as destinationVideoEl/journeyVideoEl/
+          // imaginedVideoEl above -- instant loads never play
+          // transition6.mp4.
+          ceremonyVideoEl.style.transition = 'none';
+          ceremonyVideoEl.style.opacity = '0';
+        }
+        resetCeremonyVideo();
+        if (celebrationVideoEl) {
+          // Same reasoning as destinationVideoEl/journeyVideoEl/
+          // imaginedVideoEl/ceremonyVideoEl above -- instant loads never
+          // play transition7.mp4.
+          celebrationVideoEl.style.transition = 'none';
+          celebrationVideoEl.style.opacity = '0';
+        }
+        resetCelebrationVideo();
+        if (keepsakeVideoEl) {
+          // Same reasoning as destinationVideoEl/journeyVideoEl/
+          // imaginedVideoEl/ceremonyVideoEl/celebrationVideoEl above --
+          // instant loads never play transition8.mp4.
+          keepsakeVideoEl.style.transition = 'none';
+          keepsakeVideoEl.style.opacity = '0';
+        }
+        resetKeepsakeVideo();
       }
-      resetDestinationVideo();
-      if (journeyVideoEl) {
-        // Same reasoning as destinationVideoEl above -- instant loads
-        // never play transition4.mp4.
-        journeyVideoEl.style.transition = 'none';
-        journeyVideoEl.style.opacity = '0';
-      }
-      resetJourneyVideo();
-      if (imaginedVideoEl) {
-        // Same reasoning as destinationVideoEl/journeyVideoEl above --
-        // instant loads never play transition5.mp4.
-        imaginedVideoEl.style.transition = 'none';
-        imaginedVideoEl.style.opacity = '0';
-      }
-      resetImaginedVideo();
-      if (ceremonyVideoEl) {
-        // Same reasoning as destinationVideoEl/journeyVideoEl/
-        // imaginedVideoEl above -- instant loads never play
-        // transition6.mp4.
-        ceremonyVideoEl.style.transition = 'none';
-        ceremonyVideoEl.style.opacity = '0';
-      }
-      resetCeremonyVideo();
-      if (celebrationVideoEl) {
-        // Same reasoning as destinationVideoEl/journeyVideoEl/
-        // imaginedVideoEl/ceremonyVideoEl above -- instant loads never
-        // play transition7.mp4.
-        celebrationVideoEl.style.transition = 'none';
-        celebrationVideoEl.style.opacity = '0';
-      }
-      resetCelebrationVideo();
-      if (keepsakeVideoEl) {
-        // Same reasoning as destinationVideoEl/journeyVideoEl/
-        // imaginedVideoEl/ceremonyVideoEl/celebrationVideoEl above --
-        // instant loads never play transition8.mp4.
-        keepsakeVideoEl.style.transition = 'none';
-        keepsakeVideoEl.style.opacity = '0';
-      }
-      resetKeepsakeVideo();
       // A direct/instant load landing on memory, destination, journey,
       // imagined, ceremony, celebration, keepsake or stay needs every
       // "past" scene's own static background ready (so an instant
@@ -1526,6 +1867,10 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       else if (scene === 'ceremony') ensureCelebrationAssets();
       else if (scene === 'celebration') ensureKeepsakeAssets();
       if (scene === 'travelInfo') ensureTravelInfoAssets();
+      if (scene === 'about') ensureAboutAssets();
+      else if (scene === 'fatima') ensureFatimaAssets();
+      else if (scene === 'andres') ensureAndresAssets();
+      else if (scene === 'faq') ensureFaqAssets();
       void root!.offsetWidth;
       requestAnimationFrame(() => {
         root?.classList.remove('is-instant');
@@ -2375,6 +2720,56 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       }, KEEPSAKE_SETTLE_MS);
     }
 
+    // "Un poco de nosotros" sub-tree -- about (root) -> whoWeAre ->
+    // {fatima, andres}, and about -> faq. None of these five have a
+    // video, so unlike every earlier scene pair (each with its own
+    // bespoke forward/back branch keyed to a transition video), a single
+    // shared helper handles every edge of this small tree uniformly: a
+    // plain, elegant opacity crossfade, exactly like the stay scene's own
+    // simplicity, generalized so eight near-identical branches (one per
+    // edge, per direction) don't have to be hand-written.
+    const ABOUT_TREE_SCENES: SceneName[] = ['about', 'whoWeAre', 'fatima', 'andres', 'faq', 'memories'];
+    const ABOUT_REVEAL_CLASSES = [
+      'is-about-revealing',
+      'is-who-we-are-revealing',
+      'is-fatima-revealing',
+      'is-andres-revealing',
+      'is-faq-revealing',
+      'is-memories-revealing',
+    ];
+    const ABOUT_REVEAL_CLASS_BY_SCENE: Partial<Record<SceneName, string>> = {
+      about: 'is-about-revealing',
+      whoWeAre: 'is-who-we-are-revealing',
+      fatima: 'is-fatima-revealing',
+      andres: 'is-andres-revealing',
+      faq: 'is-faq-revealing',
+      memories: 'is-memories-revealing',
+    };
+    function isAboutTreeScene(s: SceneName): boolean {
+      return ABOUT_TREE_SCENES.includes(s);
+    }
+
+    function goToAboutTreeScene(scene: SceneName) {
+      if (scene === 'about') ensureAboutAssets();
+      else if (scene === 'fatima') ensureFatimaAssets();
+      else if (scene === 'andres') ensureAndresAssets();
+      else if (scene === 'faq') ensureFaqAssets();
+
+      root!.classList.remove(...ABOUT_REVEAL_CLASSES);
+      const revealClass = ABOUT_REVEAL_CLASS_BY_SCENE[scene];
+      if (revealClass) root!.classList.add(revealClass);
+
+      const reduced = prefersReducedMotion();
+      const duration = reduced ? REDUCED_MOTION_DURATION : ABOUT_CROSSFADE_MS;
+      completionTimer = window.setTimeout(() => {
+        completionTimer = null;
+        currentScene = scene;
+        isTransitioning = false;
+        root!.classList.remove('is-transitioning');
+        focusSceneHeading(scene);
+      }, duration);
+    }
+
     function goToScene(scene: SceneName, options: { pushHistory?: boolean } = {}) {
       const { pushHistory = true } = options;
       if (
@@ -2389,9 +2784,38 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
         !celebrationPanel ||
         !keepsakePanel ||
         !stayPanel ||
-        !travelInfoPanel
+        !travelInfoPanel ||
+        !aboutPanel ||
+        !whoWeArePanel ||
+        !fatimaPanel ||
+        !andresPanel ||
+        !faqPanel ||
+        !memoriesPanel
       )
         return;
+
+      // Internal "Un poco de nosotros" navigation (about<->whoWeAre,
+      // whoWeAre<->fatima/andres, about<->faq) never goes through the
+      // generic adjacency system below -- neither scene name lives in
+      // SCENE_ORDER, so it would otherwise always fall into the instant-
+      // cut branch (correct for entering/leaving the sub-tree, e.g.
+      // journey->about or about's own back-to-journey, but not elegant
+      // enough for browsing between its five screens -- see
+      // goToAboutTreeScene's own comment).
+      if (isAboutTreeScene(scene) && isAboutTreeScene(currentScene)) {
+        isTransitioning = true;
+        clearCompletionTimer();
+        root!.classList.add('is-transitioning');
+        root!.classList.toggle('is-reduced-motion', prefersReducedMotion());
+        root!.dataset.scene = scene;
+        setSceneAccessibility(scene);
+        if (pushHistory) {
+          const hash = SCENE_HASH[scene];
+          if (window.location.hash !== hash) history.pushState({ scene }, '', hash);
+        }
+        goToAboutTreeScene(scene);
+        return;
+      }
 
       const fromIndex = sceneIndex(currentScene);
       const toIndex = sceneIndex(scene);
@@ -2912,6 +3336,16 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       const stayTrigger = target.closest<HTMLElement>('[data-action="go-to-stay"]');
       const backToKeepsakeTrigger = target.closest<HTMLElement>('[data-action="back-to-keepsake"]');
       const travelInfoTrigger = target.closest<HTMLElement>('[data-action="go-to-travel-info"]');
+      const whoWeAreTrigger = target.closest<HTMLElement>('[data-action="go-to-who-we-are"]');
+      const faqTrigger = target.closest<HTMLElement>('[data-action="go-to-faq"]');
+      const memoriesTrigger = target.closest<HTMLElement>('[data-action="go-to-memories"]');
+      const fatimaTrigger = target.closest<HTMLElement>('[data-action="go-to-fatima"]');
+      const andresTrigger = target.closest<HTMLElement>('[data-action="go-to-andres"]');
+      const backToAboutTrigger = target.closest<HTMLElement>('[data-action="back-to-about"]');
+      const backToWhoWeAreTrigger = target.closest<HTMLElement>('[data-action="back-to-who-we-are"]');
+      // JourneyScene's own secondary CTA (see its own comment) -- pre-dates
+      // this sub-tree, was an inert <p> until now.
+      const journeyAboutTrigger = target.closest<HTMLElement>('[data-action="journey-cta-secondary"]');
 
       if (forwardTrigger && root!.contains(forwardTrigger)) {
         event.preventDefault();
@@ -2970,10 +3404,40 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
         // backAction prop), so no new back-navigation code is needed.
         event.preventDefault();
         goToScene('travelInfo');
+      } else if (whoWeAreTrigger && root!.contains(whoWeAreTrigger)) {
+        event.preventDefault();
+        goToScene('whoWeAre');
+      } else if (faqTrigger && root!.contains(faqTrigger)) {
+        event.preventDefault();
+        goToScene('faq');
+      } else if (memoriesTrigger && root!.contains(memoriesTrigger)) {
+        event.preventDefault();
+        goToScene('memories');
+      } else if (fatimaTrigger && root!.contains(fatimaTrigger)) {
+        event.preventDefault();
+        goToScene('fatima');
+      } else if (andresTrigger && root!.contains(andresTrigger)) {
+        event.preventDefault();
+        goToScene('andres');
+      } else if (backToAboutTrigger && root!.contains(backToAboutTrigger)) {
+        event.preventDefault();
+        goToScene('about');
+      } else if (backToWhoWeAreTrigger && root!.contains(backToWhoWeAreTrigger)) {
+        event.preventDefault();
+        goToScene('whoWeAre');
+      } else if (journeyAboutTrigger && root!.contains(journeyAboutTrigger)) {
+        event.preventDefault();
+        goToScene('about');
       }
     });
 
     function sceneFromHash(hash: string): SceneName {
+      if (hash === '#nosotros') return 'about';
+      if (hash === '#quienes-somos') return 'whoWeAre';
+      if (hash === '#fatima') return 'fatima';
+      if (hash === '#andres') return 'andres';
+      if (hash === '#preguntas-frecuentes') return 'faq';
+      if (hash === '#nuestros-recuerdos') return 'memories';
       if (hash === '#informacion-viaje') return 'travelInfo';
       if (hash === '#estadia') return 'stay';
       if (hash === '#inolvidable') return 'keepsake';
@@ -2998,6 +3462,26 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     applySceneInstantly(initialScene);
     if (!Object.values(SCENE_HASH).includes(window.location.hash)) {
       history.replaceState({ scene: initialScene }, '', '#portada');
+    }
+
+    // Try to start background music right away -- browsers may allow
+    // this outright (their own per-site/per-visit autoplay heuristics
+    // decide, not this code), in which case it just plays. If it's
+    // blocked, startBackgroundMusic's own .play() rejection is already
+    // silent (no error/prompt), and musicEl is simply left paused here --
+    // retried below from the cover's very first interaction, which
+    // (being inside a real user-gesture handler) browsers always allow,
+    // even for audible audio. Deliberately not gated on "Comenzar el
+    // viaje" specifically anymore, so it never depends on that one CTA.
+    startBackgroundMusic();
+    if (coverPanel) {
+      const retryMusicOnFirstCoverInteraction = () => {
+        startBackgroundMusic();
+        coverPanel.removeEventListener('pointerdown', retryMusicOnFirstCoverInteraction);
+        coverPanel.removeEventListener('keydown', retryMusicOnFirstCoverInteraction);
+      };
+      coverPanel.addEventListener('pointerdown', retryMusicOnFirstCoverInteraction, { passive: true });
+      coverPanel.addEventListener('keydown', retryMusicOnFirstCoverInteraction);
     }
 
     // Reveal the whole, already-settled experience as one clean fade-in
@@ -4448,9 +4932,22 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     background-repeat: no-repeat;
   }
 
+  /*
+    Scoped to each panel's own [data-scene-panel] ancestor, not just the
+    shared .experience__stay-image class -- six different panels
+    (stay/travelInfo/about/fatima/andres/faq) all reuse that same class
+    name, so a bare ".is-X-revealing .experience__stay-image" selector
+    would match all six elements at once (animating five invisible,
+    possibly already-loaded backgrounds every time any one of them is
+    revealed) instead of only the one actually on screen.
+  */
   @media (prefers-reduced-motion: no-preference) {
-    :global(.experience.is-revealing-stay) .experience__stay-image,
-    :global(.experience.is-travel-info-revealing) .experience__stay-image {
+    :global(.experience.is-revealing-stay) [data-scene-panel='stay'] .experience__stay-image,
+    :global(.experience.is-travel-info-revealing) [data-scene-panel='travelInfo'] .experience__stay-image,
+    :global(.experience.is-about-revealing) [data-scene-panel='about'] .experience__stay-image,
+    :global(.experience.is-fatima-revealing) [data-scene-panel='fatima'] .experience__stay-image,
+    :global(.experience.is-andres-revealing) [data-scene-panel='andres'] .experience__stay-image,
+    :global(.experience.is-faq-revealing) [data-scene-panel='faq'] .experience__stay-image {
       animation: stayKenBurns 48s ease-in-out infinite alternate;
     }
   }
@@ -4499,6 +4996,164 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
   .experience[data-scene='travelInfo'] .experience__scene--celebration,
   .experience[data-scene='travelInfo'] .experience__scene--keepsake,
   .experience[data-scene='travelInfo'] .experience__scene--stay {
+    pointer-events: none;
+    visibility: hidden;
+  }
+
+  /*
+    "Un poco de nosotros" sub-tree (about/whoWeAre/fatima/andres/faq) --
+    same isolated-island model as travel-info above (own z-index tier,
+    hidden by default, shown outright when active), but unlike
+    travel-info these five DO crossfade into and out of each other (see
+    goToAboutTreeScene) -- a plain opacity transition is declared here,
+    gated the same reduced-motion/instant way as every earlier scene's
+    own panel transition. Only one of the five is ever "revealed" at a
+    time (goToAboutTreeScene/applySceneInstantly both keep the five
+    is-X-revealing classes mutually exclusive), so the shared
+    opacity:0/pointer-events:none base rule below already keeps inactive
+    siblings within the tree invisible on its own -- no separate
+    visibility rule is needed between them, only against the main
+    narrative + travel-info panels, listed below exactly like
+    travel-info's own list above.
+  */
+  .experience__scene--about,
+  .experience__scene--who-we-are,
+  .experience__scene--fatima,
+  .experience__scene--andres,
+  .experience__scene--faq,
+  .experience__scene--memories {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .experience__scene--about {
+    z-index: -9;
+  }
+
+  .experience__scene--who-we-are {
+    z-index: -10;
+  }
+
+  .experience__scene--fatima,
+  .experience__scene--andres {
+    z-index: -11;
+  }
+
+  .experience__scene--faq {
+    z-index: -12;
+  }
+
+  .experience__scene--memories {
+    z-index: -13;
+  }
+
+  .experience[data-scene='about'] .experience__scene--about,
+  .experience[data-scene='whoWeAre'] .experience__scene--who-we-are,
+  .experience[data-scene='fatima'] .experience__scene--fatima,
+  .experience[data-scene='andres'] .experience__scene--andres,
+  .experience[data-scene='faq'] .experience__scene--faq,
+  .experience[data-scene='memories'] .experience__scene--memories {
+    pointer-events: auto;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .experience:not(.is-instant) .experience__scene--about,
+    .experience:not(.is-instant) .experience__scene--who-we-are,
+    .experience:not(.is-instant) .experience__scene--fatima,
+    .experience:not(.is-instant) .experience__scene--andres,
+    .experience:not(.is-instant) .experience__scene--faq,
+    .experience:not(.is-instant) .experience__scene--memories {
+      transition: opacity 420ms ease;
+    }
+  }
+
+  .experience.is-reduced-motion .experience__scene--about,
+  .experience.is-reduced-motion .experience__scene--who-we-are,
+  .experience.is-reduced-motion .experience__scene--fatima,
+  .experience.is-reduced-motion .experience__scene--andres,
+  .experience.is-reduced-motion .experience__scene--faq,
+  .experience.is-reduced-motion .experience__scene--memories {
+    transition: opacity 260ms ease !important;
+  }
+
+  .experience.is-instant .experience__scene--about,
+  .experience.is-instant .experience__scene--who-we-are,
+  .experience.is-instant .experience__scene--fatima,
+  .experience.is-instant .experience__scene--andres,
+  .experience.is-instant .experience__scene--faq,
+  .experience.is-instant .experience__scene--memories {
+    transition: none !important;
+  }
+
+  .experience.is-about-revealing .experience__scene--about,
+  .experience.is-who-we-are-revealing .experience__scene--who-we-are,
+  .experience.is-fatima-revealing .experience__scene--fatima,
+  .experience.is-andres-revealing .experience__scene--andres,
+  .experience.is-faq-revealing .experience__scene--faq,
+  .experience.is-memories-revealing .experience__scene--memories {
+    opacity: 1;
+  }
+
+  .experience[data-scene='about'] .experience__scene--cover,
+  .experience[data-scene='about'] .experience__scene--memory,
+  .experience[data-scene='about'] .experience__scene--destination,
+  .experience[data-scene='about'] .experience__scene--journey,
+  .experience[data-scene='about'] .experience__scene--imagined,
+  .experience[data-scene='about'] .experience__scene--ceremony,
+  .experience[data-scene='about'] .experience__scene--celebration,
+  .experience[data-scene='about'] .experience__scene--keepsake,
+  .experience[data-scene='about'] .experience__scene--stay,
+  .experience[data-scene='about'] .experience__scene--travel-info,
+  .experience[data-scene='whoWeAre'] .experience__scene--cover,
+  .experience[data-scene='whoWeAre'] .experience__scene--memory,
+  .experience[data-scene='whoWeAre'] .experience__scene--destination,
+  .experience[data-scene='whoWeAre'] .experience__scene--journey,
+  .experience[data-scene='whoWeAre'] .experience__scene--imagined,
+  .experience[data-scene='whoWeAre'] .experience__scene--ceremony,
+  .experience[data-scene='whoWeAre'] .experience__scene--celebration,
+  .experience[data-scene='whoWeAre'] .experience__scene--keepsake,
+  .experience[data-scene='whoWeAre'] .experience__scene--stay,
+  .experience[data-scene='whoWeAre'] .experience__scene--travel-info,
+  .experience[data-scene='fatima'] .experience__scene--cover,
+  .experience[data-scene='fatima'] .experience__scene--memory,
+  .experience[data-scene='fatima'] .experience__scene--destination,
+  .experience[data-scene='fatima'] .experience__scene--journey,
+  .experience[data-scene='fatima'] .experience__scene--imagined,
+  .experience[data-scene='fatima'] .experience__scene--ceremony,
+  .experience[data-scene='fatima'] .experience__scene--celebration,
+  .experience[data-scene='fatima'] .experience__scene--keepsake,
+  .experience[data-scene='fatima'] .experience__scene--stay,
+  .experience[data-scene='fatima'] .experience__scene--travel-info,
+  .experience[data-scene='andres'] .experience__scene--cover,
+  .experience[data-scene='andres'] .experience__scene--memory,
+  .experience[data-scene='andres'] .experience__scene--destination,
+  .experience[data-scene='andres'] .experience__scene--journey,
+  .experience[data-scene='andres'] .experience__scene--imagined,
+  .experience[data-scene='andres'] .experience__scene--ceremony,
+  .experience[data-scene='andres'] .experience__scene--celebration,
+  .experience[data-scene='andres'] .experience__scene--keepsake,
+  .experience[data-scene='andres'] .experience__scene--stay,
+  .experience[data-scene='andres'] .experience__scene--travel-info,
+  .experience[data-scene='faq'] .experience__scene--cover,
+  .experience[data-scene='faq'] .experience__scene--memory,
+  .experience[data-scene='faq'] .experience__scene--destination,
+  .experience[data-scene='faq'] .experience__scene--journey,
+  .experience[data-scene='faq'] .experience__scene--imagined,
+  .experience[data-scene='faq'] .experience__scene--ceremony,
+  .experience[data-scene='faq'] .experience__scene--celebration,
+  .experience[data-scene='faq'] .experience__scene--keepsake,
+  .experience[data-scene='faq'] .experience__scene--stay,
+  .experience[data-scene='faq'] .experience__scene--travel-info,
+  .experience[data-scene='memories'] .experience__scene--cover,
+  .experience[data-scene='memories'] .experience__scene--memory,
+  .experience[data-scene='memories'] .experience__scene--destination,
+  .experience[data-scene='memories'] .experience__scene--journey,
+  .experience[data-scene='memories'] .experience__scene--imagined,
+  .experience[data-scene='memories'] .experience__scene--ceremony,
+  .experience[data-scene='memories'] .experience__scene--celebration,
+  .experience[data-scene='memories'] .experience__scene--keepsake,
+  .experience[data-scene='memories'] .experience__scene--stay,
+  .experience[data-scene='memories'] .experience__scene--travel-info {
     pointer-events: none;
     visibility: hidden;
   }

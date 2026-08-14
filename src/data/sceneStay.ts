@@ -12,7 +12,13 @@ import type { Guest } from './guests';
  */
 export const sceneStay = {
   eyebrow: 'Tu estadía',
-  title: 'Quédate donde todo sucede',
+  // Singular/plural title -- see getStayTitle below. Also reused as-is by
+  // the page-3 shortcut (TravelInfo, #informacion-viaje), which renders
+  // this same StayScene component with its own guest's addressing.
+  title: {
+    singular: 'Quédate donde todo sucede',
+    plural: 'Quédense donde todo sucede',
+  },
   body: [
     'Entre el mar y la reserva natural.',
     'Todo incluido.',
@@ -57,6 +63,11 @@ export const sceneStay = {
 };
 
 /** Derives StayScene's RSVP question from Guest.addressing alone. */
+/** Derives StayScene's title from Guest.addressing alone. */
+export function getStayTitle(addressing: Guest['addressing']): string {
+  return sceneStay.title[addressing];
+}
+
 export function getStayRsvpQuestion(addressing: Guest['addressing']): string {
   return sceneStay.rsvpQuestion[addressing];
 }
