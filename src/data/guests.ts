@@ -968,8 +968,8 @@ export const guests: Guest[] = [
   },
   {
     inviteId: 'ad20a80888b44eb6bc5e',
-    slug: 'katherin-aranda',
-    displayName: 'Katherin Aranda',
+    slug: 'katerin-aranda',
+    displayName: 'Katerin Aranda',
     addressing: 'singular',
     dedication: 'Para que nuestra boda sea perfecta, la noche debe estar estrellada. ¡Hacé maletas y cumplinos el deseo!',
     partySize: 1,
