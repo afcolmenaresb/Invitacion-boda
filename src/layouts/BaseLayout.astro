@@ -12,10 +12,43 @@ const { title } = Astro.props;
 <html lang="es">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, viewport-fit=cover" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
     <title>{title}</title>
   </head>
   <body>
     <slot />
   </body>
 </html>
+
+<script is:inline>
+  // Belt-and-suspenders on top of the viewport meta's own maximum-scale=1/
+  // user-scalable=no and global.css's touch-action -- modern iOS Safari
+  // (10+) ignores user-scalable=no in the viewport meta for accessibility
+  // reasons, so pinch-zoom and double-tap-zoom can still slip through
+  // there without this. Neither handler touches scrolling/panning: both
+  // only ever preventDefault() the zoom gesture itself.
+  document.addEventListener(
+    'gesturestart',
+    (event) => {
+      event.preventDefault();
+    },
+    { passive: false }
+  );
+
+  let lastTouchEnd = 0;
+  document.addEventListener(
+    'touchend',
+    (event) => {
+      const now = Date.now();
+      if (now - lastTouchEnd <= 300) {
+        event.preventDefault();
+      }
+      lastTouchEnd = now;
+    },
+    { passive: false }
+  );
+</script>
+

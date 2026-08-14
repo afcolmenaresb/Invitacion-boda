@@ -168,6 +168,9 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     line-height: 1.25;
     color: #4a3a28;
     outline: none;
+    /* Copy itself (sceneMemories.title) is untouched -- this is purely a
+       visual uppercase transform, per spec. */
+    text-transform: uppercase;
   }
 
   .memories__body {
