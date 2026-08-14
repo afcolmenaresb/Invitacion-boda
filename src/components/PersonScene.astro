@@ -195,26 +195,35 @@ const { title, body, backAction, backLabel, backVisibleLabel, eyebrow, revealFla
     bottom: 0;
     pointer-events: none;
     /*
-      The third layer used to fade this wash down to essentially nothing
-      (0.001 alpha) toward the bottom -- since .person__scroll is the part
-      that actually scrolls (this wash itself stays fixed, see its own
-      comment above), every paragraph eventually passes through that
-      near-transparent lower band as the reader scrolls, the last one
-      included, losing contrast against the photo right when it matters
-      most. It now holds a steady, moderate ivory tone the whole way down
-      instead of tapering off, so it stays behind the full length of the
-      body, last paragraph included.
+      Every layer fades in from true 0 alpha near this box's own top edge
+      instead of snapping straight to full strength in one row -- that
+      hard cutoff (chosen over a mask-image; see this comment's own
+      history above for why mask is avoided) read as its own visible
+      horizontal seam sitting right behind the name and bleeding into the
+      body's first couple of lines, distinct from (and additional to) the
+      unrelated seam that lived in Andrés's own source photo -- see that
+      photo's own scoped background-size/-position fix in
+      InvitationExperience.astro. The previous "to right" full-height
+      linear gradient (the actual source of this box's own hard edge,
+      since it never varied vertically at all) is now a radial ellipse
+      instead, which fades on every side by construction, including top.
+      The third layer still holds a steady, moderate ivory tone once
+      settled (see its own past history: it used to fade to ~0 by the
+      bottom, which -- since .person__scroll is what actually scrolls,
+      this wash stays fixed -- left the last paragraph unreadable against
+      the photo) -- only its own top few percent are new, fading it in
+      instead of starting at full strength immediately.
     */
     background:
-      radial-gradient(ellipse 64% 58% at 26% 46%, rgba(255, 251, 244, 0.26) 0%, rgba(255, 251, 244, 0) 78%),
+      radial-gradient(ellipse 64% 50% at 26% 50%, rgba(255, 251, 244, 0.26) 0%, rgba(255, 251, 244, 0) 78%),
+      radial-gradient(ellipse 150% 46% at 0% 50%, rgba(255, 251, 244, 0.5) 0%, rgba(255, 251, 244, 0.28) 45%, rgba(255, 251, 244, 0) 82%),
       linear-gradient(
-        to right,
-        rgba(255, 251, 244, 0.55) 0%,
-        rgba(255, 251, 244, 0.38) 36%,
-        rgba(255, 251, 244, 0.14) 60%,
-        rgba(255, 251, 244, 0) 88%
-      ),
-      linear-gradient(to bottom, rgba(255, 251, 244, 0.3) 0%, rgba(255, 251, 244, 0.42) 100%);
+        to bottom,
+        rgba(255, 251, 244, 0) 0%,
+        rgba(255, 251, 244, 0.22) 12%,
+        rgba(255, 251, 244, 0.3) 22%,
+        rgba(255, 251, 244, 0.42) 100%
+      );
   }
 
   .person__halo {

@@ -5293,6 +5293,25 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
   }
 
   /*
+    Andrés's own photo only: at this exact 390x844 canvas, a plain
+    background-size:cover leaves this specific photo with essentially
+    zero vertical crop slack (its own aspect ratio happens to match the
+    canvas's almost exactly), so the whole image -- top to bottom -- is
+    always shown with no room to reposition. That left a real seam in the
+    source photo itself (the tonal edge between the bright cloud bank and
+    the hazier sky/sea beneath it) sitting fixed right behind the name and
+    bleeding into the first two lines of body text, with no CSS way to
+    shift it out of frame. A small zoom creates the missing vertical
+    slack, and repositioning to the photo's own top crops the seam out
+    entirely while keeping Andrés's full figure and the wave foam in
+    frame -- confirmed visually, no other page/photo touched.
+  */
+  [data-scene-panel='andres'] .experience__stay-image {
+    background-size: 135%;
+    background-position: 50% 0%;
+  }
+
+  /*
     Scoped to each panel's own [data-scene-panel] ancestor, not just the
     shared .experience__stay-image class -- six different panels
     (stay/travelInfo/about/fatima/andres/faq) all reuse that same class
