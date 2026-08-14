@@ -1,0 +1,11 @@
+# Personalized invitation pages (/i/{slug}-{inviteId}) are meant to be
+# reached only via the private link sent to each guest -- never crawled,
+# indexed, or discovered. Each such page also carries its own
+# <meta name="robots" content="noindex, nofollow"> (see BaseLayout.astro),
+# this file is defense in depth on top of that. Both path prefixes below
+# are listed because this same file serves both deploy targets: Vercel
+# (site root) and GitHub Pages (project site under /Invitacion-boda/) --
+# see astro.config.mjs.
+User-agent: *
+Disallow: /i/
+Disallow: /Invitacion-boda/i/

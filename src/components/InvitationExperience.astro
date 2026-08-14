@@ -24,13 +24,18 @@ interface Props {
   displayName?: string;
   dedication?: string;
   addressing?: Guest['addressing'];
-  /** Guest.slug -- doubles as the RSVP document id on page 9 (StayScene). */
-  slug?: string;
+  /**
+   * Guest.inviteId -- the stable, random, non-guessable identifier used
+   * as the RSVP document id on page 9 (StayScene). Never Guest.slug --
+   * slug is presentation-only (see guests.ts). Empty on the guest-less
+   * demo (/) page.
+   */
+  inviteId?: string;
   /** Guest.partySize (already resolved via getGuestPartySize) -- see StayScene's own RSVP write. */
   partySize?: number;
 }
 
-const { displayName, dedication, addressing, slug, partySize } = Astro.props;
+const { displayName, dedication, addressing, inviteId, partySize } = Astro.props;
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 const videoSrc = `${base}/videos/memory-transition2.mp4`;
 const videoSrc2 = `${base}/videos/memory-transition3.mp4`;
@@ -369,7 +374,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       <div class="experience__stay-canvas">
         <div class="experience__stay-image" data-bg-src={stayTextureSrc} aria-hidden="true"></div>
         <div class="experience__stay-overlay">
-          <StayScene addressing={addressing} guestId={slug} guestName={displayName} partySize={partySize} />
+          <StayScene addressing={addressing} guestId={inviteId} guestName={displayName} partySize={partySize} />
         </div>
       </div>
     </div>
@@ -393,7 +398,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
         <div class="experience__stay-overlay">
           <StayScene
             addressing={addressing}
-            guestId={slug}
+            guestId={inviteId}
             guestName={displayName}
             partySize={partySize}
             backAction="back-to-destination"
@@ -3773,7 +3778,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     // always lands on this guest's own portada, never attempts to
     // reconstruct whatever internal scene the hash pointed at -- a
     // mid-sequence video/frozen-frame state can't be rebuilt from a bare
-    // hash, so this deliberately never tries. The guest's own slug/guest
+    // hash, so this deliberately never tries. The guest's own inviteId/
     // data is untouched (it comes from the page route, not the hash), so
     // the experience simply restarts cleanly from Cover with the same
     // guest -- see the popstate handler above for in-session back/forward,

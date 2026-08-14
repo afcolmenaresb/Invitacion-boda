@@ -1,5 +1,30 @@
 export interface Guest {
-  /** URL-safe slug, e.g. /estefi-y-matias. Lowercase, hyphen-separated, no ampersands. */
+  /**
+   * Stable, random, non-guessable identifier -- the ONE true identity for
+   * this invitation group. Generated once when the guest is added and
+   * never regenerated afterwards (a reload, a slug edit, anything) --
+   * doing so would invalidate every link already sent and orphan any
+   * RSVP already written under it (see rsvp.ts: the Firestore doc id
+   * literally *is* this value). Never derived from displayName/slug, never
+   * sequential (no guest1/guest2/incrementing ids -- those are guessable
+   * and enumerable). Minimum 12 characters of high-entropy
+   * alphanumerics, e.g. generated with crypto.randomUUID().replace(/-/g,
+   * '').slice(0, 16) or nanoid(16).
+   *
+   * This is what actually gates access to a guest's personalized page --
+   * see src/pages/i/[invite].astro, which only pre-renders the exact
+   * `${slug}-${inviteId}` combination for each guest below. A visitor who
+   * guesses/mutates the slug half of a URL but not the inviteId half hits
+   * a 404, never another guest's invitation.
+   */
+  inviteId: string;
+  /**
+   * URL-safe slug, e.g. `stefania-y-matias`. Lowercase, hyphen-separated,
+   * no ampersands. Presentation only -- readable, but never used alone as
+   * an identifier or a Firestore document id (see inviteId above). Two
+   * guests could theoretically share a slug; they can never share an
+   * inviteId.
+   */
   slug: string;
   /** Guest name(s) as shown on the invitation. Recommended max 32 characters. */
   displayName: string;
@@ -64,37 +89,49 @@ export function getVisibleDedicationLength(dedication: string): number {
   return dedication.replace(/\u00AD/g, '').length;
 }
 
-// Test data only — the definitive guest list is not loaded yet.
+// Test fixtures only, used to validate the slug/inviteId architecture --
+// the definitive guest list is not loaded yet. Exactly two, on purpose:
+// one plural/couple case and one singular case. Both inviteId values
+// below are fixed test codes (not real crypto-random output) so the
+// architecture is reproducible while it's being verified; real guests get
+// a freshly generated inviteId each, per the field's own doc comment.
 export const guests: Guest[] = [
   {
-    slug: 'ana',
-    displayName: 'Ana',
-    addressing: 'singular',
-    dedication: 'Gracias por acompañarnos en este nuevo comienzo.',
-  },
-  {
-    slug: 'estefi-y-matias',
-    displayName: 'Estefi y Matías',
+    inviteId: '7Qm2Kp9VxL3a',
+    slug: 'stefania-y-matias',
+    displayName: 'Stefanía y Matías',
     addressing: 'plural',
     dedication: 'Hay viajes que no tendrían el mismo sentido sin ciertas personas.',
+    partySize: 2,
   },
   {
-    slug: 'familia-gonzalez-benitez',
-    displayName: 'Familia González Benítez',
-    addressing: 'plural',
-    dedication:
-      'Desde el primer encuentro supimos que esta familia sería parte esencial de la historia que hoy comenzamos a escribir juntos.',
-  },
-  {
-    slug: 'maria-fernanda-y-juan-sebastian',
-    displayName: 'María Fernanda y Juan Sebastián',
-    addressing: 'plural',
-    dedication: 'Su presencia hará que este viaje tenga un sentido aún más especial para nosotros dos.',
+    inviteId: 'Rn8Wc4TbYh2Z',
+    slug: 'rodney',
+    displayName: 'Rodney',
+    addressing: 'singular',
+    dedication: 'Gracias por acompañarnos en este nuevo comienzo.',
+    partySize: 1,
   },
 ];
 
-export function getGuestBySlug(slug: string): Guest | undefined {
-  return guests.find((guest) => guest.slug === slug);
+/**
+ * The real identity lookup -- resolves a guest by its stable inviteId,
+ * never by slug/displayName (see Guest.inviteId's own doc comment for
+ * why). This is what src/pages/i/[invite].astro's props are built from.
+ */
+export function getGuestByInviteId(inviteId: string): Guest | undefined {
+  return guests.find((guest) => guest.inviteId === inviteId);
+}
+
+/**
+ * Builds the `${slug}-${inviteId}` route param used under /i/ (see
+ * src/pages/i/[invite].astro). The slug half is presentation only; the
+ * inviteId half -- always this function's last 12+ characters, always
+ * after the final guest-authored hyphen boundary of the slug -- is what
+ * actually resolves the page.
+ */
+export function getInviteParam(guest: Guest): string {
+  return `${guest.slug}-${guest.inviteId}`;
 }
 
 /** Resolves Guest.partySize, falling back by addressing when unset. */
@@ -108,6 +145,8 @@ export function getGuestPartySize(guest: Guest): number {
 // loudly and early, naming the offending guest and the length found, rather
 // than letting an over-length dedication reach Cover.astro's height-fit
 // fallback silently.
+const MIN_INVITE_ID_LENGTH = 12;
+const seenInviteIds = new Set<string>();
 for (const guest of guests) {
   const visibleLength = getVisibleDedicationLength(guest.dedication);
   if (visibleLength > MAX_DEDICATION_LENGTH) {
@@ -116,4 +155,14 @@ for (const guest of guests) {
         `el máximo permitido es ${MAX_DEDICATION_LENGTH}.`
     );
   }
+  if (guest.inviteId.length < MIN_INVITE_ID_LENGTH) {
+    throw new Error(
+      `[guests] El inviteId de "${guest.slug}" tiene ${guest.inviteId.length} caracteres; ` +
+        `el mínimo requerido es ${MIN_INVITE_ID_LENGTH}.`
+    );
+  }
+  if (seenInviteIds.has(guest.inviteId)) {
+    throw new Error(`[guests] inviteId duplicado: "${guest.inviteId}" (slug "${guest.slug}").`);
+  }
+  seenInviteIds.add(guest.inviteId);
 }

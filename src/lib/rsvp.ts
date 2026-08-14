@@ -1,10 +1,13 @@
 // RSVP persistence for page 9 (StayScene.astro) -- Cloud Firestore only,
 // storing exactly the five fields the spec calls for, nothing else.
 //
-// Collection name: "rsvp". Document id: the guest's own slug (guestId),
-// so re-submitting (changing your mind) overwrites the same document
-// instead of piling up duplicates -- "permitir modificarla después" is
-// just calling saveRsvpResponse again.
+// Collection name: "rsvp". Document id: the guest's own inviteId
+// (passed through as guestId -- kept as that field name for
+// compatibility with the existing Firestore rules, but its value is
+// always Guest.inviteId, never Guest.slug/displayName -- see
+// src/data/guests.ts), so re-submitting (changing your mind) overwrites
+// the same document instead of piling up duplicates -- "permitir
+// modificarla después" is just calling saveRsvpResponse again.
 
 import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
 import { getFirestoreDb, getFirebaseConfigDiagnostics } from './firebase';
