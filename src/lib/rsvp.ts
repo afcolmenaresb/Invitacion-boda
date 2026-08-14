@@ -7,7 +7,7 @@
 // just calling saveRsvpResponse again.
 
 import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
-import { getFirestoreDb } from './firebase';
+import { getFirestoreDb, getFirebaseConfigDiagnostics } from './firebase';
 
 export type AttendanceStatus = 'attending' | 'maybe' | 'not_attending';
 
@@ -46,7 +46,26 @@ export async function saveRsvpResponse(input: SaveRsvpInput): Promise<boolean> {
     // its real Firestore error code/message instead of being
     // indistinguishable from "offline". StayScene's own UI still only
     // ever shows its quiet inline error either way.
-    console.error('[rsvp] saveRsvpResponse failed:', error);
+    const code = (error as { code?: string })?.code ?? 'unknown';
+    const message = error instanceof Error ? error.message : String(error);
+    const { projectId, envVarsPresent } = getFirebaseConfigDiagnostics();
+    console.error(
+      `[rsvp] saveRsvpResponse failed -- code: ${code}, message: ${message}, projectId: ${projectId ?? '(not set)'}`
+    );
+    console.error('[rsvp] PUBLIC_FIREBASE_* env var presence (booleans only, no values):', envVarsPresent);
+    // permission-denied almost always means firestore.rules (see that
+    // file at the repo root) was never actually deployed to this
+    // Firebase project -- it is NOT applied automatically by this repo,
+    // only via the Firebase console or `firebase deploy --only
+    // firestore:rules` (see that file's own top comment). A missing
+    // PUBLIC_FIREBASE_* var would already have been caught earlier, in
+    // getFirestoreDb() itself (see firebase.ts), and never reach here.
+    if (code === 'permission-denied') {
+      console.error(
+        '[rsvp] code is permission-denied: the currently published Firestore Rules for this project are the most likely cause -- verify firestore.rules has actually been deployed (Firebase console > Firestore Database > Rules, or `firebase deploy --only firestore:rules`), not just present in this repo.'
+      );
+    }
+    console.error('[rsvp] full error object:', error);
     return false;
   }
 }

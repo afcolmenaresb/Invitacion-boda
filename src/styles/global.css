@@ -17,12 +17,19 @@
 html {
   scroll-behavior: smooth;
   /* Keeps text at its authored size across orientation changes on mobile
-     Safari/Chrome instead of them silently bumping it up -- unrelated to
-     (and never a replacement for) pinch-zoom, which stays fully enabled
-     (see BaseLayout.astro's own viewport meta -- no user-scalable=no or
-     maximum-scale=1 here, on purpose). */
+     Safari/Chrome instead of them silently bumping it up. */
   -webkit-text-size-adjust: 100%;
   text-size-adjust: 100%;
+  /*
+    User zoom is disabled globally (see BaseLayout.astro's own viewport
+    meta -- maximum-scale=1, user-scalable=no): this is the same intent
+    enforced in CSS as a second layer, since not every browser honors the
+    viewport meta for pinch-zoom consistently. "pan-x pan-y" keeps normal
+    scrolling/panning working everywhere (the fixed 390x844 canvas and its
+    own responsive scaling are untouched -- this only removes the zoom
+    gesture itself) while dropping pinch-zoom and double-tap-zoom.
+  */
+  touch-action: pan-x pan-y;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -36,6 +43,9 @@ body {
   background: var(--color-bg);
   color: var(--color-ink);
   font-family: var(--font-sans);
+  /* Same as html above -- some browsers only honor touch-action when it's
+     also set on body, not just the root element. */
+  touch-action: pan-x pan-y;
 }
 
 img {

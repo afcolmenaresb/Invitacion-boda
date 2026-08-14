@@ -354,13 +354,31 @@ import { sceneCelebration } from '../data/sceneCelebration';
       transition-delay: 4600ms;
     }
 
+    /*
+      The CTA's own appearance is additionally gated on
+      .is-celebration-cta-ready -- added by InvitationExperience.astro's
+      script only once the *whole* forward sequence for this scene has
+      genuinely finished (the video reaching 'ended'/erroring/hard-
+      capping, or the no-video fallback hold elapsing -- see
+      runCelebrationVideoAndReveal's own comment), not just this fixed
+      6000ms delay on its own. Video/text timings above are untouched --
+      this only holds the CTA back a little longer whenever the real
+      video (~8s) outlasts that fixed delay, instead of popping in mid-
+      playback.
+    */
     :global(.experience.is-celebration-revealing) [data-celebration-part='cta'] {
+      transition: opacity 900ms ease, transform 900ms ease, visibility 0s linear;
+      transition-delay: 6000ms;
+    }
+
+    :global(.experience.is-celebration-revealing.is-celebration-cta-ready) [data-celebration-part='cta'] {
+      /* Overrides the 6000ms transition-delay above -- see
+         .ceremony__cta's own identical override for why. */
+      transition-delay: 0ms;
       opacity: 1;
       transform: translateY(0);
       visibility: visible;
       pointer-events: auto;
-      transition: opacity 900ms ease, transform 900ms ease, visibility 0s linear;
-      transition-delay: 6000ms;
     }
   }
 

@@ -39,6 +39,25 @@ function missingConfigKeys(): string[] {
     .map(([key]) => key);
 }
 
+/**
+ * Diagnostic-only snapshot for the RSVP error path (see rsvp.ts's own
+ * catch block) -- projectId (not a secret; it's the public Firebase
+ * project identifier, safe to log) plus a present/missing boolean per
+ * PUBLIC_FIREBASE_* var, deliberately never the var's own value (even
+ * though these particular values are Firebase's own public web config,
+ * not secrets -- see this file's own top comment -- this stays
+ * conservative and never prints them). Exported so rsvp.ts can log it
+ * alongside the real error.code/error.message from a failed write,
+ * without duplicating the env var list there.
+ */
+export function getFirebaseConfigDiagnostics(): { projectId: string | undefined; envVarsPresent: Record<string, boolean> } {
+  const envVarsPresent: Record<string, boolean> = {};
+  for (const [key, value] of Object.entries(firebaseConfig)) {
+    envVarsPresent[key] = typeof value === 'string' && value.length > 0;
+  }
+  return { projectId: firebaseConfig.projectId, envVarsPresent };
+}
+
 let app: FirebaseApp | null = null;
 let db: Firestore | null = null;
 let attempted = false;

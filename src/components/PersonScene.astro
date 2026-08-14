@@ -55,6 +55,11 @@ const { title, body, backAction, backLabel, backVisibleLabel, eyebrow, revealFla
     height: 100%;
     display: flex;
     isolation: isolate;
+    /* Outermost safety net against horizontal scroll -- see
+       .person__scroll/.person__frame's own comments for where it was
+       actually leaking from; this just guarantees nothing inside this
+       panel can ever widen the page itself. */
+    overflow-x: hidden;
   }
 
   .person__back {
@@ -132,9 +137,15 @@ const { title, body, backAction, backLabel, backVisibleLabel, eyebrow, revealFla
     flex-direction: column;
     align-items: flex-start;
     text-align: left;
-    /* Narrower reading column, bigger side margins -- preferred over a
-       heavier wash for legibility (see .person__wash's own comment). */
-    padding: 0 44px;
+    /* Widened from the previous 44px side padding -- the column read as
+       too narrow at that width; the wash behind the body (see
+       .person__wash below) now carries legibility on its own, so the
+       column no longer needs to be this tight. overflow-x:hidden is a
+       second safety net alongside .person__scroll's own (see its
+       comment) in case anything inside this frame -- outside the
+       scrolling region -- ever bleeds past its edge again. */
+    padding: 0 32px;
+    overflow-x: hidden;
   }
 
   .person__header {
@@ -151,6 +162,13 @@ const { title, body, backAction, backLabel, backVisibleLabel, eyebrow, revealFla
        min-height:0 is what lets overflow-y:auto below actually kick in. */
     min-height: 0;
     overflow-y: auto;
+    /* Only overflow-y was ever constrained here -- overflow-x defaulted
+       to visible, so anything that bled past this element's own box
+       horizontally (the title's halo included, see .person__halo--wide
+       below) leaked all the way out to the page and produced real
+       horizontal scroll instead of just being clipped. Vertical scrolling
+       is untouched; only the horizontal axis is now contained. */
+    overflow-x: hidden;
     -webkit-overflow-scrolling: touch;
     padding-bottom: 64px;
     /* Promotes this scrolling region to its own compositor layer --
@@ -176,16 +194,36 @@ const { title, body, backAction, backLabel, backVisibleLabel, eyebrow, revealFla
     top: 32%;
     bottom: 0;
     pointer-events: none;
+    /*
+      Every layer fades in from true 0 alpha near this box's own top edge
+      instead of snapping straight to full strength in one row -- that
+      hard cutoff (chosen over a mask-image; see this comment's own
+      history above for why mask is avoided) read as its own visible
+      horizontal seam sitting right behind the name and bleeding into the
+      body's first couple of lines, distinct from (and additional to) the
+      unrelated seam that lived in Andrés's own source photo -- see that
+      photo's own scoped background-size/-position fix in
+      InvitationExperience.astro. The previous "to right" full-height
+      linear gradient (the actual source of this box's own hard edge,
+      since it never varied vertically at all) is now a radial ellipse
+      instead, which fades on every side by construction, including top.
+      The third layer still holds a steady, moderate ivory tone once
+      settled (see its own past history: it used to fade to ~0 by the
+      bottom, which -- since .person__scroll is what actually scrolls,
+      this wash stays fixed -- left the last paragraph unreadable against
+      the photo) -- only its own top few percent are new, fading it in
+      instead of starting at full strength immediately.
+    */
     background:
-      radial-gradient(ellipse 64% 58% at 26% 46%, rgba(255, 251, 244, 0.26) 0%, rgba(255, 251, 244, 0) 78%),
+      radial-gradient(ellipse 64% 50% at 26% 50%, rgba(255, 251, 244, 0.26) 0%, rgba(255, 251, 244, 0) 78%),
+      radial-gradient(ellipse 150% 46% at 0% 50%, rgba(255, 251, 244, 0.5) 0%, rgba(255, 251, 244, 0.28) 45%, rgba(255, 251, 244, 0) 82%),
       linear-gradient(
-        to right,
-        rgba(255, 251, 244, 0.55) 0%,
-        rgba(255, 251, 244, 0.38) 36%,
-        rgba(255, 251, 244, 0.14) 60%,
-        rgba(255, 251, 244, 0) 88%
-      ),
-      linear-gradient(to bottom, rgba(255, 251, 244, 0) 0%, rgba(255, 251, 244, 0.001) 100%);
+        to bottom,
+        rgba(255, 251, 244, 0) 0%,
+        rgba(255, 251, 244, 0.22) 12%,
+        rgba(255, 251, 244, 0.3) 22%,
+        rgba(255, 251, 244, 0.42) 100%
+      );
   }
 
   .person__halo {
@@ -200,8 +238,27 @@ const { title, body, backAction, backLabel, backVisibleLabel, eyebrow, revealFla
     inset: -14px -24px;
   }
 
+  /*
+    The name's own halo: now that .person__title shrink-wraps to its own
+    text (see that rule's comment above), this can size itself to the
+    word instead of the column -- "nombre + 40-60px laterales" -- a local,
+    organic radial glow, never a rectangle/band, and never spanning the
+    viewport. An explicit ellipse size (rather than the default
+    farthest-corner shape, which degenerates into a flat oval on a short,
+    wide box) keeps it reading as a soft, round halo regardless of the
+    name's own length.
+  */
+  .person__title .person__halo--wide {
+    inset: -22px -48px;
+    background: radial-gradient(ellipse 62% 100% at center, rgba(255, 254, 248, 0.95) 0%, rgba(255, 254, 248, 0) 74%);
+  }
+
   .person__eyebrow {
     position: relative;
+    /* Shrink-wraps this <p> to its own text instead of the full column
+       width -- see .person__title's own comment below for why this
+       matters for its halo. */
+    width: fit-content;
     margin: 0 0 16px;
     font-family: var(--font-sans);
     text-transform: uppercase;
@@ -210,8 +267,19 @@ const { title, body, backAction, backLabel, backVisibleLabel, eyebrow, revealFla
     color: #6f6350;
   }
 
+  /*
+    width: fit-content is the actual fix for the halo below reading as a
+    horizontal band: this <h2> is a block element, so without this its own
+    box (and so its absolutely-positioned .person__halo--wide child, sized
+    via `inset` off that box) spanned the whole reading column -- much
+    wider than the name itself -- which is exactly what produced a flat
+    band stretching edge-to-edge instead of a soft glow local to the word.
+    Shrinking the title's own box to its text means the halo now scales
+    with the name itself, not the column.
+  */
   .person__title {
     position: relative;
+    width: fit-content;
     margin: 0 0 22px;
     font-family: var(--font-serif);
     font-style: normal;
@@ -232,6 +300,8 @@ const { title, body, backAction, backLabel, backVisibleLabel, eyebrow, revealFla
 
   .person__body p {
     margin: 0;
+    max-width: 100%;
+    overflow-wrap: break-word;
     font-family: var(--font-serif);
     font-style: italic;
     font-weight: 400;

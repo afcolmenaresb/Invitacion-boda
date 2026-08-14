@@ -309,9 +309,29 @@ import { sceneCeremony } from '../data/sceneCeremony';
       transform: translateY(0);
     }
 
+    /*
+      The CTA's own appearance is additionally gated on
+      .is-ceremony-cta-ready -- added by InvitationExperience.astro's
+      script only once the *whole* forward sequence for this scene has
+      genuinely finished (the video reaching 'ended'/erroring/hard-
+      capping, or the no-video fallback hold elapsing -- see
+      runCeremonyVideoAndReveal's own comment), not just this fixed
+      3900ms delay on its own. Video/text timings above are untouched --
+      this only holds the CTA back a little longer whenever the real
+      video (~8s) outlasts that fixed delay, instead of popping in mid-
+      playback.
+    */
     :global(.experience.is-ceremony-revealing) .ceremony__cta {
       transition: opacity 1000ms ease, transform 1000ms ease, visibility 0s linear;
       transition-delay: 3900ms;
+    }
+
+    :global(.experience.is-ceremony-revealing.is-ceremony-cta-ready) .ceremony__cta {
+      /* Overrides the 3900ms transition-delay above -- by the time
+         .is-ceremony-cta-ready actually lands (the real video's own end,
+         not a guessed number), there is nothing left to wait for; it
+         should fade in right away, not queue up a second delay on top. */
+      transition-delay: 0ms;
       opacity: 1;
       transform: translateY(0);
       visibility: visible;

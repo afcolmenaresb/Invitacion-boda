@@ -12,7 +12,6 @@ import { sceneFaq } from '../data/sceneFaq';
 
   <div class="faq__frame">
     <div class="faq__header">
-      <span class="faq__header-wash" aria-hidden="true"></span>
       <p class="faq__eyebrow" data-faq-part="eyebrow">
         <span class="faq__halo" aria-hidden="true"></span>
         Un poco de nosotros
@@ -128,34 +127,6 @@ import { sceneFaq } from '../data/sceneFaq';
     width: 100%;
   }
 
-  /* Same recipe as every other scene's own ambient wash, sized to just
-     the (fixed, non-scrolling) header above the list. */
-  /*
-    Cropped via `top` instead of covering the whole header and fading the
-    top out with mask-image -- see .person__wash's own comment
-    (PersonScene.astro) for why: a masked element sharing this panel
-    with .faq__scroll (an actively-scrolling sibling) makes some
-    renderers repaint it as an opaque white box once the scroll position
-    actually changes.
-  */
-  .faq__header-wash {
-    position: absolute;
-    left: -34px;
-    right: -34px;
-    top: 14px;
-    bottom: -4px;
-    pointer-events: none;
-    background:
-      radial-gradient(ellipse 70% 100% at 30% 20%, rgba(255, 251, 244, 0.26) 0%, rgba(255, 251, 244, 0) 78%),
-      linear-gradient(
-        to right,
-        rgba(255, 251, 244, 0.55) 0%,
-        rgba(255, 251, 244, 0.38) 36%,
-        rgba(255, 251, 244, 0.14) 60%,
-        rgba(255, 251, 244, 0) 88%
-      );
-  }
-
   /*
     The list's own wash lives here, as this element's own background
     with background-attachment:local, instead of a separately positioned
@@ -201,8 +172,24 @@ import { sceneFaq } from '../data/sceneFaq';
     inset: -14px -24px;
   }
 
+  /*
+    "FAQ" own halo: same fix as PersonScene's title (see that component's
+    own comment) -- the header's previous .faq__header-wash spanned
+    edge-to-edge behind the whole header, reading as a hard horizontal
+    band. That element is gone; instead .faq__title itself now
+    shrink-wraps to its own text (width: fit-content below) so this local,
+    explicitly-shaped ellipse halo scales with the word "FAQ" instead of
+    the column -- a soft, local glow, never a band, never spanning the
+    viewport.
+  */
+  .faq__title .faq__halo--wide {
+    inset: -20px -46px;
+    background: radial-gradient(ellipse 62% 100% at center, rgba(255, 254, 248, 0.95) 0%, rgba(255, 254, 248, 0) 74%);
+  }
+
   .faq__eyebrow {
     position: relative;
+    width: fit-content;
     margin: 0 0 14px;
     font-family: var(--font-sans);
     text-transform: uppercase;
@@ -213,6 +200,7 @@ import { sceneFaq } from '../data/sceneFaq';
 
   .faq__title {
     position: relative;
+    width: fit-content;
     margin: 0 0 24px;
     font-family: var(--font-serif);
     font-style: normal;

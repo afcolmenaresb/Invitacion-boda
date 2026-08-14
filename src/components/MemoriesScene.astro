@@ -41,6 +41,14 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     position: relative;
     width: 100%;
     height: 100%;
+    /* Same as every other scene's own root (.about, .person, ...) --
+       without this, .memories__content's own `margin: auto` (meant to
+       center it in the fixed 390x844 canvas, see that rule's comment) had
+       no flex container to center *within*, so it collapsed to the top-
+       left instead: no top breathing room, eyebrow/title pinned to the
+       very top edge -- exactly what read as an oversized, disproportionate
+       title/placeholder layout. */
+    display: flex;
     isolation: isolate;
     overflow: hidden;
   }

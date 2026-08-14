@@ -78,16 +78,6 @@ const whatsAppUrl = getGoTravelWhatsAppUrl(guestName || 'invitado');
       ))}
     </ul>
 
-    <a
-      class="stay__cta"
-      data-stay-part="cta"
-      href={whatsAppUrl}
-      target="_blank"
-      rel="noopener noreferrer"
-    >
-      {sceneStay.ctaGoTravel}
-    </a>
-
     <div
       class="stay__rsvp"
       data-stay-part="rsvp"
@@ -116,6 +106,16 @@ const whatsAppUrl = getGoTravelWhatsAppUrl(guestName || 'invitado');
         <span data-rsvp-message="error" hidden>{sceneStay.rsvpError}</span>
       </p>
     </div>
+
+    <a
+      class="stay__cta"
+      data-stay-part="cta"
+      href={whatsAppUrl}
+      target="_blank"
+      rel="noopener noreferrer"
+    >
+      {sceneStay.ctaGoTravel}
+    </a>
   </div>
 </div>
 
@@ -366,10 +366,11 @@ const whatsAppUrl = getGoTravelWhatsAppUrl(guestName || 'invitado');
   }
 
   /*
-    CTA -- real <a> (opens WhatsApp in a new tab), same editorial
+    GoTravel CTA -- real <a> (opens WhatsApp in a new tab), same editorial
     sans/uppercase/arrow language as every other primary CTA in the
     experience. No individual halo/patch behind it -- reads off
-    .stay__wash above plus its own dark, high-contrast ink.
+    .stay__wash above plus its own dark, high-contrast ink. Sits after the
+    RSVP block (see the markup's own order/comment on .stay__rsvp below).
   */
   .stay__cta {
     position: relative;
@@ -399,9 +400,11 @@ const whatsAppUrl = getGoTravelWhatsAppUrl(guestName || 'invitado');
   }
 
   /*
-    RSVP block -- "separado visualmente" from the GoTravel CTA above via
-    extra margin, its own halo and a hairline-free visual pause; never a
-    modal, never a hard card.
+    RSVP block -- comes before the GoTravel CTA below (the invitation's
+    own "can you make it?" question takes priority over the logistics
+    CTA -- see the markup's own order), "separado visualmente" from the
+    highlights above it via extra margin, its own halo and a
+    hairline-free visual pause; never a modal, never a hard card.
   */
   .stay__rsvp {
     position: relative;
@@ -550,7 +553,7 @@ const whatsAppUrl = getGoTravelWhatsAppUrl(guestName || 'invitado');
       transition-delay: 1300ms;
     }
 
-    :global(.experience.is-stay-revealing) [data-stay-part='cta'] {
+    :global(.experience.is-stay-revealing) [data-stay-part='rsvp'] {
       opacity: 1;
       transform: translateY(0);
       visibility: visible;
@@ -559,7 +562,7 @@ const whatsAppUrl = getGoTravelWhatsAppUrl(guestName || 'invitado');
       transition-delay: 1600ms;
     }
 
-    :global(.experience.is-stay-revealing) [data-stay-part='rsvp'] {
+    :global(.experience.is-stay-revealing) [data-stay-part='cta'] {
       opacity: 1;
       transform: translateY(0);
       visibility: visible;

@@ -917,15 +917,31 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     // a no-op, so repeated calls (autoplay success race with the
     // interaction listener, or the "Comenzar el viaje" click reusing the
     // same function) never restart or double-trigger playback.
-    function startBackgroundMusic() {
-      if (!musicEl || !primeMusicOrder()) return;
-      if (!musicEl.paused) return;
-      void musicEl
+    //
+    // Returns the real outcome (as a Promise) instead of firing and
+    // forgetting -- the first-interaction retry logic below needs to know
+    // whether THIS attempt actually succeeded before it's safe to stop
+    // listening for further gestures: some engines (WebKit in particular)
+    // only honor a subset of gesture types for unlocking media playback
+    // (reliably 'click'/'touchend'/'keydown', NOT always
+    // 'touchstart'/'pointerdown', which can fire first on a touch device)
+    // -- removing every listener the instant *any one* of them fires,
+    // regardless of whether that specific attempt worked, would burn the
+    // more reliable ones' own chance on a gesture type that was never
+    // going to work in the first place.
+    function startBackgroundMusic(): Promise<boolean> {
+      if (!musicEl || !primeMusicOrder()) return Promise.resolve(false);
+      if (!musicEl.paused) return Promise.resolve(true);
+      return musicEl
         .play()
-        .then(() => preloadNextTrack(musicIndex))
+        .then(() => {
+          preloadNextTrack(musicIndex);
+          return true;
+        })
         .catch(() => {
           // Blocked by autoplay policy -- silent, no prompt; the first-
-          // interaction listener below will retry.
+          // interaction listener below will retry on the next gesture.
+          return false;
         });
     }
 
@@ -1022,6 +1038,19 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     let isTransitioning = false;
     let currentScene: SceneName = 'cover';
     let completionTimer: number | null = null;
+    // Bumped every time a forward transition starts (see goToScene) or a
+    // Back navigation cancels one (see goBack below). Every run*AndReveal
+    // async function captures its own value at the start and re-checks it
+    // after each await -- if it no longer matches, that run has been
+    // superseded (almost always by Back) and stops touching shared state
+    // (root classes, videos, completionTimer, currentScene) from that
+    // point on, since goBack has already applied its own, authoritative
+    // final state. This is what lets Back cancel a still-running video/
+    // reveal cleanly instead of racing it.
+    let transitionToken = 0;
+    function isStaleTransition(token: number) {
+      return token !== transitionToken;
+    }
     let destinationAssetsRequested = false;
     let destinationVideoSrcAssigned = false;
     let journeyAssetsRequested = false;
@@ -1661,27 +1690,17 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       target?.focus({ preventScroll: true });
     }
 
-    function applySceneInstantly(scene: SceneName) {
-      // Captured before currentScene is overwritten at the bottom of this
-      // function -- needed below to tell "genuinely landing elsewhere in
-      // the main narrative" apart from "just passing through an isolated
-      // island and back" (see isIsolatedIslandTransition below).
-      const previousScene = currentScene;
-      root!.classList.add('is-instant');
-      // Pre-existing gap, fixed here as a small drive-by: every other
-      // entry point (goToScene's own animated branches, goToAboutTreeScene)
-      // already sets is-reduced-motion before touching any content, but
-      // this one never did -- meaning a reduced-motion visitor landing
-      // directly on a deep link (e.g. #estadia, #nosotros) previously saw
-      // blank content once is-instant was removed a frame later, since
-      // every scene's own CSS reduced-motion fallback (".is-reduced-
-      // motion.is-X-revealing [data-X-part] { opacity: 1 }") never got its
-      // trigger class. Purely additive: nothing changes for anyone who
-      // isn't both reduced-motion AND landing here via a direct/instant
-      // load.
-      root!.classList.toggle('is-reduced-motion', prefersReducedMotion());
-      root!.dataset.scene = scene;
-      setSceneAccessibility(scene);
+    // Pure class-toggle half of applySceneInstantly, extracted so goBack
+    // (below) can reuse the exact same "past/receded/revealing" cascade
+    // math without also inheriting applySceneInstantly's own video
+    // handling -- that part unconditionally hides/rewinds every main-
+    // narrative video, correct for a fresh/direct load (nothing has ever
+    // played yet) but wrong for goBack, which must instead leave whatever
+    // is at or before its own target scene untouched and only freeze/
+    // reset the specific videos spec point 9 calls for. Returns the
+    // "past" flags and isIsolatedIslandTransition so both callers can
+    // reuse them for their own asset-preload/video decisions.
+    function applySceneRevealClasses(scene: SceneName, previousScene: SceneName) {
       root!.classList.remove(
         'is-video-visible',
         'is-ink-revealing',
@@ -1727,7 +1746,15 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       const pastCelebration = scene === 'celebration' || scene === 'keepsake' || scene === 'stay';
       const pastKeepsake = scene === 'keepsake' || scene === 'stay';
       root!.classList.toggle('is-cover-receded', scene !== 'cover');
-      root!.classList.toggle('is-revealing-memory', scene !== 'cover');
+      // scene !== 'cover' alone isn't enough here: the whole "Un poco de
+      // nosotros" sub-tree (and travelInfo) are isolated islands, not
+      // steps in the cover->...->stay chain -- excluding them is what
+      // keeps MemoryScene's own content (including its "Descubrir el
+      // destino" CTA) from bleeding through behind Fátima/Andrés/FAQ/etc,
+      // which it otherwise did (is-revealing-memory was landing true on
+      // every one of those screens, same as it correctly does for every
+      // *real* past-cover scene).
+      root!.classList.toggle('is-revealing-memory', scene !== 'cover' && !isIsolatedIsland(scene));
       root!.classList.toggle('is-memory-receded', pastDestination);
       root!.classList.toggle('is-revealing-destination', pastDestination);
       root!.classList.toggle('is-destination-revealing', pastDestination);
@@ -1740,9 +1767,19 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       root!.classList.toggle('is-imagined-receded', pastCeremony);
       root!.classList.toggle('is-revealing-ceremony', pastCeremony);
       root!.classList.toggle('is-ceremony-revealing', pastCeremony);
+      // Same "already settled" flag as is-ceremony-revealing itself --
+      // whenever ceremony is being shown as an already-reached scene
+      // (instant/back landing) rather than a live forward animation in
+      // progress, its own CTA must be immediately visible/interactive too
+      // (spec point 9), not waiting on runCeremonyVideoAndReveal's own
+      // real-video-end signal (see that function's own comment) -- that
+      // signal only matters for a genuine forward playthrough.
+      root!.classList.toggle('is-ceremony-cta-ready', pastCeremony);
       root!.classList.toggle('is-ceremony-receded', pastCelebration);
       root!.classList.toggle('is-revealing-celebration', pastCelebration);
       root!.classList.toggle('is-celebration-revealing', pastCelebration);
+      // Same reasoning as is-ceremony-cta-ready above, one scene deeper.
+      root!.classList.toggle('is-celebration-cta-ready', pastCelebration);
       root!.classList.toggle('is-celebration-receded', pastKeepsake);
       root!.classList.toggle('is-revealing-keepsake', pastKeepsake);
       root!.classList.toggle('is-keepsake-revealing', pastKeepsake);
@@ -1782,9 +1819,72 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       // Checking only `scene` would protect the way in but not the way
       // back (landing on 'journey' again is not itself an island), so
       // both this call's target and the scene it's leaving are checked.
-      const isIsolatedIsland = (s: SceneName) => s === 'travelInfo' || isAboutTreeScene(s);
       const isIsolatedIslandTransition = isIsolatedIsland(scene) || isIsolatedIsland(previousScene);
-      if (!isIsolatedIslandTransition) {
+      return { pastDestination, pastJourney, pastImagined, pastCeremony, pastCelebration, pastKeepsake, isIsolatedIslandTransition };
+    }
+
+    // Same "current scene's own background/video preload" convention used
+    // by every runXVideoAndReveal (see each of their own comments) --
+    // extracted so applySceneInstantly and goBack (which also needs the
+    // *background* half, but never the video-preload half in the same
+    // unconditional way) can both call into it without duplicating this
+    // list.
+    function ensureBackgroundsUpTo(flags: {
+      pastDestination: boolean;
+      pastJourney: boolean;
+      pastImagined: boolean;
+      pastCeremony: boolean;
+      pastCelebration: boolean;
+      pastKeepsake: boolean;
+    }, scene: SceneName) {
+      if (scene === 'memory' || flags.pastDestination) ensureDestinationBackground();
+      if (flags.pastDestination) ensureJourneyBackground();
+      if (flags.pastJourney) ensureImaginedBackground();
+      if (flags.pastImagined) ensureCeremonyBackground();
+      if (flags.pastCeremony) ensureCelebrationBackground();
+      if (flags.pastCelebration) ensureKeepsakeBackground();
+      if (flags.pastKeepsake) ensureStayAssets();
+    }
+
+    function ensureNextSceneAssets(scene: SceneName) {
+      if (scene === 'memory') ensureDestinationAssets();
+      else if (scene === 'destination') ensureJourneyAssets();
+      else if (scene === 'journey') ensureImaginedAssets();
+      else if (scene === 'imagined') ensureCeremonyAssets();
+      else if (scene === 'ceremony') ensureCelebrationAssets();
+      else if (scene === 'celebration') ensureKeepsakeAssets();
+      if (scene === 'travelInfo') ensureTravelInfoAssets();
+      if (scene === 'about') ensureAboutAssets();
+      else if (scene === 'fatima') ensureFatimaAssets();
+      else if (scene === 'andres') ensureAndresAssets();
+      else if (scene === 'faq') ensureFaqAssets();
+    }
+
+    function applySceneInstantly(scene: SceneName) {
+      // Captured before currentScene is overwritten at the bottom of this
+      // function -- needed below to tell "genuinely landing elsewhere in
+      // the main narrative" apart from "just passing through an isolated
+      // island and back" (see isIsolatedIslandTransition below).
+      const previousScene = currentScene;
+      root!.classList.add('is-instant');
+      // Pre-existing gap, fixed here as a small drive-by: every other
+      // entry point (goToScene's own animated branches, goToAboutTreeScene)
+      // already sets is-reduced-motion before touching any content, but
+      // this one never did -- meaning a reduced-motion visitor landing
+      // directly on a deep link (e.g. #estadia, #nosotros) previously saw
+      // blank content once is-instant was removed a frame later, since
+      // every scene's own CSS reduced-motion fallback (".is-reduced-
+      // motion.is-X-revealing [data-X-part] { opacity: 1 }") never got its
+      // trigger class. Purely additive: nothing changes for anyone who
+      // isn't both reduced-motion AND landing here via a direct/instant
+      // load.
+      root!.classList.toggle('is-reduced-motion', prefersReducedMotion());
+      root!.dataset.scene = scene;
+      setSceneAccessibility(scene);
+
+      const flags = applySceneRevealClasses(scene, previousScene);
+
+      if (!flags.isIsolatedIslandTransition) {
         if (destinationVideoEl) {
           destinationVideoEl.style.transition = 'none';
           // Instant loads never play transition3.mp4 (there is no
@@ -1842,17 +1942,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       // transitionN.mp4 at once on a direct/deep link is exactly the
       // "carga anticipada" this is meant to avoid. Background images are
       // cheap static files, safe to request for the whole past chain.
-      if (scene === 'memory' || pastDestination) ensureDestinationBackground();
-      if (pastDestination) ensureJourneyBackground();
-      if (pastJourney) ensureImaginedBackground();
-      if (pastImagined) ensureCeremonyBackground();
-      if (pastCeremony) ensureCelebrationBackground();
-      if (pastCelebration) ensureKeepsakeBackground();
-      // ensureStayAssets has no video at all (page 9 is a static photo,
-      // see its own comment) -- as cheap as the background-only helpers
-      // above, so (like before) it's still safe to call for the whole
-      // pastKeepsake range (scene is 'keepsake' or 'stay').
-      if (pastKeepsake) ensureStayAssets();
+      ensureBackgroundsUpTo(flags, scene);
 
       // Video preload is the one exception: only the single scene right
       // after the one just landed on gets its full assets (background +
@@ -1860,17 +1950,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       // next one" pattern the real forward click-through path already
       // uses (see runDestinationVideoAndReveal's own ensureJourneyAssets()
       // call, etc.) -- never the whole remaining chain at once.
-      if (scene === 'memory') ensureDestinationAssets();
-      else if (scene === 'destination') ensureJourneyAssets();
-      else if (scene === 'journey') ensureImaginedAssets();
-      else if (scene === 'imagined') ensureCeremonyAssets();
-      else if (scene === 'ceremony') ensureCelebrationAssets();
-      else if (scene === 'celebration') ensureKeepsakeAssets();
-      if (scene === 'travelInfo') ensureTravelInfoAssets();
-      if (scene === 'about') ensureAboutAssets();
-      else if (scene === 'fatima') ensureFatimaAssets();
-      else if (scene === 'andres') ensureAndresAssets();
-      else if (scene === 'faq') ensureFaqAssets();
+      ensureNextSceneAssets(scene);
       void root!.offsetWidth;
       requestAnimationFrame(() => {
         root?.classList.remove('is-instant');
@@ -1990,7 +2070,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     // above. Always ends by revealing MemoryScene, whether the video
     // played to completion, failed, or timed out: there is exactly one
     // exit path, never a frozen screen.
-    async function runVideoAndReveal() {
+    async function runVideoAndReveal(token: number) {
       releaseCoverInkReveal();
       // Cover (including the duck/elephant) recedes now and stays
       // receded for the rest of this run -- through the video, its hold,
@@ -2017,6 +2097,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
           // ignore -- see resetVideo
         }
         const ready = await waitForVideoReady(videoEl, VIDEO_READY_TIMEOUT_MS);
+        if (isStaleTransition(token)) return;
         if (ready) {
           root!.classList.add('is-video-visible');
           try {
@@ -2028,14 +2109,18 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
             // box crossfaded in over nothing.
             root!.classList.remove('is-video-visible');
           }
+          if (isStaleTransition(token)) return;
         }
       }
 
       if (played && videoEl) {
         await sleep(PHASE_B_CROSSFADE_MS);
+        if (isStaleTransition(token)) return;
         const finishedOk = await waitForVideoOutcome(videoEl, VIDEO_HARD_CAP_MS);
+        if (isStaleTransition(token)) return;
         if (finishedOk) {
           await sleep(POST_VIDEO_HOLD_MS);
+          if (isStaleTransition(token)) return;
         }
         // A mid-playback error/hard-timeout skips the hold (there's no
         // good last frame to rest on) and falls straight through to the
@@ -2048,6 +2133,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
         // this is a plain, brief hold on the bare paper before revealing
         // MemoryScene -- never a blank video flash.
         await sleep(PHASE_B_CROSSFADE_MS);
+        if (isStaleTransition(token)) return;
       }
 
       // Order-of-paint fix for the video -> MemoryScene handoff: the
@@ -2084,11 +2170,13 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       await new Promise<void>((resolve) => {
         requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
       });
+      if (isStaleTransition(token)) return;
 
       if (played) {
         root!.classList.remove('is-video-visible');
         if (videoStageEl) {
           await waitForTransitionEnd(videoStageEl, 'opacity', 500);
+          if (isStaleTransition(token)) return;
         }
       }
       resetVideo();
@@ -2104,6 +2192,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       // actual moment the CTA was told to fade in, not a hand-summed
       // constant.
       await startMemoryContentReveal(prepared);
+      if (isStaleTransition(token)) return;
 
       completionTimer = window.setTimeout(() => {
         completionTimer = null;
@@ -2125,7 +2214,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     // clock DestinationScene's own per-part CSS transition-delays (4.0s,
     // 4.4s, 5.1s, ...) are measured against, matching the spec's "desde el
     // inicio del video" reference point.
-    async function runDestinationVideoAndReveal() {
+    async function runDestinationVideoAndReveal(token: number) {
       ensureDestinationAssets();
       root!.classList.add('is-memory-receded', 'is-revealing-destination', 'is-destination-revealing');
 
@@ -2144,6 +2233,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
         destinationVideoEl.style.transition = '';
         destinationVideoEl.style.opacity = '';
         const ready = await waitForVideoReady(destinationVideoEl, VIDEO_READY_TIMEOUT_MS);
+        if (isStaleTransition(token)) return;
         if (ready) {
           try {
             await destinationVideoEl.play();
@@ -2155,6 +2245,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
           } catch {
             played = false;
           }
+          if (isStaleTransition(token)) return;
         }
       }
 
@@ -2164,6 +2255,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
         // own audio is done competing for attention, so the background
         // music can recover its normal volume now.
         unduckBackgroundMusic();
+        if (isStaleTransition(token)) return;
         if (finishedOk) {
           // Clean 'ended': deliberately do nothing here. A <video> that
           // reaches the end of its own playback naturally stays painted
@@ -2187,6 +2279,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
           void destinationVideoEl.offsetWidth;
           destinationVideoEl.style.opacity = '0';
           await waitForTransitionEnd(destinationVideoEl, 'opacity', DESTINATION_VIDEO_FADE_MS + 200);
+          if (isStaleTransition(token)) return;
         }
       } else {
         // Never played (readiness timeout/error, or reduced-motion-style
@@ -2201,6 +2294,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
           destinationVideoEl.style.opacity = '0';
         }
         await sleep(DESTINATION_FALLBACK_HOLD_MS);
+        if (isStaleTransition(token)) return;
       }
 
       completionTimer = window.setTimeout(() => {
@@ -2218,7 +2312,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     // memory->destination pair, one scene deeper. is-journey-revealing is
     // added in this same moment: the clock JourneyScene's own per-part
     // CSS transition-delays (1.4s, 2.7s, ...) are measured against.
-    async function runJourneyVideoAndReveal() {
+    async function runJourneyVideoAndReveal(token: number) {
       ensureJourneyAssets();
 
       // JourneyScene is reached -- give transition5.mp4 a head start now,
@@ -2236,6 +2330,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
         journeyVideoEl.style.transition = '';
         journeyVideoEl.style.opacity = '';
         ready = await waitForVideoReady(journeyVideoEl, VIDEO_READY_TIMEOUT_MS);
+        if (isStaleTransition(token)) return;
       }
 
       // Only now -- once the journey video is confirmed to actually have
@@ -2262,6 +2357,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
         } catch {
           played = false;
         }
+        if (isStaleTransition(token)) return;
       }
 
       if (played && journeyVideoEl) {
@@ -2270,6 +2366,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
         // own audio is done competing for attention, so the background
         // music can recover its normal volume now.
         unduckBackgroundMusic();
+        if (isStaleTransition(token)) return;
         if (finishedOk) {
           // Clean 'ended': deliberately do nothing here, same principle
           // as the destination stage's own freeze -- a <video> that
@@ -2292,6 +2389,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
           void journeyVideoEl.offsetWidth;
           journeyVideoEl.style.opacity = '0';
           await waitForTransitionEnd(journeyVideoEl, 'opacity', DESTINATION_VIDEO_FADE_MS + 200);
+          if (isStaleTransition(token)) return;
         }
       } else {
         // Never played (readiness timeout/error) -- hide the <video>
@@ -2304,6 +2402,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
           journeyVideoEl.style.opacity = '0';
         }
         await sleep(JOURNEY_FALLBACK_HOLD_MS);
+        if (isStaleTransition(token)) return;
       }
 
       completionTimer = window.setTimeout(() => {
@@ -2325,7 +2424,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     // below), not once it ends -- the video itself keeps playing,
     // untouched, at normal speed all the way to its natural end and
     // freeze, exactly as before.
-    async function runImaginedVideoAndReveal() {
+    async function runImaginedVideoAndReveal(token: number) {
       ensureImaginedAssets();
 
       // ImaginedDaysScene is reached -- give transition6.mp4 a head start
@@ -2343,6 +2442,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
         imaginedVideoEl.style.transition = '';
         imaginedVideoEl.style.opacity = '';
         ready = await waitForVideoReady(imaginedVideoEl, VIDEO_READY_TIMEOUT_MS);
+        if (isStaleTransition(token)) return;
       }
 
       // Same paint-before-reveal principle as the journey stage's own
@@ -2363,13 +2463,16 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
         } catch {
           played = false;
         }
+        if (isStaleTransition(token)) return;
       }
 
       // Guards against adding is-imagined-revealing twice (the 1.5s timer
-      // and the post-outcome fallback below can both fire).
+      // and the post-outcome fallback below can both fire). Also bails on
+      // a stale token -- see the 1.5s fire-and-forget call below, which
+      // can otherwise fire well after Back has already moved on.
       let textRevealed = false;
       const revealImaginedText = () => {
-        if (textRevealed) return;
+        if (textRevealed || isStaleTransition(token)) return;
         textRevealed = true;
         root!.classList.add('is-imagined-revealing');
       };
@@ -2389,6 +2492,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
         // -- this is a harmless no-op, unduckBackgroundMusic is
         // idempotent.)
         unduckBackgroundMusic();
+        if (isStaleTransition(token)) return;
         if (finishedOk) {
           // Clean 'ended': same freeze already used for destination/
           // journey -- do nothing to the video, it stays painted on its
@@ -2408,6 +2512,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
           void imaginedVideoEl.offsetWidth;
           imaginedVideoEl.style.opacity = '0';
           await waitForTransitionEnd(imaginedVideoEl, 'opacity', DESTINATION_VIDEO_FADE_MS + 200);
+          if (isStaleTransition(token)) return;
           revealImaginedText();
         }
       } else {
@@ -2423,6 +2528,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
           imaginedVideoEl.style.opacity = '0';
         }
         await sleep(IMAGINED_TEXT_DELAY_MS);
+        if (isStaleTransition(token)) return;
         revealImaginedText();
       }
 
@@ -2446,7 +2552,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     // than waiting for transition6.mp4 to end first. Only *when* each
     // part appears (CeremonyScene's own per-part delays) is unchanged;
     // only this starting point moved earlier.
-    async function runCeremonyVideoAndReveal() {
+    async function runCeremonyVideoAndReveal(token: number) {
       ensureCeremonyAssets();
 
       // CeremonyScene is reached -- give transition7.mp4 a head start
@@ -2464,6 +2570,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
         ceremonyVideoEl.style.transition = '';
         ceremonyVideoEl.style.opacity = '';
         ready = await waitForVideoReady(ceremonyVideoEl, VIDEO_READY_TIMEOUT_MS);
+        if (isStaleTransition(token)) return;
       }
 
       // Same paint-before-reveal principle as every previous stage's own
@@ -2486,6 +2593,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
         } catch {
           played = false;
         }
+        if (isStaleTransition(token)) return;
       }
 
       if (played && ceremonyVideoEl) {
@@ -2494,6 +2602,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
         // own audio is done competing for attention, so the background
         // music can recover its normal volume now.
         unduckBackgroundMusic();
+        if (isStaleTransition(token)) return;
         if (finishedOk) {
           // Clean 'ended': same freeze already used for destination/
           // journey/imagined -- do nothing to the video, it stays painted
@@ -2508,6 +2617,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
           void ceremonyVideoEl.offsetWidth;
           ceremonyVideoEl.style.opacity = '0';
           await waitForTransitionEnd(ceremonyVideoEl, 'opacity', DESTINATION_VIDEO_FADE_MS + 200);
+          if (isStaleTransition(token)) return;
         }
       } else {
         // Never played (readiness timeout/error) -- hide the <video>
@@ -2521,7 +2631,14 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
           ceremonyVideoEl.style.opacity = '0';
         }
         await sleep(CEREMONY_FALLBACK_HOLD_MS);
+        if (isStaleTransition(token)) return;
       }
+
+      // The whole forward sequence for this scene (video ended/errored/
+      // hard-capped, or the no-video fallback hold elapsed) is genuinely
+      // done now -- only now does the "Celebremos" CTA actually fade in
+      // (see .ceremony__cta's own is-ceremony-cta-ready-gated rule).
+      root!.classList.add('is-ceremony-cta-ready');
 
       completionTimer = window.setTimeout(() => {
         completionTimer = null;
@@ -2539,7 +2656,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     // revealing is added at that same moment, together with the
     // crossfade -- text and video start together, same convention as
     // destination/journey/ceremony.
-    async function runCelebrationVideoAndReveal() {
+    async function runCelebrationVideoAndReveal(token: number) {
       ensureCelebrationAssets();
 
       // CelebrationScene is reached -- give transition8.mp4 a head start
@@ -2557,6 +2674,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
         celebrationVideoEl.style.transition = '';
         celebrationVideoEl.style.opacity = '';
         ready = await waitForVideoReady(celebrationVideoEl, VIDEO_READY_TIMEOUT_MS);
+        if (isStaleTransition(token)) return;
       }
 
       // Same paint-before-reveal principle as every previous stage's own
@@ -2579,6 +2697,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
         } catch {
           played = false;
         }
+        if (isStaleTransition(token)) return;
       }
 
       if (played && celebrationVideoEl) {
@@ -2587,6 +2706,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
         // own audio is done competing for attention, so the background
         // music can recover its normal volume now.
         unduckBackgroundMusic();
+        if (isStaleTransition(token)) return;
         if (finishedOk) {
           // Clean 'ended': same freeze already used for destination/
           // journey/imagined/ceremony -- do nothing to the video, it
@@ -2602,6 +2722,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
           void celebrationVideoEl.offsetWidth;
           celebrationVideoEl.style.opacity = '0';
           await waitForTransitionEnd(celebrationVideoEl, 'opacity', DESTINATION_VIDEO_FADE_MS + 200);
+          if (isStaleTransition(token)) return;
         }
       } else {
         // Never played (readiness timeout/error) -- hide the <video>
@@ -2615,7 +2736,15 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
           celebrationVideoEl.style.opacity = '0';
         }
         await sleep(CELEBRATION_FALLBACK_HOLD_MS);
+        if (isStaleTransition(token)) return;
       }
+
+      // The whole forward sequence for this scene (video ended/errored/
+      // hard-capped, or the no-video fallback hold elapsed) is genuinely
+      // done now -- only now does the "Seguir descubriendo" CTA actually
+      // fade in (see [data-celebration-part='cta']'s own
+      // is-celebration-cta-ready-gated rule).
+      root!.classList.add('is-celebration-cta-ready');
 
       completionTimer = window.setTimeout(() => {
         completionTimer = null;
@@ -2633,7 +2762,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     // is added at that same moment, together with the crossfade -- text
     // and video start together, same convention as destination/journey/
     // ceremony/celebration.
-    async function runKeepsakeVideoAndReveal() {
+    async function runKeepsakeVideoAndReveal(token: number) {
       ensureKeepsakeAssets();
 
       // KeepsakeScene is reached -- give page 9's own static image a head
@@ -2651,6 +2780,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
         keepsakeVideoEl.style.transition = '';
         keepsakeVideoEl.style.opacity = '';
         ready = await waitForVideoReady(keepsakeVideoEl, VIDEO_READY_TIMEOUT_MS);
+        if (isStaleTransition(token)) return;
       }
 
       // Same paint-before-reveal principle as every previous stage's own
@@ -2673,6 +2803,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
         } catch {
           played = false;
         }
+        if (isStaleTransition(token)) return;
       }
 
       if (played && keepsakeVideoEl) {
@@ -2681,6 +2812,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
         // own audio is done competing for attention, so the background
         // music can recover its normal volume now.
         unduckBackgroundMusic();
+        if (isStaleTransition(token)) return;
         if (finishedOk) {
           // Clean 'ended': same freeze already used for destination/
           // journey/imagined/ceremony/celebration -- do nothing to the
@@ -2696,6 +2828,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
           void keepsakeVideoEl.offsetWidth;
           keepsakeVideoEl.style.opacity = '0';
           await waitForTransitionEnd(keepsakeVideoEl, 'opacity', DESTINATION_VIDEO_FADE_MS + 200);
+          if (isStaleTransition(token)) return;
         }
       } else {
         // Never played (readiness timeout/error) -- hide the <video>
@@ -2709,6 +2842,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
           keepsakeVideoEl.style.opacity = '0';
         }
         await sleep(KEEPSAKE_FALLBACK_HOLD_MS);
+        if (isStaleTransition(token)) return;
       }
 
       completionTimer = window.setTimeout(() => {
@@ -2749,6 +2883,14 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       return ABOUT_TREE_SCENES.includes(s);
     }
 
+    // Shared by applySceneRevealClasses/applySceneInstantly and goBack --
+    // see applySceneRevealClasses's own comment for why this matters
+    // (entering/leaving travelInfo or the "Un poco de nosotros" sub-tree
+    // must never touch main-narrative video state).
+    function isIsolatedIsland(s: SceneName): boolean {
+      return s === 'travelInfo' || isAboutTreeScene(s);
+    }
+
     function goToAboutTreeScene(scene: SceneName) {
       if (scene === 'about') ensureAboutAssets();
       else if (scene === 'fatima') ensureFatimaAssets();
@@ -2768,6 +2910,168 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
         root!.classList.remove('is-transitioning');
         focusSceneHeading(scene);
       }, duration);
+    }
+
+    // Every scene from 'destination' through 'keepsake' has its own entry
+    // video (the one that plays *during* the transition into it -- see
+    // each video element's own markup comment); memory/stay/cover/the
+    // about-tree have none. Centralized here so goBack (below) can freeze/
+    // reset "scene X's own video" generically instead of a hand-written
+    // switch at every call site.
+    function videoElForScene(scene: SceneName): HTMLVideoElement | null {
+      switch (scene) {
+        case 'destination':
+          return destinationVideoEl;
+        case 'journey':
+          return journeyVideoEl;
+        case 'imagined':
+          return imaginedVideoEl;
+        case 'ceremony':
+          return ceremonyVideoEl;
+        case 'celebration':
+          return celebrationVideoEl;
+        case 'keepsake':
+          return keepsakeVideoEl;
+        default:
+          return null;
+      }
+    }
+
+    // Restores `scene`'s own entry video to its final, settled state --
+    // paused on its own last frame, fully visible -- the exact state Back
+    // must land on instantly (spec point 9). A video that already reached
+    // 'ended' naturally during its original forward run is already
+    // sitting exactly here untouched (see each runXVideoAndReveal's own
+    // "do nothing on finishedOk" comment) -- this only has real work to do
+    // if that run was interrupted (by Back itself, mid-playback) or had
+    // already failed over to the hidden/error fallback, in which case
+    // there is no better frame available than whichever one it stopped
+    // on; seeking to `duration` is still the closest "final frame" state
+    // available. Never touches a video that was never assigned a src
+    // (reduced motion, or a scene never actually reached) -- nothing to
+    // freeze there.
+    function freezeSceneVideoAtEnd(scene: SceneName) {
+      const video = videoElForScene(scene);
+      if (!video || !video.src) return;
+      video.pause();
+      if (Number.isFinite(video.duration) && video.duration > 0) {
+        try {
+          video.currentTime = video.duration;
+        } catch {
+          // Some browsers can throw seeking before metadata has fully
+          // settled -- harmless, the video is already paused and as close
+          // to its own end as it can get.
+        }
+      }
+      video.volume = 1;
+      // Only actually make it visible if it has a real decoded frame to
+      // show (readyState >= 2, HAVE_CURRENT_DATA) -- if its original
+      // forward run already failed over (error/hard-cap, no good frame to
+      // freeze on -- see each runXVideoAndReveal's own error branch), it
+      // is left exactly as that branch's own fade-out left it (opacity 0)
+      // rather than popping a black/broken box back into view.
+      if (video.readyState >= 2) {
+        video.style.transition = 'none';
+        video.style.opacity = '1';
+      }
+    }
+
+    // Resets `scene`'s own entry video back to its very start, paused and
+    // hidden -- for every scene the visitor is now leaving *ahead* of
+    // wherever Back just landed, so that advancing into it again later
+    // plays its own transition video again from 0, exactly like a first
+    // visit (spec point 9: "la siguiente escena sí debe ejecutar su
+    // animación normalmente desde 0"). Reuses the same resetXVideo
+    // helpers goToScene's own hand-written back branches already call.
+    function resetSceneVideoToStart(scene: SceneName) {
+      const video = videoElForScene(scene);
+      if (!video) return;
+      switch (scene) {
+        case 'destination':
+          resetDestinationVideo();
+          break;
+        case 'journey':
+          resetJourneyVideo();
+          break;
+        case 'imagined':
+          resetImaginedVideo();
+          break;
+        case 'ceremony':
+          resetCeremonyVideo();
+          break;
+        case 'celebration':
+          resetCelebrationVideo();
+          break;
+        case 'keepsake':
+          resetKeepsakeVideo();
+          break;
+        default:
+          break;
+      }
+      video.style.transition = 'none';
+      video.style.opacity = '0';
+    }
+
+    // Every Back control in the experience (every [data-action^="back-to-"]
+    // trigger) routes through this single function instead of goToScene --
+    // see the click handler below. Unlike goToScene, this is never blocked
+    // by isTransitioning: it works from the very first instant of any
+    // transition/animation (spec point 9/3), and it never replays an
+    // entrance animation or waits on the original timers -- it snaps
+    // straight to the target scene's fully-settled resting state:
+    //
+    //  - every is-*-revealing/-receded class recomputed from scratch for
+    //    the target (applySceneRevealClasses -- shared with
+    //    applySceneInstantly, see its own comment);
+    //  - the target's own entry video (if it has one) left/frozen on its
+    //    last frame, visible (freezeSceneVideoAtEnd) -- never reset to 0,
+    //    never hidden;
+    //  - every scene *ahead* of the target (the one(s) being left behind)
+    //    has its own entry video reset back to 0/hidden
+    //    (resetSceneVideoToStart), so a later forward replay starts fresh;
+    //  - everything at or before the target is left completely untouched
+    //    -- already correctly frozen from whenever it was first reached.
+    //
+    // Bumping transitionToken first is what actually cancels whatever
+    // forward run was in flight: every run*VideoAndReveal function
+    // re-checks its own captured token after each await and stops
+    // mutating shared state the moment it no longer matches, instead of
+    // fighting the instant state this function is about to apply.
+    function goBack(scene: SceneName) {
+      const previousScene = currentScene;
+      transitionToken += 1;
+      clearCompletionTimer();
+      isTransitioning = false;
+      root!.classList.remove('is-transitioning');
+      root!.classList.add('is-instant');
+      root!.classList.toggle('is-reduced-motion', prefersReducedMotion());
+      root!.dataset.scene = scene;
+      setSceneAccessibility(scene);
+
+      const flags = applySceneRevealClasses(scene, previousScene);
+
+      if (!flags.isIsolatedIslandTransition) {
+        const targetIndex = sceneIndex(scene);
+        if (targetIndex !== -1) {
+          for (const s of SCENE_ORDER) {
+            if (sceneIndex(s) > targetIndex) resetSceneVideoToStart(s);
+          }
+        }
+        freezeSceneVideoAtEnd(scene);
+      }
+
+      ensureBackgroundsUpTo(flags, scene);
+      ensureNextSceneAssets(scene);
+
+      void root!.offsetWidth;
+      requestAnimationFrame(() => {
+        root?.classList.remove('is-instant');
+      });
+      currentScene = scene;
+
+      const hash = SCENE_HASH[scene];
+      if (window.location.hash !== hash) history.pushState({ scene }, '', hash);
+      focusSceneHeading(scene);
     }
 
     function goToScene(scene: SceneName, options: { pushHistory?: boolean } = {}) {
@@ -2804,6 +3108,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       // goToAboutTreeScene's own comment).
       if (isAboutTreeScene(scene) && isAboutTreeScene(currentScene)) {
         isTransitioning = true;
+        transitionToken += 1;
         clearCompletionTimer();
         root!.classList.add('is-transitioning');
         root!.classList.toggle('is-reduced-motion', prefersReducedMotion());
@@ -2840,6 +3145,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       }
 
       isTransitioning = true;
+      transitionToken += 1;
       clearCompletionTimer();
       root!.classList.add('is-transitioning');
       root!.dataset.transitionDirection = toIndex > fromIndex ? 'forward' : 'back';
@@ -2969,7 +3275,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
           return;
         }
 
-        runJourneyVideoAndReveal();
+        runJourneyVideoAndReveal(transitionToken);
         return;
       }
 
@@ -3154,7 +3460,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
           return;
         }
 
-        runKeepsakeVideoAndReveal();
+        runKeepsakeVideoAndReveal(transitionToken);
         return;
       }
 
@@ -3188,7 +3494,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
           return;
         }
 
-        runCelebrationVideoAndReveal();
+        runCelebrationVideoAndReveal(transitionToken);
         return;
       }
 
@@ -3222,7 +3528,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
           return;
         }
 
-        runCeremonyVideoAndReveal();
+        runCeremonyVideoAndReveal(transitionToken);
         return;
       }
 
@@ -3257,7 +3563,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
           return;
         }
 
-        runImaginedVideoAndReveal();
+        runImaginedVideoAndReveal(transitionToken);
         return;
       }
 
@@ -3289,7 +3595,7 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
           return;
         }
 
-        runDestinationVideoAndReveal();
+        runDestinationVideoAndReveal(transitionToken);
         return;
       }
 
@@ -3311,9 +3617,10 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
         return;
       }
 
+      const scheduledToken = transitionToken;
       window.setTimeout(() => {
-        if (!isTransitioning) return;
-        runVideoAndReveal();
+        if (!isTransitioning || isStaleTransition(scheduledToken)) return;
+        runVideoAndReveal(scheduledToken);
       }, PHASE_A_MS);
     }
 
@@ -3349,53 +3656,60 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
 
       if (forwardTrigger && root!.contains(forwardTrigger)) {
         event.preventDefault();
-        startBackgroundMusic();
+        void startBackgroundMusic();
         goToScene('memory');
       } else if (backTrigger && root!.contains(backTrigger)) {
+        // Every back-to-* trigger below routes through goBack, never
+        // goToScene -- see goBack's own comment: it works from the very
+        // first instant of any transition/animation (never blocked by
+        // isTransitioning), cancels whatever forward run is in flight, and
+        // snaps straight to the target scene's fully-settled resting
+        // state -- video frozen on its own last frame, visible -- instead
+        // of replaying/waiting on its entrance animation.
         event.preventDefault();
-        goToScene('cover');
+        goBack('cover');
       } else if (destinationTrigger && root!.contains(destinationTrigger)) {
         event.preventDefault();
         goToScene('destination');
       } else if (backToMemoryTrigger && root!.contains(backToMemoryTrigger)) {
         event.preventDefault();
-        goToScene('memory');
+        goBack('memory');
       } else if (journeyTrigger && root!.contains(journeyTrigger)) {
         event.preventDefault();
         goToScene('journey');
       } else if (backToDestinationTrigger && root!.contains(backToDestinationTrigger)) {
         event.preventDefault();
-        goToScene('destination');
+        goBack('destination');
       } else if (imaginedTrigger && root!.contains(imaginedTrigger)) {
         event.preventDefault();
         goToScene('imagined');
       } else if (backToJourneyTrigger && root!.contains(backToJourneyTrigger)) {
         event.preventDefault();
-        goToScene('journey');
+        goBack('journey');
       } else if (ceremonyTrigger && root!.contains(ceremonyTrigger)) {
         event.preventDefault();
         goToScene('ceremony');
       } else if (backToImaginedTrigger && root!.contains(backToImaginedTrigger)) {
         event.preventDefault();
-        goToScene('imagined');
+        goBack('imagined');
       } else if (celebrationTrigger && root!.contains(celebrationTrigger)) {
         event.preventDefault();
         goToScene('celebration');
       } else if (backToCeremonyTrigger && root!.contains(backToCeremonyTrigger)) {
         event.preventDefault();
-        goToScene('ceremony');
+        goBack('ceremony');
       } else if (keepsakeTrigger && root!.contains(keepsakeTrigger)) {
         event.preventDefault();
         goToScene('keepsake');
       } else if (backToCelebrationTrigger && root!.contains(backToCelebrationTrigger)) {
         event.preventDefault();
-        goToScene('celebration');
+        goBack('celebration');
       } else if (stayTrigger && root!.contains(stayTrigger)) {
         event.preventDefault();
         goToScene('stay');
       } else if (backToKeepsakeTrigger && root!.contains(backToKeepsakeTrigger)) {
         event.preventDefault();
-        goToScene('keepsake');
+        goBack('keepsake');
       } else if (travelInfoTrigger && root!.contains(travelInfoTrigger)) {
         // Page 3's own shortcut -- always the "not adjacent" instant-cut
         // path (see goToScene's own adjacency check), never the animated
@@ -3421,10 +3735,10 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
         goToScene('andres');
       } else if (backToAboutTrigger && root!.contains(backToAboutTrigger)) {
         event.preventDefault();
-        goToScene('about');
+        goBack('about');
       } else if (backToWhoWeAreTrigger && root!.contains(backToWhoWeAreTrigger)) {
         event.preventDefault();
-        goToScene('whoWeAre');
+        goBack('whoWeAre');
       } else if (journeyAboutTrigger && root!.contains(journeyAboutTrigger)) {
         event.preventDefault();
         goToScene('about');
@@ -3454,14 +3768,19 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       goToScene(sceneFromHash(window.location.hash), { pushHistory: false });
     });
 
-    // Initial state from the URL: a direct link to #recuerdo or #destino
-    // shows that scene immediately (no replayed animation -- the spec only
-    // asks for the transition on user action), otherwise default to
-    // #portada and make that canonical in the URL.
-    const initialScene = sceneFromHash(window.location.hash);
-    applySceneInstantly(initialScene);
-    if (!Object.values(SCENE_HASH).includes(window.location.hash)) {
-      history.replaceState({ scene: initialScene }, '', '#portada');
+    // Every fresh document load (hard reload, or a direct/shared link
+    // straight into an internal hash like #fatima or #informacion-viaje)
+    // always lands on this guest's own portada, never attempts to
+    // reconstruct whatever internal scene the hash pointed at -- a
+    // mid-sequence video/frozen-frame state can't be rebuilt from a bare
+    // hash, so this deliberately never tries. The guest's own slug/guest
+    // data is untouched (it comes from the page route, not the hash), so
+    // the experience simply restarts cleanly from Cover with the same
+    // guest -- see the popstate handler above for in-session back/forward,
+    // which still navigates the SPA normally and is untouched by this.
+    applySceneInstantly('cover');
+    if (window.location.hash !== '#portada') {
+      history.replaceState({ scene: 'cover' }, '', '#portada');
     }
 
     // Try to start background music right away -- browsers may allow
@@ -3469,19 +3788,49 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     // decide, not this code), in which case it just plays. If it's
     // blocked, startBackgroundMusic's own .play() rejection is already
     // silent (no error/prompt), and musicEl is simply left paused here --
-    // retried below from the cover's very first interaction, which
-    // (being inside a real user-gesture handler) browsers always allow,
-    // even for audible audio. Deliberately not gated on "Comenzar el
-    // viaje" specifically anymore, so it never depends on that one CTA.
-    startBackgroundMusic();
-    if (coverPanel) {
-      const retryMusicOnFirstCoverInteraction = () => {
-        startBackgroundMusic();
-        coverPanel.removeEventListener('pointerdown', retryMusicOnFirstCoverInteraction);
-        coverPanel.removeEventListener('keydown', retryMusicOnFirstCoverInteraction);
+    // retried below from the visitor's very first interaction with the
+    // page, which (being inside a real user-gesture handler) browsers
+    // always allow, even for audible audio. Deliberately not gated on
+    // "Comenzar el viaje" specifically anymore, so it never depends on
+    // that one CTA.
+    void startBackgroundMusic();
+    {
+      // Listens on `document` -- not scoped to the cover panel's own DOM
+      // bounds -- so literally any click/tap anywhere on the page counts,
+      // not just inside Cover's own canvas (its bounding box can be
+      // smaller than the full viewport once the fixed 390x844 canvas is
+      // scaled/letterboxed on wider screens, and the CTA click itself
+      // already reaches this same handler on the way through anyway,
+      // since it bubbles). pointerdown/touchstart/click cover mouse,
+      // touch and (redundantly, on purpose -- harmless overlap)
+      // synthesized click alike; keydown is kept alongside them for
+      // keyboard-only visitors, who trigger neither.
+      //
+      // Listeners are only removed once THIS attempt actually reports
+      // success, never just because some event fired -- WebKit (Safari,
+      // iOS included) does not reliably unlock media playback from
+      // 'touchstart'/'pointerdown' (only from 'touchend'/'click'/
+      // 'keydown' are guaranteed), and on a touch device 'touchstart'
+      // fires first. Removing every listener the instant that one fired
+      // -- regardless of whether .play() actually succeeded -- used to
+      // burn 'click'/'touchend'-equivalent's own, more reliable chance on
+      // a gesture type that was never going to work on that engine,
+      // leaving music silently stuck off until the visitor happened to
+      // hit a CTA (whose own click handler calls startBackgroundMusic
+      // too, so that path still worked, masking this).
+      const retryMusicOnFirstInteraction = () => {
+        void startBackgroundMusic().then((started) => {
+          if (!started) return;
+          document.removeEventListener('pointerdown', retryMusicOnFirstInteraction);
+          document.removeEventListener('touchstart', retryMusicOnFirstInteraction);
+          document.removeEventListener('click', retryMusicOnFirstInteraction);
+          document.removeEventListener('keydown', retryMusicOnFirstInteraction);
+        });
       };
-      coverPanel.addEventListener('pointerdown', retryMusicOnFirstCoverInteraction, { passive: true });
-      coverPanel.addEventListener('keydown', retryMusicOnFirstCoverInteraction);
+      document.addEventListener('pointerdown', retryMusicOnFirstInteraction, { passive: true });
+      document.addEventListener('touchstart', retryMusicOnFirstInteraction, { passive: true });
+      document.addEventListener('click', retryMusicOnFirstInteraction);
+      document.addEventListener('keydown', retryMusicOnFirstInteraction);
     }
 
     // Reveal the whole, already-settled experience as one clean fade-in
@@ -3568,10 +3917,16 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     visibility: hidden;
   }
 
-  .experience.is-transitioning :global(.cover__cta),
-  .experience.is-transitioning :global([data-action='back-to-cover']) {
+  .experience.is-transitioning :global(.cover__cta) {
     pointer-events: none;
   }
+
+  /*
+    Back is deliberately NOT included in the rule above -- it must stay
+    clickable from the very first instant of any transition/animation (see
+    goBack in the script above, and spec point 3/9), never gated behind
+    is-transitioning like the forward CTA is.
+  */
 
   /*
     Cover recedes while .is-cover-receded is present, the video shows
@@ -3864,10 +4219,12 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     visibility: hidden;
   }
 
-  .experience.is-transitioning :global(.memory__cta),
-  .experience.is-transitioning :global([data-action='back-to-memory']) {
+  .experience.is-transitioning :global(.memory__cta) {
     pointer-events: none;
   }
+
+  /* Back stays clickable throughout -- see the cover__cta rule's own
+     comment above. */
 
   @media (prefers-reduced-motion: no-preference) {
     .experience:not(.is-instant) .experience__scene--destination {
@@ -4016,10 +4373,12 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     visibility: hidden;
   }
 
-  .experience.is-transitioning :global(.destination__cta--primary),
-  .experience.is-transitioning :global([data-action='back-to-destination']) {
+  .experience.is-transitioning :global(.destination__cta--primary) {
     pointer-events: none;
   }
+
+  /* Back stays clickable throughout -- see the cover__cta rule's own
+     comment above. */
 
   @media (prefers-reduced-motion: no-preference) {
     .experience:not(.is-instant) .experience__scene--journey {
@@ -4193,10 +4552,12 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     visibility: hidden;
   }
 
-  .experience.is-transitioning :global(.journey__cta--primary),
-  .experience.is-transitioning :global([data-action='back-to-journey']) {
+  .experience.is-transitioning :global(.journey__cta--primary) {
     pointer-events: none;
   }
+
+  /* Back stays clickable throughout -- see the cover__cta rule's own
+     comment above. */
 
   @media (prefers-reduced-motion: no-preference) {
     .experience:not(.is-instant) .experience__scene--imagined {
@@ -4351,23 +4712,22 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     visibility: hidden;
   }
 
-  .experience.is-transitioning :global(.imagined__cta),
-  .experience.is-transitioning :global([data-action='back-to-imagined']) {
+  .experience.is-transitioning :global(.imagined__cta) {
     pointer-events: none;
   }
 
-  .experience.is-transitioning :global(.ceremony__cta),
-  .experience.is-transitioning :global([data-action='back-to-ceremony']) {
+  .experience.is-transitioning :global(.ceremony__cta) {
     pointer-events: none;
   }
 
-  .experience.is-transitioning :global(.celebration__cta),
-  .experience.is-transitioning :global([data-action='back-to-celebration']) {
+  /* Back (imagined/ceremony/celebration/keepsake) stays clickable
+     throughout -- see the cover__cta rule's own comment above. */
+
+  .experience.is-transitioning :global(.celebration__cta) {
     pointer-events: none;
   }
 
-  .experience.is-transitioning :global(.keepsake__cta),
-  .experience.is-transitioning :global([data-action='back-to-keepsake']) {
+  .experience.is-transitioning :global(.keepsake__cta) {
     pointer-events: none;
   }
 
@@ -4930,6 +5290,25 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
     background-size: cover;
     background-position: 50% 50%;
     background-repeat: no-repeat;
+  }
+
+  /*
+    Andrés's own photo only: at this exact 390x844 canvas, a plain
+    background-size:cover leaves this specific photo with essentially
+    zero vertical crop slack (its own aspect ratio happens to match the
+    canvas's almost exactly), so the whole image -- top to bottom -- is
+    always shown with no room to reposition. That left a real seam in the
+    source photo itself (the tonal edge between the bright cloud bank and
+    the hazier sky/sea beneath it) sitting fixed right behind the name and
+    bleeding into the first two lines of body text, with no CSS way to
+    shift it out of frame. A small zoom creates the missing vertical
+    slack, and repositioning to the photo's own top crops the seam out
+    entirely while keeping Andrés's full figure and the wave foam in
+    frame -- confirmed visually, no other page/photo touched.
+  */
+  [data-scene-panel='andres'] .experience__stay-image {
+    background-size: 135%;
+    background-position: 50% 0%;
   }
 
   /*
