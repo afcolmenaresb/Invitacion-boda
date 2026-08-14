@@ -16,6 +16,13 @@
 
 html {
   scroll-behavior: smooth;
+  /* Keeps text at its authored size across orientation changes on mobile
+     Safari/Chrome instead of them silently bumping it up -- unrelated to
+     (and never a replacement for) pinch-zoom, which stays fully enabled
+     (see BaseLayout.astro's own viewport meta -- no user-scalable=no or
+     maximum-scale=1 here, on purpose). */
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -34,4 +41,17 @@ body {
 img {
   display: block;
   max-width: 100%;
+}
+
+/*
+  Every interactive control in this project is a plain <button> or <a>
+  (see the components themselves) -- this alone removes the ~300ms
+  double-tap-to-zoom delay/behavior on all of them without touching
+  pinch-zoom anywhere else on the page (manipulation still allows panning
+  and pinch-zoom generally; it only tells the browser this *specific*
+  element doesn't need double-tap handling).
+*/
+button,
+a {
+  touch-action: manipulation;
 }

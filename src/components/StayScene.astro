@@ -1,6 +1,7 @@
 ---
 import {
   sceneStay,
+  getStayTitle,
   getStayRsvpQuestion,
   getStayRsvpOptions,
   getStayRsvpConfirmations,
@@ -39,6 +40,7 @@ const {
   backVisibleLabel = sceneStay.backVisibleLabel,
 } = Astro.props;
 
+const title = getStayTitle(addressing);
 const rsvpQuestion = getStayRsvpQuestion(addressing);
 const rsvpOptions = getStayRsvpOptions(addressing);
 const rsvpConfirmations = getStayRsvpConfirmations(addressing);
@@ -61,7 +63,7 @@ const whatsAppUrl = getGoTravelWhatsAppUrl(guestName || 'invitado');
     </p>
     <h2 class="stay__title" data-scene-heading data-stay-part="title" tabindex="-1">
       <span class="stay__halo stay__halo--wide" aria-hidden="true"></span>
-      {sceneStay.title}
+      {title}
     </h2>
     <div class="stay__body" data-stay-part="body">
       <span class="stay__halo stay__halo--wide" aria-hidden="true"></span>
@@ -509,6 +511,16 @@ const whatsAppUrl = getGoTravelWhatsAppUrl(guestName || 'invitado');
     transform: translateY(10px);
   }
 
+  /* CTA and RSVP specifically: not interactive/focusable until actually
+     shown -- opacity:0 alone doesn't stop pointer-events or Tab from
+     reaching them (rsvp's own visibility:hidden also covers its three
+     nested option buttons, since none of them override it back). */
+  [data-stay-part='cta'],
+  [data-stay-part='rsvp'] {
+    visibility: hidden;
+    pointer-events: none;
+  }
+
   @media (prefers-reduced-motion: no-preference) {
     :global(.experience.is-stay-revealing) [data-stay-part] {
       transition: opacity 900ms ease, transform 900ms ease;
@@ -541,12 +553,18 @@ const whatsAppUrl = getGoTravelWhatsAppUrl(guestName || 'invitado');
     :global(.experience.is-stay-revealing) [data-stay-part='cta'] {
       opacity: 1;
       transform: translateY(0);
+      visibility: visible;
+      pointer-events: auto;
+      transition: opacity 900ms ease, transform 900ms ease, visibility 0s linear;
       transition-delay: 1600ms;
     }
 
     :global(.experience.is-stay-revealing) [data-stay-part='rsvp'] {
       opacity: 1;
       transform: translateY(0);
+      visibility: visible;
+      pointer-events: auto;
+      transition: opacity 900ms ease, transform 900ms ease, visibility 0s linear;
       transition-delay: 1900ms;
     }
   }
@@ -570,6 +588,14 @@ const whatsAppUrl = getGoTravelWhatsAppUrl(guestName || 'invitado');
     transform: translateY(0);
   }
 
+  :global(.experience.is-reduced-motion.is-stay-revealing) [data-stay-part='cta'],
+  :global(.experience.is-reduced-motion.is-stay-revealing) [data-stay-part='rsvp'],
+  :global(.experience[data-scene='stay'].is-instant) [data-stay-part='cta'],
+  :global(.experience[data-scene='stay'].is-instant) [data-stay-part='rsvp'] {
+    visibility: visible;
+    pointer-events: auto;
+  }
+
   /*
     Page-3 shortcut instance (see backAction/backLabel/backVisibleLabel
     above): always an instant cut, never the staged reveal above -- its
@@ -580,5 +606,11 @@ const whatsAppUrl = getGoTravelWhatsAppUrl(guestName || 'invitado');
     opacity: 1;
     transform: translateY(0);
     transition: none !important;
+  }
+
+  :global(.experience.is-travel-info-revealing) [data-stay-part='cta'],
+  :global(.experience.is-travel-info-revealing) [data-stay-part='rsvp'] {
+    visibility: visible;
+    pointer-events: auto;
   }
 </style>

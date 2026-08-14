@@ -972,18 +972,32 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 
   // Location and CTA are not "written" -- they simply settle in once the
   // signature is done, per spec: a plain gentle fade + tiny rise.
+  //
+  // Also drives visibility (not just opacity) for these two: the CTA is
+  // real, focusable/clickable <a> markup sitting right there in the DOM
+  // for the whole ~18-23s reveal -- opacity:0 alone hides it from sighted
+  // pointer users but never stops a keyboard user from tabbing into (and
+  // activating) it early. visibility:hidden closes that gap for free
+  // (removed from the tab order and from hit-testing both), and -- paired
+  // with a 0s-duration "visibility" transition sharing the exact same
+  // delay as the opacity/transform one below -- it flips to visible at
+  // the exact same moment the fade-in itself starts, never a frame
+  // before or after, so "aparece" and "se vuelve interactivo" always
+  // happen together.
   function prepareFadeHidden(el: HTMLElement) {
     el.style.transition = 'none';
     el.style.opacity = '0';
     el.style.transform = 'translateY(2px)';
+    el.style.visibility = 'hidden';
   }
 
   function triggerFade(el: HTMLElement, duration: number, delay: number) {
-    el.style.transition = `opacity ${duration}ms ease-out ${delay}ms, transform ${duration}ms ease-out ${delay}ms`;
+    el.style.transition = `opacity ${duration}ms ease-out ${delay}ms, transform ${duration}ms ease-out ${delay}ms, visibility 0s linear ${delay}ms`;
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         el.style.opacity = '1';
         el.style.transform = 'translateY(0)';
+        el.style.visibility = 'visible';
       });
     });
   }
@@ -992,6 +1006,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
     el.style.opacity = '';
     el.style.transform = '';
     el.style.transition = '';
+    el.style.visibility = '';
   }
 
   function prepareUnderlineHidden(el: HTMLElement) {

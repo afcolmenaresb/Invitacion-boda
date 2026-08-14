@@ -315,6 +315,13 @@ const finalLine = getMemorySceneFinalLine(addressing);
     transform: translateY(8px);
   }
 
+  /* Not interactive/focusable until actually shown -- harmless on the
+     other, non-interactive elements sharing this selector. */
+  :global(.experience:not(.is-revealing-memory)) .memory__cta {
+    visibility: hidden;
+    pointer-events: none;
+  }
+
   :global(.experience.is-revealing-memory) .memory__eyebrow,
   :global(.experience.is-revealing-memory) .memory__title,
   :global(.experience.is-revealing-memory) .memory__body,
@@ -322,6 +329,14 @@ const finalLine = getMemorySceneFinalLine(addressing);
   :global(.experience.is-revealing-memory) .memory__cta {
     opacity: 1;
     transform: translateY(0);
+  }
+
+  /* Fallback path only (reduced-motion / instant loads / already-settled
+     scene, i.e. never mid-forward-animation) -- the forward-transition-
+     specific rules below override this while the CTA must still wait. */
+  :global(.experience.is-revealing-memory) .memory__cta {
+    visibility: visible;
+    pointer-events: auto;
   }
 
   /*
@@ -343,6 +358,8 @@ const finalLine = getMemorySceneFinalLine(addressing);
       .memory__cta {
       opacity: 0;
       transform: translateY(8px);
+      visibility: hidden;
+      pointer-events: none;
     }
   }
 
@@ -384,7 +401,9 @@ const finalLine = getMemorySceneFinalLine(addressing);
       .memory__cta {
       opacity: 1;
       transform: translateY(0);
-      transition: opacity 350ms ease, transform 350ms ease;
+      visibility: visible;
+      pointer-events: auto;
+      transition: opacity 350ms ease, transform 350ms ease, visibility 0s linear;
     }
 
     :global(.experience.is-ink-revealing) .memory__title,

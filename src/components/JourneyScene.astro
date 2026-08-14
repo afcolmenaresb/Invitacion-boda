@@ -388,6 +388,15 @@ const ctaPrimary = getJourneyCtaPrimary(addressing);
     transform: translateY(8px);
   }
 
+  /* CTAs specifically: not interactive/focusable until actually shown
+     (opacity:0 alone doesn't stop pointer-events or Tab from reaching
+     them). See the reveal rules below for when this lifts. */
+  [data-journey-part='cta-primary'],
+  [data-journey-part='cta-secondary'] {
+    visibility: hidden;
+    pointer-events: none;
+  }
+
   @media (prefers-reduced-motion: no-preference) {
     /*
       Exit (back to #destino): is-journey-revealing is removed the moment
@@ -434,12 +443,18 @@ const ctaPrimary = getJourneyCtaPrimary(addressing);
     :global(.experience.is-journey-revealing) [data-journey-part='cta-primary'] {
       opacity: 1;
       transform: translateY(0);
+      visibility: visible;
+      pointer-events: auto;
+      transition: opacity 850ms ease, transform 850ms ease, visibility 0s linear;
       transition-delay: 5800ms;
     }
 
     :global(.experience.is-journey-revealing) [data-journey-part='cta-secondary'] {
       opacity: 1;
       transform: translateY(0);
+      visibility: visible;
+      pointer-events: auto;
+      transition: opacity 850ms ease, transform 850ms ease, visibility 0s linear;
       transition-delay: 6300ms;
     }
   }
@@ -461,5 +476,13 @@ const ctaPrimary = getJourneyCtaPrimary(addressing);
   :global(.experience[data-scene='journey'].is-instant) [data-journey-part] {
     opacity: 1;
     transform: translateY(0);
+  }
+
+  :global(.experience.is-reduced-motion.is-journey-revealing) [data-journey-part='cta-primary'],
+  :global(.experience.is-reduced-motion.is-journey-revealing) [data-journey-part='cta-secondary'],
+  :global(.experience[data-scene='journey'].is-instant) [data-journey-part='cta-primary'],
+  :global(.experience[data-scene='journey'].is-instant) [data-journey-part='cta-secondary'] {
+    visibility: visible;
+    pointer-events: auto;
   }
 </style>

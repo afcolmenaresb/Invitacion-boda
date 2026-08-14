@@ -318,6 +318,13 @@ import { sceneCelebration } from '../data/sceneCelebration';
     transform: translateY(10px);
   }
 
+  /* CTA specifically: not interactive/focusable until actually shown --
+     opacity:0 alone doesn't stop pointer-events or Tab from reaching it. */
+  [data-celebration-part='cta'] {
+    visibility: hidden;
+    pointer-events: none;
+  }
+
   @media (prefers-reduced-motion: no-preference) {
     :global(.experience.is-celebration-revealing) [data-celebration-part] {
       transition: opacity 900ms ease, transform 900ms ease;
@@ -350,6 +357,9 @@ import { sceneCelebration } from '../data/sceneCelebration';
     :global(.experience.is-celebration-revealing) [data-celebration-part='cta'] {
       opacity: 1;
       transform: translateY(0);
+      visibility: visible;
+      pointer-events: auto;
+      transition: opacity 900ms ease, transform 900ms ease, visibility 0s linear;
       transition-delay: 6000ms;
     }
   }
@@ -371,5 +381,11 @@ import { sceneCelebration } from '../data/sceneCelebration';
   :global(.experience[data-scene='celebration'].is-instant) [data-celebration-part] {
     opacity: 1;
     transform: translateY(0);
+  }
+
+  :global(.experience.is-reduced-motion.is-celebration-revealing) [data-celebration-part='cta'],
+  :global(.experience[data-scene='celebration'].is-instant) [data-celebration-part='cta'] {
+    visibility: visible;
+    pointer-events: auto;
   }
 </style>

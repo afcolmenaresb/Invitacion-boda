@@ -264,6 +264,13 @@ import { sceneCeremony } from '../data/sceneCeremony';
     transform: translateY(10px);
   }
 
+  /* CTA specifically: not interactive/focusable until actually shown --
+     opacity:0 alone doesn't stop pointer-events or Tab from reaching it. */
+  .ceremony__cta {
+    visibility: hidden;
+    pointer-events: none;
+  }
+
   @media (prefers-reduced-motion: no-preference) {
     :global(.experience:not(.is-instant)) .ceremony__heading,
     :global(.experience:not(.is-instant)) .ceremony__line,
@@ -303,9 +310,12 @@ import { sceneCeremony } from '../data/sceneCeremony';
     }
 
     :global(.experience.is-ceremony-revealing) .ceremony__cta {
+      transition: opacity 1000ms ease, transform 1000ms ease, visibility 0s linear;
       transition-delay: 3900ms;
       opacity: 1;
       transform: translateY(0);
+      visibility: visible;
+      pointer-events: auto;
     }
   }
 
@@ -337,5 +347,11 @@ import { sceneCeremony } from '../data/sceneCeremony';
   :global(.experience[data-scene='ceremony'].is-instant) .ceremony__cta {
     opacity: 1;
     transform: translateY(0);
+  }
+
+  :global(.experience.is-reduced-motion.is-ceremony-revealing) .ceremony__cta,
+  :global(.experience[data-scene='ceremony'].is-instant) .ceremony__cta {
+    visibility: visible;
+    pointer-events: auto;
   }
 </style>

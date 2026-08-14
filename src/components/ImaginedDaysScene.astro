@@ -292,6 +292,10 @@ const closingLines = sceneImaginedDays.closing.split('\n');
     color: #3a332b;
     opacity: 0;
     transform: translateY(8px);
+    /* Not interactive/focusable until actually shown -- opacity:0 alone
+       doesn't stop pointer-events or Tab from reaching it. */
+    visibility: hidden;
+    pointer-events: none;
   }
 
   .imagined__cta::before {
@@ -327,10 +331,12 @@ const closingLines = sceneImaginedDays.closing.split('\n');
     }
 
     :global(.experience.is-imagined-revealing) .imagined__cta {
-      transition: opacity 1500ms ease, transform 1500ms ease;
+      transition: opacity 1500ms ease, transform 1500ms ease, visibility 0s linear;
       transition-delay: 8000ms;
       opacity: 1;
       transform: translateY(0);
+      visibility: visible;
+      pointer-events: auto;
     }
 
     /*
@@ -430,5 +436,11 @@ const closingLines = sceneImaginedDays.closing.split('\n');
   :global(.experience[data-scene='imagined'].is-instant) .imagined__cta {
     opacity: 1;
     transform: translateY(0);
+  }
+
+  :global(.experience.is-reduced-motion.is-imagined-revealing) .imagined__cta,
+  :global(.experience[data-scene='imagined'].is-instant) .imagined__cta {
+    visibility: visible;
+    pointer-events: auto;
   }
 </style>

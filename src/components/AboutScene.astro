@@ -242,6 +242,14 @@ import { sceneAbout } from '../data/sceneAbout';
     transform: translateY(10px);
   }
 
+  /* CTAs specifically: not interactive/focusable until actually shown --
+     opacity:0 alone doesn't stop pointer-events or Tab from reaching
+     them (covers all three buttons nested inside this group). */
+  [data-about-part='ctas'] {
+    visibility: hidden;
+    pointer-events: none;
+  }
+
   @media (prefers-reduced-motion: no-preference) {
     :global(.experience.is-about-revealing) [data-about-part] {
       transition: opacity 700ms ease, transform 700ms ease;
@@ -268,6 +276,9 @@ import { sceneAbout } from '../data/sceneAbout';
     :global(.experience.is-about-revealing) [data-about-part='ctas'] {
       opacity: 1;
       transform: translateY(0);
+      visibility: visible;
+      pointer-events: auto;
+      transition: opacity 700ms ease, transform 700ms ease, visibility 0s linear;
       transition-delay: 950ms;
     }
   }
@@ -287,5 +298,11 @@ import { sceneAbout } from '../data/sceneAbout';
   :global(.experience[data-scene='about'].is-instant) [data-about-part] {
     opacity: 1;
     transform: translateY(0);
+  }
+
+  :global(.experience.is-reduced-motion.is-about-revealing) [data-about-part='ctas'],
+  :global(.experience[data-scene='about'].is-instant) [data-about-part='ctas'] {
+    visibility: visible;
+    pointer-events: auto;
   }
 </style>
