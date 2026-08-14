@@ -53,8 +53,9 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 </script>
 
 <!--
-  Reuses Cover.astro's own .orientation-lock/-content/-text rules verbatim
-  (declared :global() there for exactly this purpose) instead of a second,
+  Reuses the shared .orientation-lock/-content/-text rules verbatim
+  (declared once in src/styles/global.css for exactly this purpose,
+  including this class's own display:flex trigger) instead of a second,
   duplicate stylesheet -- same composition, texture, alignment and
   Homemade Apple typography as the existing rotate-device notice, just
   with this file's own copy and its own trigger class (is-desktop-gated
@@ -69,10 +70,6 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 </div>
 
 <style>
-  :global(html.is-desktop-gated) .desktop-gate {
-    display: flex;
-  }
-
   /* The interactive experience itself is never painted behind this gate --
      no scene, no video, nothing. */
   :global(html.is-desktop-gated) :global(#invitation-experience) {

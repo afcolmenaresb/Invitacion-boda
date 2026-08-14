@@ -10,13 +10,20 @@
 // Deliberately the SAME visual object as OrientationGate.astro/
 // DesktopGate.astro, not a new design: same fixed full-viewport canvas,
 // same paper texture, same centered composition, same Homemade Apple
-// voice -- reuses their shared :global(.orientation-lock/-content/-text)
-// rules (declared once in Cover.astro) rather than a new stylesheet. The
-// only genuinely new class is .not-found-gate, which does nothing but
-// force this instance permanently visible (the other two gates are
-// hidden by default and only shown by an <html> class an inline script
-// toggles at runtime -- this one has no such toggle: it's this page's
-// entire content, always on).
+// voice -- reuses their shared .orientation-lock/-content/-text rules
+// (declared once in src/styles/global.css, including this component's
+// own .not-found-gate display:flex trigger -- see that file's own
+// comment for why it lives there and not in a component <style>) rather
+// than a new stylesheet.
+//
+// Cover.astro is the only other place that currently loads this font
+// (for its own use of .orientation-lock__text, among other things) --
+// neither index.astro nor 404.astro render Cover, so without this import
+// the shared .orientation-lock__text rule's `font-family: 'Homemade
+// Apple', cursive` would silently fall back to the browser/OS's generic
+// cursive font instead of the real one.
+import '@fontsource/homemade-apple/400.css';
+
 const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 ---
 
@@ -40,12 +47,6 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '');
 </div>
 
 <style>
-  /* Always visible -- unlike OrientationGate/DesktopGate, nothing ever
-     toggles this on/off at runtime; it IS the page. */
-  :global(.orientation-lock.not-found-gate) {
-    display: flex;
-  }
-
   /* Same 390-ish vertical canvas convention as every scene, so the text
      reads as a poster rather than stretching edge-to-edge on tablets. */
   .orientation-lock__content {
