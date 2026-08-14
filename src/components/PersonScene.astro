@@ -1,0 +1,248 @@
+---
+// Shared by Fátima's and Andrés's individual pages (sceneFatima.ts /
+// sceneAndres.ts have the exact same shape) -- one component, two data
+// files, instead of two near-identical components. Same pattern already
+// established for StayScene's own backAction/backLabel/backVisibleLabel
+// props.
+interface Props {
+  title: string;
+  body: string[];
+  backAction: string;
+  backLabel: string;
+  backVisibleLabel: string;
+  eyebrow: string;
+  revealFlag: string;
+}
+
+const { title, body, backAction, backLabel, backVisibleLabel, eyebrow, revealFlag } = Astro.props;
+---
+
+<div class="person" data-scene-panel-content aria-label={title}>
+  <span class="person__wash" aria-hidden="true"></span>
+  <button type="button" class="person__back" data-action={backAction} aria-label={backLabel}>
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
+      <path d="M15 5 L8 12 L15 19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
+    <span>{backVisibleLabel}</span>
+  </button>
+
+  <div class="person__content" data-person-scroll>
+    <p class="person__eyebrow" data-person-part={`${revealFlag}-eyebrow`}>
+      <span class="person__halo" aria-hidden="true"></span>
+      {eyebrow}
+    </p>
+    <h2 class="person__title" data-scene-heading data-person-part={`${revealFlag}-title`} tabindex="-1">
+      <span class="person__halo person__halo--wide" aria-hidden="true"></span>
+      {title}
+    </h2>
+    <div class="person__body" data-person-part={`${revealFlag}-body`}>
+      <span class="person__halo person__halo--wide" aria-hidden="true"></span>
+      {body.map((line) => (
+        <p>{line}</p>
+      ))}
+    </div>
+  </div>
+</div>
+
+<style>
+  .person {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    isolation: isolate;
+  }
+
+  .person__back {
+    position: absolute;
+    top: max(18px, env(safe-area-inset-top));
+    left: max(18px, env(safe-area-inset-left));
+    z-index: 2;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: none;
+    border: none;
+    padding: 0.4rem 0.2rem;
+    cursor: pointer;
+    font-family: var(--font-sans);
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #3a332b;
+    opacity: 0;
+  }
+
+  .person__back::before {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    inset: -6px -10px;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, rgba(255, 254, 248, 0.95), rgba(255, 254, 248, 0) 80%);
+  }
+
+  :global(.experience.is-fatima-revealing) .person__back,
+  :global(.experience.is-andres-revealing) .person__back {
+    opacity: 1;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    :global(.experience:not(.is-instant)) .person__back {
+      transition: opacity 320ms ease, color 0.2s ease, transform 0.2s ease;
+    }
+
+    .person__back:hover,
+    .person__back:focus-visible {
+      color: var(--color-accent);
+      transform: translateX(-2px);
+    }
+  }
+
+  :global(.experience.is-instant) .person__back {
+    transition: none !important;
+  }
+
+  /*
+    Same fixed 390x844 canvas convention as every other scene, but this
+    reading column can genuinely overflow it -- five/six full paragraphs
+    is more than any previous single scene has carried at once. Scrolls
+    internally (the outer 390x844 canvas itself never scrolls, same as
+    everywhere else) rather than spilling the text or forcing a second
+    sub-screen the spec never asked for -- "divide el contenido bien"
+    is satisfied by this already being its own dedicated page, one person
+    at a time, not by paginating within it too.
+  */
+  .person__content {
+    position: relative;
+    margin-top: auto;
+    width: 100%;
+    max-width: 358.8px;
+    max-height: min(72vh, 620px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    text-align: left;
+    padding: 0 28px 64px;
+  }
+
+  .person__wash {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background:
+      radial-gradient(ellipse 60% 44% at 26% 66%, rgba(255, 251, 244, 0.26) 0%, rgba(255, 251, 244, 0) 78%),
+      linear-gradient(
+        to right,
+        rgba(255, 251, 244, 0.55) 0%,
+        rgba(255, 251, 244, 0.38) 36%,
+        rgba(255, 251, 244, 0.14) 60%,
+        rgba(255, 251, 244, 0) 88%
+      );
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 1) 30%, rgba(0, 0, 0, 1) 100%);
+    mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 1) 30%, rgba(0, 0, 0, 1) 100%);
+  }
+
+  .person__halo {
+    position: absolute;
+    z-index: -1;
+    pointer-events: none;
+    inset: -10px -18px;
+    background: radial-gradient(ellipse at center, rgba(255, 254, 248, 0.9) 0%, rgba(255, 254, 248, 0) 72%);
+  }
+
+  .person__halo--wide {
+    inset: -14px -24px;
+  }
+
+  .person__eyebrow {
+    position: relative;
+    margin: 0 0 16px;
+    font-family: var(--font-sans);
+    text-transform: uppercase;
+    letter-spacing: 0.22em;
+    font-size: 0.68rem;
+    color: #6f6350;
+  }
+
+  .person__title {
+    position: relative;
+    margin: 0 0 22px;
+    font-family: var(--font-serif);
+    font-style: normal;
+    font-weight: 400;
+    font-size: 2.4rem;
+    line-height: 1.2;
+    color: #4a3a28;
+    outline: none;
+  }
+
+  .person__body {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding-bottom: 8px;
+  }
+
+  .person__body p {
+    margin: 0;
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-weight: 400;
+    font-size: 1.06rem;
+    line-height: 1.62;
+    color: #241a12;
+  }
+
+  [data-person-part] {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    :global(.experience.is-fatima-revealing) [data-person-part^='fatima'],
+    :global(.experience.is-andres-revealing) [data-person-part^='andres'] {
+      transition: opacity 700ms ease, transform 700ms ease;
+    }
+
+    :global(.experience.is-fatima-revealing) [data-person-part='fatima-eyebrow'],
+    :global(.experience.is-andres-revealing) [data-person-part='andres-eyebrow'] {
+      opacity: 1;
+      transform: translateY(0);
+      transition-delay: 150ms;
+    }
+
+    :global(.experience.is-fatima-revealing) [data-person-part='fatima-title'],
+    :global(.experience.is-andres-revealing) [data-person-part='andres-title'] {
+      opacity: 1;
+      transform: translateY(0);
+      transition-delay: 380ms;
+    }
+
+    :global(.experience.is-fatima-revealing) [data-person-part='fatima-body'],
+    :global(.experience.is-andres-revealing) [data-person-part='andres-body'] {
+      opacity: 1;
+      transform: translateY(0);
+      transition-delay: 650ms;
+    }
+  }
+
+  :global(.experience.is-reduced-motion.is-fatima-revealing) [data-person-part^='fatima'],
+  :global(.experience.is-reduced-motion.is-andres-revealing) [data-person-part^='andres'],
+  :global(.experience.is-instant) [data-person-part] {
+    transition: opacity 260ms ease !important;
+    transform: none !important;
+    transition-delay: 0ms !important;
+  }
+
+  :global(.experience.is-reduced-motion.is-fatima-revealing) [data-person-part^='fatima'],
+  :global(.experience.is-reduced-motion.is-andres-revealing) [data-person-part^='andres'],
+  :global(.experience[data-scene='fatima'].is-instant) [data-person-part^='fatima'],
+  :global(.experience[data-scene='andres'].is-instant) [data-person-part^='andres'] {
+    opacity: 1;
+    transform: translateY(0);
+  }
+</style>

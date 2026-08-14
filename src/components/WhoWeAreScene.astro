@@ -1,0 +1,286 @@
+---
+import { sceneWhoWeAre } from '../data/sceneWhoWeAre';
+
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+---
+
+<div class="who" data-scene-panel-content aria-label={sceneWhoWeAre.title}>
+  <div class="who__texture" style={`background-image: url('${base}/images/textura_vertical_2.png')`}></div>
+
+  <button type="button" class="who__back" data-action="back-to-about" aria-label={sceneWhoWeAre.backLabel}>
+    <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
+      <path d="M15 5 L8 12 L15 19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+    </svg>
+    <span>{sceneWhoWeAre.backVisibleLabel}</span>
+  </button>
+
+  <div class="who__heading" data-who-part="heading">
+    <span class="who__halo who__halo--wide" aria-hidden="true"></span>
+    <h2 class="who__title" data-scene-heading tabindex="-1">{sceneWhoWeAre.title}</h2>
+    <p class="who__body">{sceneWhoWeAre.body}</p>
+  </div>
+
+  <!-- Same duck/elephant illustrations Cover.astro uses, presented here
+       statically (no ink-reveal animation) as two clear, tappable
+       controls -- the duck stands for Fátima, the elephant for Andrés,
+       exactly as on the cover, so this screen reads as "the same two
+       companions from the very first page, now inviting you in". -->
+  <button type="button" class="who__control who__control--fatima" data-action="go-to-fatima" data-who-part="fatima">
+    <span class="who__control-halo" aria-hidden="true"></span>
+    <img
+      class="who__duck"
+      src={`${base}/images/duck.png`}
+      alt=""
+      aria-hidden="true"
+      width="768"
+      height="1376"
+      loading="lazy"
+    />
+    <span class="who__control-label">{sceneWhoWeAre.fatimaLabel}</span>
+  </button>
+
+  <button type="button" class="who__control who__control--andres" data-action="go-to-andres" data-who-part="andres">
+    <span class="who__control-halo" aria-hidden="true"></span>
+    <img
+      class="who__elephant"
+      src={`${base}/images/elephant.png`}
+      alt=""
+      aria-hidden="true"
+      width="1101"
+      height="1856"
+      loading="lazy"
+    />
+    <span class="who__control-label">{sceneWhoWeAre.andresLabel}</span>
+  </button>
+</div>
+
+<style>
+  .who {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    isolation: isolate;
+    overflow: hidden;
+  }
+
+  .who__texture {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+  }
+
+  .who__back {
+    position: absolute;
+    top: max(18px, env(safe-area-inset-top));
+    left: max(18px, env(safe-area-inset-left));
+    z-index: 3;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    background: none;
+    border: none;
+    padding: 0.4rem 0.2rem;
+    cursor: pointer;
+    font-family: var(--font-sans);
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #3a332b;
+    opacity: 0;
+  }
+
+  .who__back::before {
+    content: '';
+    position: absolute;
+    z-index: -1;
+    inset: -6px -10px;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, rgba(255, 254, 248, 0.95), rgba(255, 254, 248, 0) 80%);
+  }
+
+  :global(.experience.is-who-we-are-revealing) .who__back {
+    opacity: 1;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    :global(.experience:not(.is-instant)) .who__back {
+      transition: opacity 320ms ease, color 0.2s ease, transform 0.2s ease;
+    }
+
+    .who__back:hover,
+    .who__back:focus-visible {
+      color: var(--color-accent);
+      transform: translateX(-2px);
+    }
+  }
+
+  :global(.experience.is-instant) .who__back {
+    transition: none !important;
+  }
+
+  .who__heading {
+    position: absolute;
+    z-index: 2;
+    left: 28px;
+    right: 28px;
+    top: 96px;
+    text-align: left;
+  }
+
+  .who__halo {
+    position: absolute;
+    z-index: -1;
+    pointer-events: none;
+    inset: -14px -24px;
+    background: radial-gradient(ellipse at center, rgba(255, 254, 248, 0.9) 0%, rgba(255, 254, 248, 0) 72%);
+  }
+
+  .who__title {
+    position: relative;
+    margin: 0 0 10px;
+    font-family: var(--font-serif);
+    font-style: normal;
+    font-weight: 400;
+    font-size: 1.85rem;
+    line-height: 1.3;
+    color: #4a3a28;
+    outline: none;
+  }
+
+  .who__body {
+    position: relative;
+    margin: 0;
+    font-family: var(--font-sans);
+    font-size: 0.82rem;
+    letter-spacing: 0.02em;
+    color: #6f6350;
+  }
+
+  /*
+    Duck (top-right, Fátima) and elephant (bottom-left, Andrés) -- same
+    illustrations, same mix-blend-mode and general placement as
+    Cover.astro's own .cover__duck/.cover__elephant, just as plain,
+    tappable controls instead of the ink-reveal animation.
+  */
+  .who__control {
+    position: absolute;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+  }
+
+  .who__control-halo {
+    position: absolute;
+    z-index: -1;
+    pointer-events: none;
+    inset: -16px -28px;
+    background: radial-gradient(ellipse at center, rgba(255, 254, 248, 0.85) 0%, rgba(255, 254, 248, 0) 75%);
+    opacity: 0;
+  }
+
+  :global(.experience.is-who-we-are-revealing) .who__control-halo {
+    opacity: 1;
+  }
+
+  .who__control--fatima {
+    right: 4.7px;
+    top: 210px;
+  }
+
+  .who__duck {
+    width: 176px;
+    height: auto;
+    transform: scaleX(-1);
+    filter: brightness(0.45) contrast(1.5);
+    mix-blend-mode: multiply;
+  }
+
+  .who__control--andres {
+    left: -2.3px;
+    bottom: 210px;
+  }
+
+  .who__elephant {
+    width: 155px;
+    height: auto;
+    transform: scaleX(-1);
+    mix-blend-mode: multiply;
+  }
+
+  .who__control-label {
+    margin-top: 10px;
+    font-family: var(--font-sans);
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+    font-size: 0.78rem;
+    color: #221a10;
+  }
+
+  .who__control-label::after {
+    content: ' →';
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    :global(.experience:not(.is-instant)) .who__control-label {
+      transition: color 0.2s ease;
+    }
+
+    .who__control:hover .who__control-label,
+    .who__control:focus-visible .who__control-label {
+      color: var(--color-accent);
+    }
+  }
+
+  /*
+    Entrance: same plain opacity + translateY convention as every other
+    scene, gated behind is-who-we-are-revealing.
+  */
+  [data-who-part] {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    :global(.experience.is-who-we-are-revealing) [data-who-part] {
+      transition: opacity 700ms ease, transform 700ms ease;
+    }
+
+    :global(.experience.is-who-we-are-revealing) [data-who-part='heading'] {
+      opacity: 1;
+      transform: translateY(0);
+      transition-delay: 150ms;
+    }
+
+    :global(.experience.is-who-we-are-revealing) [data-who-part='fatima'] {
+      opacity: 1;
+      transform: translateY(0);
+      transition-delay: 450ms;
+    }
+
+    :global(.experience.is-who-we-are-revealing) [data-who-part='andres'] {
+      opacity: 1;
+      transform: translateY(0);
+      transition-delay: 600ms;
+    }
+  }
+
+  :global(.experience.is-reduced-motion.is-who-we-are-revealing) [data-who-part],
+  :global(.experience.is-instant) [data-who-part] {
+    transition: opacity 260ms ease !important;
+    transform: none !important;
+    transition-delay: 0ms !important;
+  }
+
+  :global(.experience.is-reduced-motion.is-who-we-are-revealing) [data-who-part],
+  :global(.experience[data-scene='whoWeAre'].is-instant) [data-who-part] {
+    opacity: 1;
+    transform: translateY(0);
+  }
+</style>
