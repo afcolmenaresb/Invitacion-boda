@@ -1746,7 +1746,15 @@ const musicSrcs = musicPlaylist.map((track) => `${base}/audio/${track}`);
       const pastCelebration = scene === 'celebration' || scene === 'keepsake' || scene === 'stay';
       const pastKeepsake = scene === 'keepsake' || scene === 'stay';
       root!.classList.toggle('is-cover-receded', scene !== 'cover');
-      root!.classList.toggle('is-revealing-memory', scene !== 'cover');
+      // scene !== 'cover' alone isn't enough here: the whole "Un poco de
+      // nosotros" sub-tree (and travelInfo) are isolated islands, not
+      // steps in the cover->...->stay chain -- excluding them is what
+      // keeps MemoryScene's own content (including its "Descubrir el
+      // destino" CTA) from bleeding through behind Fátima/Andrés/FAQ/etc,
+      // which it otherwise did (is-revealing-memory was landing true on
+      // every one of those screens, same as it correctly does for every
+      // *real* past-cover scene).
+      root!.classList.toggle('is-revealing-memory', scene !== 'cover' && !isIsolatedIsland(scene));
       root!.classList.toggle('is-memory-receded', pastDestination);
       root!.classList.toggle('is-revealing-destination', pastDestination);
       root!.classList.toggle('is-destination-revealing', pastDestination);
