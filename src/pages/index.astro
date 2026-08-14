@@ -1,10 +1,17 @@
 ---
+// Bare-domain access (https://fatimayandres.com with no path) is not a
+// real invitation -- there is no guest-less "demo" experience to show
+// here anymore (see NotFoundGate.astro's own comment: this page and
+// 404.astro deliberately share the exact same private-access screen).
+// Never lists guests, never links to any /i/{slug}-{inviteId}, never
+// hints that any particular invitation exists -- the only way in is the
+// personalized link a guest actually received.
 import BaseLayout from '../layouts/BaseLayout.astro';
-import InvitationExperience from '../components/InvitationExperience.astro';
+import NotFoundGate from '../components/NotFoundGate.astro';
 ---
 
-<BaseLayout title="Invitación de Fátima y Andrés">
+<BaseLayout title="Invitación de Fátima y Andrés" noindex>
   <main>
-    <InvitationExperience />
+    <NotFoundGate />
   </main>
 </BaseLayout>

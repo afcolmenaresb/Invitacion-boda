@@ -1,0 +1,77 @@
+---
+// Shared "invalid/private access" screen -- reused verbatim by both
+// src/pages/index.astro (bare-domain access) and src/pages/404.astro
+// (any unmatched route, including a /i/{slug}-{inviteId} whose exact
+// combination was never generated -- see [invite].astro's own comment:
+// a static build only ever produces the exact paths in guests.ts, so a
+// mutated/guessed inviteId simply never matches a file and lands here
+// through the host's normal 404 handling, same as any other bad path).
+//
+// Deliberately the SAME visual object as OrientationGate.astro/
+// DesktopGate.astro, not a new design: same fixed full-viewport canvas,
+// same paper texture, same centered composition, same Homemade Apple
+// voice -- reuses their shared :global(.orientation-lock/-content/-text)
+// rules (declared once in Cover.astro) rather than a new stylesheet. The
+// only genuinely new class is .not-found-gate, which does nothing but
+// force this instance permanently visible (the other two gates are
+// hidden by default and only shown by an <html> class an inline script
+// toggles at runtime -- this one has no such toggle: it's this page's
+// entire content, always on).
+const base = import.meta.env.BASE_URL.replace(/\/$/, '');
+---
+
+<div
+  class="orientation-lock not-found-gate"
+  style={`background-image: url('${base}/images/textura_vertical_2.png')`}
+>
+  <div class="orientation-lock__content">
+    <h1 class="orientation-lock__text not-found-gate__title">Error 404: Variable No Encontrada 🖥️</h1>
+    <p class="orientation-lock__text not-found-gate__body">
+      ¡Ups! Parece que hay una anomalía en el sistema. Ningún modelo estadístico predijo que llegarías a la matriz
+      principal sin tu variable específica.
+    </p>
+    <p class="orientation-lock__text not-found-gate__body">
+      Para que el algoritmo funcione y puedas visualizar tu invitación, necesitas ingresar tu enlace completo.
+    </p>
+    <p class="orientation-lock__text not-found-gate__signoff">
+      Compila bien los datos, ¡nos vemos en tu enlace personalizado!
+    </p>
+  </div>
+</div>
+
+<style>
+  /* Always visible -- unlike OrientationGate/DesktopGate, nothing ever
+     toggles this on/off at runtime; it IS the page. */
+  :global(.orientation-lock.not-found-gate) {
+    display: flex;
+  }
+
+  /* Same 390-ish vertical canvas convention as every scene, so the text
+     reads as a poster rather than stretching edge-to-edge on tablets. */
+  .orientation-lock__content {
+    max-width: 358.8px;
+    gap: 20px;
+  }
+
+  /* Title: the primary element (per spec) -- same Homemade Apple family
+     as the shared .orientation-lock__text, just scaled up and given the
+     most weight/space, so it reads first. */
+  .not-found-gate__title {
+    margin: 0;
+    font-size: 2.1rem;
+    line-height: 1.25;
+  }
+
+  .not-found-gate__body {
+    font-size: 1.28rem;
+    line-height: 1.42;
+  }
+
+  /* Sign-off: same family/size language as the body, set apart only by
+     accent color -- reads as a closing line, not another instruction. */
+  .not-found-gate__signoff {
+    font-size: 1.28rem;
+    line-height: 1.42;
+    color: var(--color-accent);
+  }
+</style>
