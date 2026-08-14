@@ -7,7 +7,13 @@ rules_version = '2';
 // Firebase CLI is set up for this project.
 //
 // Intent, per the page 9 spec:
-//   - No public read access to the collection at all.
+//   - Reading a single, specific RSVP document by its own id (a `get`) is
+//     allowed -- this is what lets StayScene restore a guest's previously
+//     saved response on reload (see src/lib/rsvp.ts's getRsvpResponse).
+//     There is still no way to enumerate the collection: `list` (any
+//     query against /rsvp, e.g. "get all documents") stays denied, so a
+//     visitor can only ever read the one document whose exact id
+//     (inviteId) they already have -- never discover another guest's.
 //   - Guests may create or update only their own document (doc id must
 //     equal the guestId field), with the exact five fields the app
 //     writes, no more, no less, and each one type/shape-checked.
@@ -15,7 +21,8 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /rsvp/{guestId} {
-      allow read: if false;
+      allow get: if true;
+      allow list: if false;
       allow delete: if false;
 
       allow create, update: if

@@ -120,7 +120,14 @@ const whatsAppUrl = getGoTravelWhatsAppUrl(guestName || 'invitado');
 </div>
 
 <script>
-  import { saveRsvpResponse, type AttendanceStatus } from '../lib/rsvp';
+  import { getRsvpResponse, saveRsvpResponse, type AttendanceStatus, type SavedRsvpResponse } from '../lib/rsvp';
+
+  // This scene is rendered twice per page (the main page-9 stay panel and
+  // the page-3 "VER INFORMACIÓN DEL VIAJE" shortcut, see
+  // InvitationExperience.astro) with the same guestId -- shared across
+  // both .stay__rsvp instances below so a restore never fires the same
+  // Firestore read twice for one page load.
+  const restoreByGuestId = new Map<string, Promise<SavedRsvpResponse | null>>();
 
   // Runs once per page load, same as every other lightweight client
   // script in this project (see Cover.astro) -- .stay__rsvp only exists
@@ -142,8 +149,15 @@ const whatsAppUrl = getGoTravelWhatsAppUrl(guestName || 'invitado');
       feedback.classList.add('is-visible');
     }
 
+    // True the instant the guest interacts with this RSVP block --
+    // guards the restore below from clobbering a fresh in-flight
+    // selection if it resolves after the guest already started
+    // answering again (see spec: never overwrite a new interaction).
+    let userInteracted = false;
+
     buttons.forEach((button) => {
       button.addEventListener('click', () => {
+        userInteracted = true;
         const status = button.dataset.rsvpStatus as AttendanceStatus | undefined;
         if (!status) return;
 
@@ -158,6 +172,32 @@ const whatsAppUrl = getGoTravelWhatsAppUrl(guestName || 'invitado');
         });
       });
     });
+
+    // Silent restore: no spinner, no gating of the scene's own reveal
+    // animation (this fires alongside it, never before/blocking it). If
+    // the guest already tapped an option by the time this resolves,
+    // their fresh interaction wins and this is dropped on the floor.
+    if (guestId) {
+      let restore = restoreByGuestId.get(guestId);
+      if (!restore) {
+        restore = getRsvpResponse(guestId);
+        restoreByGuestId.set(guestId, restore);
+      }
+      restore
+        .then((saved) => {
+          if (!saved || userInteracted) return;
+          const match = buttons.find((b) => b.dataset.rsvpStatus === saved.attendanceStatus);
+          if (!match) return;
+          buttons.forEach((b) => b.classList.toggle('is-selected', b === match));
+          showMessage(saved.attendanceStatus);
+        })
+        .catch((error) => {
+          // getRsvpResponse itself never rejects -- this is belt-and-
+          // suspenders only, matching the rest of this file's philosophy
+          // of never letting the RSVP feature break the page.
+          console.error('[rsvp] restoring previous response failed:', error);
+        });
+    }
   });
 </script>
 
