@@ -29,8 +29,11 @@ import { sceneAbout } from '../data/sceneAbout';
       <button type="button" class="about__cta" data-action="go-to-who-we-are">
         {sceneAbout.ctaWhoWeAre}
       </button>
-      <button type="button" class="about__cta about__cta--secondary" data-action="go-to-faq">
+      <button type="button" class="about__cta" data-action="go-to-faq">
         {sceneAbout.ctaFaq}
+      </button>
+      <button type="button" class="about__cta" data-action="go-to-memories">
+        {sceneAbout.ctaMemories}
       </button>
     </div>
   </div>
@@ -111,14 +114,27 @@ import { sceneAbout } from '../data/sceneAbout';
     padding: 0 28px;
   }
 
-  /* Reading column wash -- identical recipe to every other scene's own
-     .X__wash (JourneyScene/.../StayScene), kept consistent. */
+  /*
+    Reading column wash -- same recipe as every other scene's own
+    .X__wash, but reaches further down and wider across the lower half
+    (three CTAs now sit here, not two) via a bigger, softer ellipse
+    (92% x 70% instead of 60% x 44%, three color stops instead of two
+    for a much more gradual falloff) rather than by raising opacity --
+    peak alpha is barely touched (0.28 vs 0.26). The vertical mask starts
+    revealing a little earlier (34% vs 38%) so the extra reach at the
+    bottom doesn't come at the cost of a later, more abrupt start.
+  */
   .about__wash {
     position: absolute;
     inset: 0;
     pointer-events: none;
     background:
-      radial-gradient(ellipse 60% 44% at 26% 66%, rgba(255, 251, 244, 0.26) 0%, rgba(255, 251, 244, 0) 78%),
+      radial-gradient(
+        ellipse 92% 70% at 30% 74%,
+        rgba(255, 251, 244, 0.28) 0%,
+        rgba(255, 251, 244, 0.16) 52%,
+        rgba(255, 251, 244, 0) 88%
+      ),
       linear-gradient(
         to right,
         rgba(255, 251, 244, 0.55) 0%,
@@ -126,8 +142,8 @@ import { sceneAbout } from '../data/sceneAbout';
         rgba(255, 251, 244, 0.14) 60%,
         rgba(255, 251, 244, 0) 88%
       );
-    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 1) 38%, rgba(0, 0, 0, 1) 100%);
-    mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 1) 38%, rgba(0, 0, 0, 1) 100%);
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 1) 34%, rgba(0, 0, 0, 1) 100%);
+    mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 1) 34%, rgba(0, 0, 0, 1) 100%);
   }
 
   .about__halo {
@@ -203,11 +219,6 @@ import { sceneAbout } from '../data/sceneAbout';
 
   .about__cta::after {
     content: ' →';
-  }
-
-  .about__cta--secondary {
-    font-size: 0.8rem;
-    color: #6b6055;
   }
 
   @media (prefers-reduced-motion: no-preference) {

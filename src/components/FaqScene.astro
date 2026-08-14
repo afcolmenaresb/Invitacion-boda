@@ -3,7 +3,6 @@ import { sceneFaq } from '../data/sceneFaq';
 ---
 
 <div class="faq" data-scene-panel-content aria-label={sceneFaq.title}>
-  <span class="faq__wash" aria-hidden="true"></span>
   <button type="button" class="faq__back" data-action="back-to-about" aria-label={sceneFaq.backLabel}>
     <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false">
       <path d="M15 5 L8 12 L15 19" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
@@ -11,26 +10,30 @@ import { sceneFaq } from '../data/sceneFaq';
     <span>{sceneFaq.backVisibleLabel}</span>
   </button>
 
-  <div class="faq__content" data-faq-scroll>
-    <p class="faq__eyebrow" data-faq-part="eyebrow">
-      <span class="faq__halo" aria-hidden="true"></span>
-      Un poco de nosotros
-    </p>
-    <h2 class="faq__title" data-scene-heading data-faq-part="title" tabindex="-1">
-      <span class="faq__halo faq__halo--wide" aria-hidden="true"></span>
-      {sceneFaq.title}
-    </h2>
+  <div class="faq__frame">
+    <div class="faq__header">
+      <span class="faq__header-wash" aria-hidden="true"></span>
+      <p class="faq__eyebrow" data-faq-part="eyebrow">
+        <span class="faq__halo" aria-hidden="true"></span>
+        Un poco de nosotros
+      </p>
+      <h2 class="faq__title" data-scene-heading data-faq-part="title" tabindex="-1">
+        <span class="faq__halo faq__halo--wide" aria-hidden="true"></span>
+        {sceneFaq.title}
+      </h2>
+    </div>
 
-    <div class="faq__list" data-faq-part="list">
-      <span class="faq__halo faq__halo--wide" aria-hidden="true"></span>
-      {sceneFaq.items.map((item) => (
-        <div class="faq__item">
-          <p class="faq__question">{item.question}</p>
-          {item.answer.map((line) => (
-            <p class="faq__answer">{line}</p>
-          ))}
-        </div>
-      ))}
+    <div class="faq__scroll" data-faq-scroll>
+      <div class="faq__list" data-faq-part="list">
+        {sceneFaq.items.map((item) => (
+          <div class="faq__item">
+            <p class="faq__question">{item.question}</p>
+            {item.answer.map((line) => (
+              <p class="faq__answer">{line}</p>
+            ))}
+          </div>
+        ))}
+      </div>
     </div>
   </div>
 </div>
@@ -95,33 +98,55 @@ import { sceneFaq } from '../data/sceneFaq';
 
   /*
     Same fixed 390x844 canvas as every scene, but the eleven Q&A pairs
-    are far more content than any single previous scene carries -- this
-    reading column scrolls internally (never the outer canvas), same
-    device as PersonScene's own .person__content, so "no satures la
-    pantalla" is handled by letting the visitor scroll through an
-    unhurried list rather than cramming everything into one fixed view.
+    are far more content than any single previous scene carries. Split
+    into a header (title -- stays fixed/visible, never scrolls away) and
+    a separate scrolling body, same flex-column device as PersonScene's
+    own .person__frame/.person__header/.person__scroll (see that
+    component's own comment for why position:sticky doesn't work here).
+    "no satures la pantalla" is handled by letting the visitor scroll
+    through an unhurried list rather than cramming everything into one
+    fixed view, plus the title never disappearing while reading.
   */
-  .faq__content {
+  .faq__frame {
     position: relative;
     margin-top: auto;
     width: 100%;
     max-width: 358.8px;
     max-height: min(78vh, 680px);
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
     display: flex;
     flex-direction: column;
     align-items: flex-start;
     text-align: left;
-    padding: 0 28px 64px;
+    /* Slightly narrower than before -- keeps question/answer text off
+       the busiest parts of the sunset photo underneath. */
+    padding: 0 34px;
   }
 
-  .faq__wash {
+  .faq__header {
+    position: relative;
+    flex: 0 0 auto;
+    width: 100%;
+  }
+
+  /* Same recipe as every other scene's own ambient wash, sized to just
+     the (fixed, non-scrolling) header above the list. */
+  /*
+    Cropped via `top` instead of covering the whole header and fading the
+    top out with mask-image -- see .person__wash's own comment
+    (PersonScene.astro) for why: a masked element sharing this panel
+    with .faq__scroll (an actively-scrolling sibling) makes some
+    renderers repaint it as an opaque white box once the scroll position
+    actually changes.
+  */
+  .faq__header-wash {
     position: absolute;
-    inset: 0;
+    left: -34px;
+    right: -34px;
+    top: 14px;
+    bottom: -4px;
     pointer-events: none;
     background:
-      radial-gradient(ellipse 60% 44% at 26% 66%, rgba(255, 251, 244, 0.26) 0%, rgba(255, 251, 244, 0) 78%),
+      radial-gradient(ellipse 70% 100% at 30% 20%, rgba(255, 251, 244, 0.26) 0%, rgba(255, 251, 244, 0) 78%),
       linear-gradient(
         to right,
         rgba(255, 251, 244, 0.55) 0%,
@@ -129,8 +154,39 @@ import { sceneFaq } from '../data/sceneFaq';
         rgba(255, 251, 244, 0.14) 60%,
         rgba(255, 251, 244, 0) 88%
       );
-    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 1) 26%, rgba(0, 0, 0, 1) 100%);
-    mask-image: linear-gradient(to bottom, transparent 0%, rgba(0, 0, 0, 1) 26%, rgba(0, 0, 0, 1) 100%);
+  }
+
+  /*
+    The list's own wash lives here, as this element's own background
+    with background-attachment:local, instead of a separately positioned
+    overlay -- a plain absolutely-positioned overlay sibling only ever
+    covers this element's fixed *visible* height (max-height above),
+    never its full *scrollable* height, so it used to fade out partway
+    down an eleven-question list well before the real end. A background
+    with local attachment scrolls together with the content and sizes
+    itself to that full scrollable canvas instead, so the wash now
+    reaches all the way to the last answer, not just the first screenful.
+  */
+  .faq__scroll {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 64px;
+    background-image: linear-gradient(
+        to right,
+        rgba(255, 251, 244, 0.5) 0%,
+        rgba(255, 251, 244, 0.34) 34%,
+        rgba(255, 251, 244, 0.12) 58%,
+        rgba(255, 251, 244, 0) 86%
+      ),
+      linear-gradient(to bottom, rgba(255, 251, 244, 0) 0%, rgba(255, 251, 244, 0.4) 14%, rgba(255, 251, 244, 0.4) 100%);
+    background-repeat: no-repeat, no-repeat;
+    background-attachment: local, local;
+    /* Promotes this scrolling region to its own compositor layer -- see
+       PersonScene's own .person__scroll comment for why this matters. */
+    transform: translateZ(0);
   }
 
   .faq__halo {
