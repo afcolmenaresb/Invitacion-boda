@@ -52,7 +52,6 @@ export const sceneFaq = {
       answer: [
         'Fátima.',
         'No siempre consigue esperar al siguiente capítulo y, ocasionalmente, avanza sin autorización.',
-        'Lo verdaderamente impresionante es verla fingir sorpresa cuando después lo vemos juntos.',
       ],
     },
     {
