@@ -60,5 +60,27 @@ const { title, noindex = false } = Astro.props;
     },
     { passive: false }
   );
+
+  // Cosmetic deterrent only -- does not actually hide or protect the page
+  // source (view-source:, curl, a browser's own menu, etc. all still work).
+  // Blocks the right-click context menu and the common keyboard shortcuts
+  // for opening DevTools / viewing source, so a casual visitor doesn't
+  // stumble into either by accident.
+  document.addEventListener('contextmenu', (event) => {
+    event.preventDefault();
+  });
+
+  document.addEventListener('keydown', (event) => {
+    const key = event.key.toLowerCase();
+    const blocksDevTools =
+      key === 'f12' ||
+      (event.ctrlKey && event.shiftKey && ['i', 'j', 'c'].includes(key)) ||
+      (event.metaKey && event.altKey && ['i', 'j', 'c'].includes(key)) ||
+      (event.ctrlKey && key === 'u') ||
+      (event.metaKey && key === 'u');
+    if (blocksDevTools) {
+      event.preventDefault();
+    }
+  });
 </script>
 
