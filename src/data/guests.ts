@@ -1101,7 +1101,48 @@ export const guests: Guest[] = [
     addressing: 'singular',
     dedication: 'Ningún modelo macroeconómico predijo un viaje tan genial. Deja los datos un rato y acompañanos a celebrar.',
     partySize: 1,
-  },];
+  },
+  {
+    inviteId: '54bebed57d744ae880c5',
+    slug: 'emilio-abente',
+    displayName: 'Emilio Abente',
+    addressing: 'plural',
+    dedication: 'Ningún modelo econométrico predijo un viaje tan genial. Deja los datos un rato y acompañanos a celebrar.',
+    partySize: 2,
+  },
+  {
+    inviteId: 'd60054ab9f244a1faa03',
+    slug: 'ana-bordon',
+    displayName: 'Ana Bordón',
+    addressing: 'singular',
+    dedication: 'Nos encantaría que puedan acompañarnos en este viaje.',
+    partySize: 1,
+  },
+  {
+    inviteId: '05092fc70e2c4e0c94a1',
+    slug: 'laura-alcaraz',
+    displayName: 'Laura Alcaraz',
+    addressing: 'singular',
+    dedication: 'Nos encantaría que puedan acompañarnos en este viaje.',
+    partySize: 1,
+  },
+  {
+    inviteId: '5c683d5203f240c684c8',
+    slug: 'liz-diana',
+    displayName: 'Liz Diana',
+    addressing: 'plural',
+    dedication: 'Fue hermoso ser parte de su gran día; ahora nos hace muchísima ilusión que ustedes dos viajen a nuestro momento especial.',
+    partySize: 2,
+  },
+  {
+    inviteId: '9e32221c3ab942df92e5',
+    slug: 'lucia-melgarejo',
+    displayName: 'Lucía Melgarejo',
+    addressing: 'plural',
+    dedication: 'Tía, nos encantaría que puedan acompañarnos en este viaje.',
+    partySize: 2,
+  },
+];
 
 /**
  * The real identity lookup -- resolves a guest by its stable inviteId,
